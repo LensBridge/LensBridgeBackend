@@ -1,0 +1,15 @@
+/* shared-styles.css */
+html, body {
+    margin: 0;
+    padding: 0;
+}
+
+:host(.v-loading) {
+    opacity: 0.5;
+}
+
+.preview-card {
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    overflow: hidden;
+}
