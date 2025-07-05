@@ -8,12 +8,13 @@ import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.util.UUID;
 
+@Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Data
-@Document(collection = "events")
-public class Event {
+@Document(collection = "uploaders")
+public class Uploader {
     @Id
     private UUID id;
-    private String eventName;
+    private String name;
+    private String email;
 }

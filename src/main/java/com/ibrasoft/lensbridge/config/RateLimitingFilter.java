@@ -23,7 +23,7 @@ import java.util.concurrent.TimeUnit;
 @Component
 public class RateLimitingFilter extends OncePerRequestFilter {
 
-    @Value("${ratelimit.requests:100}")
+    @Value("${ratelimit.requests:10}")
     private int maxRequests;
 
     @Value("${ratelimit.duration.minutes:1}")
