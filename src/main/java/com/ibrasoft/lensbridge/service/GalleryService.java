@@ -55,7 +55,7 @@ public class GalleryService {
         item.setThumbnail(thumbnail);
 
         // Get author info
-        String author = upload.getInstagramHandle() != null ? upload.getInstagramHandle() : "Anonymous";
+        String author = !upload.getInstagramHandle().isEmpty() ? upload.getInstagramHandle() : "Anonymous";
         item.setAuthor(author);
 
         // Get event info
