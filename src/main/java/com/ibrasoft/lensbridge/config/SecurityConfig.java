@@ -2,6 +2,7 @@ package com.ibrasoft.lensbridge.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -19,7 +20,7 @@ public class SecurityConfig {
                         .anyRequest().permitAll()
                 )
                 .csrf(AbstractHttpConfigurer::disable) // Disable CSRF for API endpoints
-                .cors(AbstractHttpConfigurer::disable); // Configure CORS as needed
+                .cors(Customizer.withDefaults()); // Configure CORS as needed
         return http.build();
     }
 }
