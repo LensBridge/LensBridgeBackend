@@ -25,5 +25,5 @@ public class Upload {
     private boolean featured;
     private int likes;
     private int views;
-    private String contentType;
+    private String contentType; // to determine if it's image or video
 }

@@ -36,14 +36,13 @@ public class FileUploadController {
                 if (file.isEmpty()) {
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("File is empty: " + file.getOriginalFilename());
                 }
-                if (file.getSize() > 100 * 1024 * 1024) { // 10 MB limit
+                if (file.getSize() > 100 * 1024 * 1024) {
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("File size exceeds limit: " + file.getOriginalFilename());
                 }
                 String fileUrl;
-                if (file.getContentType().contains("image")){
+                if (file.getContentType().contains("image")) {
                     fileUrl = cloudinaryService.uploadImage(file.getBytes(), uuid.toString());
-                }
-                else if (file.getContentType().contains("video")){
+                } else if (file.getContentType().contains("video")) {
                     fileUrl = cloudinaryService.uploadVideo(file.getBytes(), uuid.toString());
                 } else {
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Unsupported file type: " + file.getContentType());
