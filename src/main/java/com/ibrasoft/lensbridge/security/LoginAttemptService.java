@@ -1,4 +1,4 @@
-package com.bezkoder.springjwt.security;
+package com.ibrasoft.lensbridge.security;
 
 import org.springframework.stereotype.Component;
 

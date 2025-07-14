@@ -1,4 +1,4 @@
-package com.bezkoder.springjwt.models;
+package com.ibrasoft.lensbridge.model.auth;
 
 import java.util.ArrayList;
 import java.util.List;

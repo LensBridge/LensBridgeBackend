@@ -1,4 +1,4 @@
-package com.bezkoder.springjwt.security.services;
+package com.ibrasoft.lensbridge.security.services;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

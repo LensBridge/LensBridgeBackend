@@ -1,4 +1,4 @@
-package com.bezkoder.springjwt.payload.response;
+package com.ibrasoft.lensbridge.dto.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

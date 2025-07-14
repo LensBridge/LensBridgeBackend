@@ -1,4 +1,4 @@
-package com.bezkoder.springjwt.security.services;
+package com.ibrasoft.lensbridge.security.services;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mail.SimpleMailMessage;

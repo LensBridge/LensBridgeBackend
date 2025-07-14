@@ -1,4 +1,4 @@
-package com.bezkoder.springjwt.repository;
+package com.ibrasoft.lensbridge.repository;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -6,7 +6,7 @@ import java.util.UUID;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 
-import com.bezkoder.springjwt.models.User;
+import com.ibrasoft.lensbridge.model.auth.User;
 
 @Repository
 public interface UserRepository extends MongoRepository<User, UUID> {

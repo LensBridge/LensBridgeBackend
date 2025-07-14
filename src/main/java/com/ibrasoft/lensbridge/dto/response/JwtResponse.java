@@ -1,4 +1,4 @@
-package com.bezkoder.springjwt.payload.response;
+package com.ibrasoft.lensbridge.dto.response;
 
 import java.util.List;
 import java.util.UUID;

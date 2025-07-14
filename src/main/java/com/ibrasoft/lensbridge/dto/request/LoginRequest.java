@@ -1,4 +1,4 @@
-package com.bezkoder.springjwt.payload.request;
+package com.ibrasoft.lensbridge.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;

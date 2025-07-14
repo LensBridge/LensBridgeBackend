@@ -1,4 +1,4 @@
-package com.bezkoder.springjwt.models;
+package com.ibrasoft.lensbridge.model.auth;
 
 /**
  * Enum representing user roles in the system.
