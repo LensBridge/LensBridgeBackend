@@ -35,7 +35,7 @@ public enum Role {
      * @return the role name (e.g., "USER")
      */
     public String getRoleName() {
-        return authority.substring(5); // Remove "ROLE_" prefix
+        return authority.substring(5); 
     }
 
     /**
