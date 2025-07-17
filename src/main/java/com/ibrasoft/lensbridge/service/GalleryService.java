@@ -2,12 +2,14 @@ package com.ibrasoft.lensbridge.service;
 
 import com.ibrasoft.lensbridge.dto.GalleryItemDto;
 import com.ibrasoft.lensbridge.dto.GalleryResponseDto;
-import com.ibrasoft.lensbridge.model.Upload;
-import com.ibrasoft.lensbridge.model.Uploader;
+import com.ibrasoft.lensbridge.model.auth.User;
+import com.ibrasoft.lensbridge.model.upload.Upload;
 import com.ibrasoft.lensbridge.model.event.Event;
 import com.ibrasoft.lensbridge.repository.EventsRepository;
-import com.ibrasoft.lensbridge.repository.UploaderRepository;
+import com.ibrasoft.lensbridge.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.time.format.DateTimeFormatter;
@@ -20,17 +22,19 @@ import java.util.stream.Collectors;
 public class GalleryService {
 
     private final UploadService uploadService;
-    private final UploaderRepository uploaderRepository;
+    private final UserRepository uploaderRepository;
     private final EventsRepository eventsRepository;
     private final CloudinaryService cloudinaryService;
 
-    public GalleryResponseDto getAllGalleryItems() {
-        List<Upload> uploads = uploadService.getAllUploads();
-        List<GalleryItemDto> galleryItems = uploads.stream()
-                .map(this::convertToGalleryItem)
-                .collect(Collectors.toList());
-        
-        return new GalleryResponseDto(galleryItems);
+    public Page<GalleryItemDto> getAllApprovedGalleryItems(Pageable pageable) {
+        Page<Upload> uploads = uploadService.getAllApprovedUploads(pageable);
+        return uploads.map(this::convertToGalleryItem); // super clean!
+    }
+
+
+    public Page<GalleryItemDto> getAllGalleryItems(Pageable pageable) {
+        Page<Upload> uploads = uploadService.getAllUploads(pageable);
+        return uploads.map(this::convertToGalleryItem);
     }
 
     public GalleryResponseDto getGalleryItemsByEvent(UUID eventId) {
@@ -44,28 +48,26 @@ public class GalleryService {
 
     private GalleryItemDto convertToGalleryItem(Upload upload) {
         GalleryItemDto item = new GalleryItemDto();
+        User uploader = uploaderRepository.findById(upload.getUploadedBy())
+                .orElse(null);
         
         // Basic info
         item.setId(upload.getUuid().toString());
         item.setSrc(upload.getFileUrl());
         item.setTitle(upload.getUploadDescription() != null ? upload.getUploadDescription() : "Untitled");
         item.setFeatured(upload.isFeatured());
-        item.setLikes(upload.getLikes());
-        item.setViews(upload.getViews());
-        
-        // Determine content type
-        String contentType = determineContentType(upload);
-        item.setType(contentType);
-        
-        // Generate thumbnail
-        String thumbnail = generateThumbnail(upload.getFileUrl(), contentType);
+        item.setType(upload.getContentType().toString().toLowerCase());
+
+        if (upload.isAnon()) {
+            item.setAuthor("Anonymous");
+        } else if (uploader != null) {
+            item.setAuthor(uploader.getFirstName() + " " + uploader.getLastName());
+        } else {
+            item.setAuthor("Unknown");
+        }
+
+        String thumbnail = generateThumbnail(upload.getFileUrl(), upload.getContentType().toString().toLowerCase());
         item.setThumbnail(thumbnail);
-        
-        // Get author info
-        String author = getAuthorName(upload.getUploadedBy());
-        item.setAuthor(author);
-        
-        // Get event info
         String eventName = getEventName(upload.getEventId());
         item.setEvent(eventName);
         
@@ -74,21 +76,6 @@ public class GalleryService {
         item.setDate(date);
         
         return item;
-    }
-
-    private String determineContentType(Upload upload) {
-        if (upload.getContentType() != null) {
-            return upload.getContentType().startsWith("video") ? "video" : "image";
-        }
-        
-        // Fallback: determine by file extension
-        String fileName = upload.getFileName();
-        if (fileName != null) {
-            String extension = fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase();
-            return isVideoExtension(extension) ? "video" : "image";
-        }
-        
-        return "image"; // Default
     }
 
     private boolean isVideoExtension(String extension) {
@@ -112,14 +99,6 @@ public class GalleryService {
             // If thumbnail generation fails, return original URL
             return fileUrl;
         }
-    }
-
-    private String getAuthorName(UUID uploaderId) {
-        if (uploaderId == null) return "Anonymous";
-        
-        return uploaderRepository.findById(uploaderId)
-                .map(Uploader::getName)
-                .orElse("Anonymous");
     }
 
     private String getEventName(UUID eventId) {

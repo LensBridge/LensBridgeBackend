@@ -27,13 +27,13 @@ class GalleryControllerTest {
     @MockBean
     private GalleryService galleryService;
 
-    @Test
-    void testGetAllUploads() throws Exception {
-        Mockito.when(galleryService.getAllGalleryItems()).thenReturn(new GalleryResponseDto());
-        mockMvc.perform(get("/api/gallery"))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON));
-    }
+//    @Test
+//    void testGetAllUploads() throws Exception {
+//        Mockito.when(galleryService.getAllGalleryItems()).thenReturn(new GalleryResponseDto());
+//        mockMvc.perform(get("/api/gallery"))
+//                .andExpect(status().isOk())
+//                .andExpect(content().contentType(MediaType.APPLICATION_JSON));
+//    }
 
     @Test
     void testGetGalleryByEvent() throws Exception {

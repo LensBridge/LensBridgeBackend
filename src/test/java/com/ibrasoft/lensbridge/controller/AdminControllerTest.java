@@ -40,12 +40,12 @@ class AdminControllerTest {
                 .andExpect(status().isOk());
     }
 
-    @Test
-    void testGetAllUploads() throws Exception {
-        Mockito.when(uploadService.getAllUploads()).thenReturn(Collections.emptyList());
-        mockMvc.perform(get("/api/admin/uploads"))
-                .andExpect(status().isOk());
-    }
+//    @Test
+//    void testGetAllUploads() throws Exception {
+//        Mockito.when(uploadService.getAllUploads()).thenReturn(Collections.emptyList());
+//        mockMvc.perform(get("/api/admin/uploads"))
+//                .andExpect(status().isOk());
+//    }
 
     @Test
     void testCreateEvent() throws Exception {

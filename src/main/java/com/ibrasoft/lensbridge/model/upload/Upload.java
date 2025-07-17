@@ -1,4 +1,4 @@
-package com.ibrasoft.lensbridge.model;
+package com.ibrasoft.lensbridge.model.upload;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -15,15 +15,20 @@ import java.util.UUID;
 public class Upload {
     @Id
     private UUID uuid;
+
     private String fileName;
     private String fileUrl;
     private String uploadDescription;
+
     private String instagramHandle;
     private UUID uploadedBy;
+
     private UUID eventId;
     private LocalDate createdDate;
+
+    private boolean approved;
     private boolean featured;
-    private int likes;
-    private int views;
-    private String contentType; // to determine if it's image or video
+    private boolean isAnon;
+
+    private UploadType contentType;
 }

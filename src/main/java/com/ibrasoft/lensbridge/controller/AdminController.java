@@ -1,11 +1,15 @@
 package com.ibrasoft.lensbridge.controller;
 
+import com.ibrasoft.lensbridge.dto.GalleryItemDto;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.model.event.Event;
 import com.ibrasoft.lensbridge.model.event.EventStatus;
+import com.ibrasoft.lensbridge.model.upload.Upload;
 import com.ibrasoft.lensbridge.service.EventsService;
 import com.ibrasoft.lensbridge.service.UploadService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -42,7 +46,7 @@ public class AdminController {
     }
 
     @GetMapping("/uploads")
-    public ResponseEntity<?> getAllUploads() {
-        return ResponseEntity.ok(uploadService.getAllUploads());
+    public ResponseEntity<Page<Upload>> getAllUploads(Pageable pageable) {
+        return ResponseEntity.ok(uploadService.getAllUploads(pageable));
     }
 }

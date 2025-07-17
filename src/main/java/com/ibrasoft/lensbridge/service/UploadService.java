@@ -1,8 +1,10 @@
 package com.ibrasoft.lensbridge.service;
 
-import com.ibrasoft.lensbridge.model.Upload;
+import com.ibrasoft.lensbridge.model.upload.Upload;
 import com.ibrasoft.lensbridge.repository.UploadRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -22,8 +24,12 @@ public class UploadService {
         return uploadRepository.save(upload);
     }
 
-    public List<Upload> getAllUploads() {
-        return uploadRepository.findAll();
+    public Page<Upload> getAllUploads(Pageable pageable) {
+        return uploadRepository.findAll(pageable);
+    }
+
+    public Page<Upload> getAllApprovedUploads(Pageable pageable) {
+        return uploadRepository.findByApprovedTrue(pageable);
     }
 
     public Optional<Upload> getUploadById(UUID id) {

@@ -1,9 +1,7 @@
 package com.ibrasoft.lensbridge.service;
 
 import com.ibrasoft.lensbridge.dto.GalleryResponseDto;
-import com.ibrasoft.lensbridge.model.Upload;
 import com.ibrasoft.lensbridge.repository.EventsRepository;
-import com.ibrasoft.lensbridge.repository.UploaderRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;

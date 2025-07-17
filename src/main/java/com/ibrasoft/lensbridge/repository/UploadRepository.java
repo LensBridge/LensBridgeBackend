@@ -1,6 +1,8 @@
 package com.ibrasoft.lensbridge.repository;
 
-import com.ibrasoft.lensbridge.model.Upload;
+import com.ibrasoft.lensbridge.model.upload.Upload;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 
@@ -12,4 +14,6 @@ import java.util.UUID;
 public interface UploadRepository extends MongoRepository<Upload, UUID> {
     Optional<Upload> findByUuid(UUID uuid);
     List<Upload> findByEventId(UUID eventId);
+
+    Page<Upload> findByApprovedTrue(Pageable pageable);
 }

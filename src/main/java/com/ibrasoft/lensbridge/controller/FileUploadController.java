@@ -1,7 +1,9 @@
 package com.ibrasoft.lensbridge.controller;
 
-import com.ibrasoft.lensbridge.model.Upload;
+import com.ibrasoft.lensbridge.model.upload.Upload;
 import com.ibrasoft.lensbridge.model.auth.Role;
+import com.ibrasoft.lensbridge.model.upload.UploadType;
+import com.ibrasoft.lensbridge.security.services.UserDetailsImpl;
 import com.ibrasoft.lensbridge.service.CloudinaryService;
 import com.ibrasoft.lensbridge.service.UploadService;
 import lombok.RequiredArgsConstructor;
@@ -26,12 +28,17 @@ public class FileUploadController {
 
     @PostMapping("/{eventId}/batch")
     @PreAuthorize("hasRole('" + Role.VERIFIED + "')")
-    public ResponseEntity<?> uploadFiles(@PathVariable UUID eventId, @RequestParam("files") List<MultipartFile> files, @RequestParam(value = "instagramHandle", required = false) String instagramHandle, @RequestParam(value = "description", required = false) String description) {
+    public ResponseEntity<?> uploadFiles(@PathVariable UUID eventId,
+                                         @RequestParam("files") List<MultipartFile> files,
+                                         @RequestParam(value = "instagramHandle", required = false) String instagramHandle,
+                                         @RequestParam(value = "description", required = false) String description,
+                                         @RequestParam(value="anon") boolean anon) {
         try {
             List<UUID> uploadedUuids = new ArrayList<>();
-
+            UserDetailsImpl user = (UserDetailsImpl) org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getPrincipal();
             for (MultipartFile file : files) {
                 UUID uuid = UUID.randomUUID();
+                Upload upload = new Upload();
                 if (file.isEmpty()) {
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("File is empty: " + file.getOriginalFilename());
                 }
@@ -46,21 +53,26 @@ public class FileUploadController {
                 
                 String fileUrl;
                 if (contentType.contains("image")) {
+                    upload.setContentType(UploadType.IMAGE);
                     fileUrl = cloudinaryService.uploadImage(file.getBytes(), uuid.toString());
                 } else if (contentType.contains("video")) {
+                    upload.setContentType(UploadType.VIDEO);
                     fileUrl = cloudinaryService.uploadVideo(file.getBytes(), uuid.toString());
                 } else {
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Unsupported file type: " + contentType);
                 }
 
-                Upload upload = new Upload();
                 upload.setUuid(uuid);
                 upload.setFileName(file.getOriginalFilename());
                 upload.setFileUrl(fileUrl);
-                upload.setInstagramHandle(instagramHandle != null ? instagramHandle : "");
+                upload.setInstagramHandle(instagramHandle);
                 upload.setEventId(eventId);
+                upload.setAnon(anon);
+                upload.setApproved(false);
+                upload.setUploadedBy(user.getId());
+                upload.setFeatured(false);
                 upload.setCreatedDate(LocalDate.now());
-                upload.setUploadDescription(description != null && !description.isEmpty() ? description : "");
+                upload.setUploadDescription(description);
 
                 uploadService.createUpload(upload);
                 uploadedUuids.add(uuid);
@@ -69,16 +81,6 @@ public class FileUploadController {
             return ResponseEntity.ok("Files uploaded successfully. UUIDs: " + uploadedUuids);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error uploading files: " + e.getMessage());
-        }
-    }
-
-
-    @GetMapping("/event/{eventId}")
-    public ResponseEntity<?> getUploadsByEvent(@PathVariable UUID eventId) {
-        try {
-            return ResponseEntity.ok(uploadService.getUploadsByEventId(eventId));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error fetching uploads: " + e.getMessage());
         }
     }
 

@@ -1,7 +1,7 @@
 package com.ibrasoft.lensbridge.controller;
 
 import com.ibrasoft.lensbridge.config.TestSecurityConfig;
-import com.ibrasoft.lensbridge.model.Upload;
+import com.ibrasoft.lensbridge.model.upload.Upload;
 import com.ibrasoft.lensbridge.service.CloudinaryService;
 import com.ibrasoft.lensbridge.service.UploadService;
 import org.junit.jupiter.api.Test;
@@ -10,11 +10,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
-import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.util.Collections;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;

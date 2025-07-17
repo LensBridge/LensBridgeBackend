@@ -1,6 +1,6 @@
 package com.ibrasoft.lensbridge.service;
 
-import com.ibrasoft.lensbridge.model.Upload;
+import com.ibrasoft.lensbridge.model.upload.Upload;
 import com.ibrasoft.lensbridge.repository.UploadRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
