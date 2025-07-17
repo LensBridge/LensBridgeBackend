@@ -6,16 +6,23 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import jakarta.mail.internet.MimeMessage;
 
 @Service
 public class EmailService {
+    private static final Logger logger = LoggerFactory.getLogger(EmailService.class);
+    
     @Autowired
     private JavaMailSender mailSender;
 
     @Value("${spring.mail.from:noreply@lensbridge.tech}")
     private String fromAddress;
+
+    @Value("${spring.mail.from.name:LensBridge Mailer Service}")
+    private String fromName;
 
     /**
      * Sends a simple email.
@@ -24,12 +31,19 @@ public class EmailService {
      * @param text the body of the email
      */
     public void sendEmail(String to, String subject, String text) {
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom(fromAddress);
-        message.setTo(to);
-        message.setSubject(subject);
-        message.setText(text);
-        mailSender.send(message);
+        try {
+            logger.info("Attempting to send email to: {} with subject: {}", to, subject);
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(fromAddress);
+            message.setTo(to);
+            message.setSubject(subject);
+            message.setText(text);
+            mailSender.send(message);
+            logger.info("Email sent successfully to: {}", to);
+        } catch (Exception e) {
+            logger.error("Failed to send email to: {} - Error: {}", to, e.getMessage(), e);
+            throw new RuntimeException("Failed to send email", e);
+        }
     }
 
     /**
@@ -68,16 +82,29 @@ public class EmailService {
 
     private void sendHtmlEmail(String to, String subject, String htmlContent) {
         try {
+            logger.info("Attempting to send HTML email to: {} with subject: {}", to, subject);
             MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true);
-            helper.setFrom(fromAddress);
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            
+            // Set from address with name
+            helper.setFrom(fromAddress, fromName);
             helper.setTo(to);
             helper.setSubject(subject);
             helper.setText(htmlContent, true);
+            
             mailSender.send(message);
+            logger.info("HTML email sent successfully to: {}", to);
         } catch (Exception e) {
-            // Fallback to plain text
-            sendEmail(to, subject, htmlContent.replaceAll("<[^>]*>", ""));
+            logger.error("Failed to send HTML email to: {} - Error: {}", to, e.getMessage(), e);
+            logger.info("Attempting fallback to plain text email for: {}", to);
+            try {
+                // Fallback to plain text
+                String plainText = htmlContent.replaceAll("<[^>]*>", "").replaceAll("\\s+", " ").trim();
+                sendEmail(to, subject, plainText);
+            } catch (Exception fallbackError) {
+                logger.error("Fallback plain text email also failed for: {} - Error: {}", to, fallbackError.getMessage(), fallbackError);
+                throw new RuntimeException("Failed to send email (HTML and plain text fallback)", fallbackError);
+            }
         }
     }
 

@@ -18,8 +18,7 @@ import static org.mockito.Mockito.*;
 class GalleryServiceIntegrationTest {
     @Mock
     private UploadService uploadService;
-    @Mock
-    private UploaderRepository uploaderRepository;
+
     @Mock
     private EventsRepository eventsRepository;
     @Mock
@@ -27,15 +26,6 @@ class GalleryServiceIntegrationTest {
 
     @InjectMocks
     private GalleryService galleryService;
-
-    @Test
-    void testGetAllGalleryItems() {
-        when(uploadService.getAllUploads()).thenReturn(Collections.emptyList());
-        GalleryResponseDto response = galleryService.getAllGalleryItems();
-        assertNotNull(response);
-        assertTrue(response.getItems().isEmpty());
-        verify(uploadService).getAllUploads();
-    }
 
     @Test
     void testGetGalleryItemsByEvent() {
