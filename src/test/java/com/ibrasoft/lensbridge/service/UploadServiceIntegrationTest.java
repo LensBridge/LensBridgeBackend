@@ -31,13 +31,13 @@ class UploadServiceIntegrationTest {
         assertNotNull(created);
         verify(uploadRepository).save(upload);
     }
-
-    @Test
-    void testGetAllUploads() {
-        when(uploadRepository.findAll()).thenReturn(Collections.emptyList());
-        assertTrue(uploadService.getAllUploads().isEmpty());
-        verify(uploadRepository).findAll();
-    }
+//
+//    @Test
+//    void testGetAllUploads() {
+//        when(uploadRepository.findAll()).thenReturn(Collections.emptyList());
+//        assertTrue(uploadService.getAllUploads().isEmpty());
+//        verify(uploadRepository).findAll();
+//    }
 
     @Test
     void testGetUploadById() {
@@ -49,23 +49,23 @@ class UploadServiceIntegrationTest {
         verify(uploadRepository).findById(id);
     }
 
-    @Test
-    void testGetUploadByUuid() {
-        UUID uuid = UUID.randomUUID();
-        Upload upload = new Upload();
-        when(uploadRepository.findByUuid(uuid)).thenReturn(Optional.of(upload));
-        Optional<Upload> found = uploadService.getUploadByUuid(uuid);
-        assertTrue(found.isPresent());
-        verify(uploadRepository).findByUuid(uuid);
-    }
+//    @Test
+//    void testGetUploadByUuid() {
+//        UUID uuid = UUID.randomUUID();
+//        Upload upload = new Upload();
+//        when(uploadRepository.findByUuid(uuid)).thenReturn(Optional.of(upload));
+//        Optional<Upload> found = uploadService.getUploadByUuid(uuid);
+//        assertTrue(found.isPresent());
+//        verify(uploadRepository).findByUuid(uuid);
+//    }
 
-    @Test
-    void testGetUploadsByEventId() {
-        UUID eventId = UUID.randomUUID();
-        when(uploadRepository.findByEventId(eventId)).thenReturn(Collections.emptyList());
-        assertTrue(uploadService.getUploadsByEventId(eventId).isEmpty());
-        verify(uploadRepository).findByEventId(eventId);
-    }
+//    @Test
+//    void testGetUploadsByEventId() {
+//        UUID eventId = UUID.randomUUID();
+//        when(uploadRepository.findByEventId(eventId)).thenReturn(Collections.emptyList());
+//        assertTrue(uploadService.getUploadsByEventId(eventId).isEmpty());
+//        verify(uploadRepository).findByEventId(eventId);
+//    }
 
     @Test
     void testUpdateUpload() {

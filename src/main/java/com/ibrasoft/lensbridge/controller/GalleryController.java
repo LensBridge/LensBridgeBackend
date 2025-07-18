@@ -1,7 +1,6 @@
 package com.ibrasoft.lensbridge.controller;
 
-import com.ibrasoft.lensbridge.dto.GalleryItemDto;
-import com.ibrasoft.lensbridge.dto.GalleryResponseDto;
+import com.ibrasoft.lensbridge.dto.response.GalleryItemDto;
 import com.ibrasoft.lensbridge.service.GalleryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -31,17 +30,16 @@ public class GalleryController {
     }
 
     @GetMapping("/gallery/event/{eventId}")
-    public ResponseEntity<GalleryResponseDto> getGalleryByEvent(@PathVariable UUID eventId) {
+    public ResponseEntity<Page<GalleryItemDto>> getGalleryByEvent(@PathVariable UUID eventId, Pageable pageable) {
+        // TODO: Update this to use pagination
         try {
-            GalleryResponseDto response = galleryService.getGalleryItemsByEvent(eventId);
+            Page<GalleryItemDto> response = galleryService.getGalleryItemsByEvent(eventId, pageable);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             // Log the error for debugging
             System.err.println("Error fetching gallery for event: " + e.getMessage());
             e.printStackTrace();
-            
-            // Return empty response instead of error for better UX
-            return ResponseEntity.ok(new GalleryResponseDto());
+            return ResponseEntity.ok(Page.empty());
         }
     }
 }

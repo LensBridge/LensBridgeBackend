@@ -1,11 +1,11 @@
 package com.ibrasoft.lensbridge.service;
 
-import com.ibrasoft.lensbridge.dto.GalleryItemDto;
-import com.ibrasoft.lensbridge.dto.GalleryResponseDto;
+import com.ibrasoft.lensbridge.dto.response.GalleryItemDto;
 import com.ibrasoft.lensbridge.model.auth.User;
 import com.ibrasoft.lensbridge.model.upload.Upload;
 import com.ibrasoft.lensbridge.model.event.Event;
 import com.ibrasoft.lensbridge.repository.EventsRepository;
+import com.ibrasoft.lensbridge.repository.UploadRepository;
 import com.ibrasoft.lensbridge.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -21,29 +21,25 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class GalleryService {
 
-    private final UploadService uploadService;
+    private final UploadRepository uploadRepository;
     private final UserRepository uploaderRepository;
     private final EventsRepository eventsRepository;
     private final CloudinaryService cloudinaryService;
 
     public Page<GalleryItemDto> getAllApprovedGalleryItems(Pageable pageable) {
-        Page<Upload> uploads = uploadService.getAllApprovedUploads(pageable);
+        Page<Upload> uploads = uploadRepository.findByApprovedTrue(pageable);
         return uploads.map(this::convertToGalleryItem); // super clean!
     }
 
 
     public Page<GalleryItemDto> getAllGalleryItems(Pageable pageable) {
-        Page<Upload> uploads = uploadService.getAllUploads(pageable);
+        Page<Upload> uploads = uploadRepository.findAll(pageable);
         return uploads.map(this::convertToGalleryItem);
     }
 
-    public GalleryResponseDto getGalleryItemsByEvent(UUID eventId) {
-        List<Upload> uploads = uploadService.getUploadsByEventId(eventId);
-        List<GalleryItemDto> galleryItems = uploads.stream()
-                .map(this::convertToGalleryItem)
-                .collect(Collectors.toList());
-        
-        return new GalleryResponseDto(galleryItems);
+    public Page<GalleryItemDto> getGalleryItemsByEvent(UUID eventId, Pageable pageable) {
+        Page<Upload> uploads = uploadRepository.findByEventId(eventId, pageable);
+        return  uploads.map(this::convertToGalleryItem);
     }
 
     private GalleryItemDto convertToGalleryItem(Upload upload) {
@@ -76,11 +72,6 @@ public class GalleryService {
         item.setDate(date);
         
         return item;
-    }
-
-    private boolean isVideoExtension(String extension) {
-        return extension.equals("mp4") || extension.equals("avi") || extension.equals("mov") || 
-               extension.equals("wmv") || extension.equals("flv") || extension.equals("webm");
     }
 
     private String generateThumbnail(String fileUrl, String contentType) {

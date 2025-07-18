@@ -12,8 +12,16 @@ import java.util.UUID;
 
 @Repository
 public interface UploadRepository extends MongoRepository<Upload, UUID> {
-    Optional<Upload> findByUuid(UUID uuid);
-    List<Upload> findByEventId(UUID eventId);
+    Page<Upload> findByEventId(UUID eventId, Pageable pageable);
 
     Page<Upload> findByApprovedTrue(Pageable pageable);
+    
+    // Admin-specific query methods
+    Page<Upload> findByApproved(boolean approved, Pageable pageable);
+    
+    Page<Upload> findByFeatured(boolean featured, Pageable pageable);
+    
+    Page<Upload> findByApprovedTrueAndFeaturedTrue(Pageable pageable);
+    
+    Page<Upload> findByUploadedBy(UUID uploadedBy, Pageable pageable);
 }

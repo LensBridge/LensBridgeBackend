@@ -52,7 +52,7 @@ public class FileUploadController {
                 }
                 
                 String fileUrl;
-                if (contentType.contains("image")) {
+                if (contentType.contains("image") || contentType.contains("octet-stream")) {
                     upload.setContentType(UploadType.IMAGE);
                     fileUrl = cloudinaryService.uploadImage(file.getBytes(), uuid.toString());
                 } else if (contentType.contains("video")) {

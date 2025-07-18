@@ -1,4 +1,4 @@
-package com.ibrasoft.lensbridge.dto;
+package com.ibrasoft.lensbridge.dto.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
