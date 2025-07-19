@@ -37,6 +37,12 @@ public class UploadService {
     @Value("${uploads.allowed-file-types}")
     private List<String> allowedFileTypes;
 
+    @Value("${uploads.default-approved:false}")
+    private boolean defaultApproved;
+
+    @Value("${uploads.default-featured:false}")
+    private boolean defaultFeatured;
+
     public Upload createUpload(MultipartFile file, UUID eventId, String description, String instagramHandle,
             boolean anon, UUID uploadedBy) throws Exception {
 
@@ -78,7 +84,7 @@ public class UploadService {
 
         UUID uuid = UUID.randomUUID();
         Upload upload = new Upload(uuid, originalFilename, fileURL, description, instagramHandle, uploadedBy, eventId,
-                LocalDateTime.now(), false, false, anon, uploadType);
+                LocalDateTime.now(), defaultApproved, defaultFeatured, anon, uploadType);
         uploadRepository.save(upload);
         return upload;
     }
