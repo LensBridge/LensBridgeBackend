@@ -24,6 +24,14 @@ public class CloudinaryService {
         return (String) uploadResult.get("secure_url");
     }
 
+    public String uploadImage(File imageFile, String fileName) throws IOException {
+        Map<?, ?> uploadResult = cloudinary.uploader().upload(imageFile, ObjectUtils.asMap(
+                "folder", "lensbridge",
+                "public_id", fileName
+        ));
+        return (String) uploadResult.get("secure_url");
+    }
+
     public String uploadVideo(byte[] fileBytes, String fileName) throws IOException {
         Map<?, ?> uploadResult = cloudinary.uploader().upload(fileBytes, ObjectUtils.asMap(
                 "folder", "lensbridge",

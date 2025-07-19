@@ -8,7 +8,6 @@ import com.ibrasoft.lensbridge.dto.response.MessageResponse;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.model.event.Event;
 import com.ibrasoft.lensbridge.model.event.EventStatus;
-import com.ibrasoft.lensbridge.model.upload.Upload;
 import com.ibrasoft.lensbridge.service.AdminOperationService;
 import com.ibrasoft.lensbridge.service.EventsService;
 import com.ibrasoft.lensbridge.service.UploadService;

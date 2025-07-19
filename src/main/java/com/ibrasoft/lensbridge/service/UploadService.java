@@ -4,13 +4,19 @@ import com.ibrasoft.lensbridge.dto.response.AdminUploadDto;
 import com.ibrasoft.lensbridge.model.auth.User;
 import com.ibrasoft.lensbridge.model.event.Event;
 import com.ibrasoft.lensbridge.model.upload.Upload;
+import com.ibrasoft.lensbridge.model.upload.UploadType;
 import com.ibrasoft.lensbridge.repository.UploadRepository;
 import com.ibrasoft.lensbridge.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -22,12 +28,59 @@ public class UploadService {
     private final UploadRepository uploadRepository;
     private final UserRepository userRepository;
     private final EventsService eventsService;
+    private final CloudinaryService cloudinaryService;
+    private final MediaConversionService mediaConversionService;
 
-    public Upload createUpload(Upload upload) {
-        if (upload.getUuid() == null) {
-            upload.setUuid(UUID.randomUUID());
+    @Value("${uploads.max-size}")
+    private long maxUploadSize;
+
+    @Value("${uploads.allowed-file-types}")
+    private List<String> allowedFileTypes;
+
+    public Upload createUpload(MultipartFile file, UUID eventId, String description, String instagramHandle,
+            boolean anon, UUID uploadedBy) throws Exception {
+
+        if (file.isEmpty()) {
+            throw new IllegalArgumentException("Empty file cannot be uploaded");
         }
-        return uploadRepository.save(upload);
+        if (file.getSize() > maxUploadSize) {
+            throw new IllegalArgumentException("File size exceeds the maximum limit of " + maxUploadSize + " bytes");
+        }
+        if (file.getContentType() == null || !allowedFileTypes.contains(file.getContentType())) {
+            throw new IllegalArgumentException("Unsupported file type: " + file.getContentType());
+        }
+
+        String fileURL;
+
+        String contentType = file.getContentType();
+        String originalFilename = file.getOriginalFilename();
+        File outputFile;
+        UploadType uploadType;
+
+        if (contentType != null && contentType.startsWith("image")) {
+            uploadType = UploadType.IMAGE;
+            // Handle HEIC conversion to JPEG
+            if ("image/heic".equals(contentType)) {
+                outputFile = mediaConversionService.convertHEICToJPEG(file.getInputStream(), originalFilename);
+            } else {
+                outputFile = File.createTempFile("upload_", "_" + originalFilename);
+                file.transferTo(outputFile);
+            }
+            fileURL = cloudinaryService.uploadImage(outputFile, UUID.randomUUID().toString());
+        } else if (contentType != null && contentType.startsWith("video")) {
+            uploadType = UploadType.VIDEO;
+            outputFile = File.createTempFile("upload_", "_" + originalFilename);
+            file.transferTo(outputFile);
+            fileURL = cloudinaryService.uploadVideo(outputFile, UUID.randomUUID().toString());
+        } else {
+            throw new IllegalArgumentException("Unsupported file type: " + contentType);
+        }
+
+        UUID uuid = UUID.randomUUID();
+        Upload upload = new Upload(uuid, originalFilename, fileURL, description, instagramHandle, uploadedBy, eventId,
+                LocalDateTime.now(), false, false, anon, uploadType);
+        uploadRepository.save(upload);
+        return upload;
     }
 
     public Page<Upload> getAllUploads(Pageable pageable) {
@@ -76,7 +129,7 @@ public class UploadService {
      */
     private AdminUploadDto convertToAdminUploadDto(Upload upload) {
         AdminUploadDto dto = new AdminUploadDto();
-        
+
         // Copy upload fields
         dto.setUuid(upload.getUuid());
         dto.setFileName(upload.getFileName());
@@ -90,7 +143,7 @@ public class UploadService {
         dto.setFeatured(upload.isFeatured());
         dto.setAnon(upload.isAnon());
         dto.setContentType(upload.getContentType());
-    
+
         Optional<User> userOpt = userRepository.findById(upload.getUploadedBy());
         if (userOpt.isPresent()) {
             User user = userOpt.get();
@@ -99,7 +152,7 @@ public class UploadService {
             dto.setUploaderEmail(user.getEmail());
             dto.setUploaderStudentNumber(user.getStudentNumber());
         }
-        
+
         // Fetch and populate event information
         if (upload.getEventId() != null) {
             Optional<Event> eventOpt = eventsService.getEventById(upload.getEventId());
@@ -107,7 +160,7 @@ public class UploadService {
                 dto.setEventName(eventOpt.get().getName());
             }
         }
-        
+
         return dto;
     }
 }

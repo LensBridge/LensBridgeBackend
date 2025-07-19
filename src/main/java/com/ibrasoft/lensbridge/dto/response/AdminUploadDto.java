@@ -5,7 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Data
@@ -29,7 +29,7 @@ public class AdminUploadDto {
     private UUID eventId;
     private String eventName;
     
-    private LocalDate createdDate;
+    private LocalDateTime createdDate;
     private boolean approved;
     private boolean featured;
     private boolean isAnon;

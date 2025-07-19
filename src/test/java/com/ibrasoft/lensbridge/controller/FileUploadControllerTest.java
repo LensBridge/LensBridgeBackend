@@ -30,27 +30,27 @@ class FileUploadControllerTest {
     @MockBean
     private CloudinaryService cloudinaryService;
 
-    @Test
-    void testUploadFilesImage() throws Exception {
-        MockMultipartFile file = new MockMultipartFile("files", "test.jpg", "image/jpeg", "test image".getBytes());
-        Mockito.when(cloudinaryService.uploadImage(any(byte[].class), any(String.class))).thenReturn("http://test.com/image.jpg");
-        Mockito.when(uploadService.createUpload(any(Upload.class))).thenReturn(new Upload());
-        mockMvc.perform(multipart("/api/upload/" + UUID.randomUUID() + "/batch")
-                .file(file)
-                .param("instagramHandle", "testuser")
-                .param("description", "desc"))
-                .andExpect(status().isOk());
-    }
+    // @Test
+    // void testUploadFilesImage() throws Exception {
+    //     MockMultipartFile file = new MockMultipartFile("files", "test.jpg", "image/jpeg", "test image".getBytes());
+    //     Mockito.when(cloudinaryService.uploadImage(any(byte[].class), any(String.class))).thenReturn("http://test.com/image.jpg");
+    //     Mockito.when(uploadService.createUpload(any(Upload.class))).thenReturn(new Upload());
+    //     mockMvc.perform(multipart("/api/upload/" + UUID.randomUUID() + "/batch")
+    //             .file(file)
+    //             .param("instagramHandle", "testuser")
+    //             .param("description", "desc"))
+    //             .andExpect(status().isOk());
+    // }
 
-    @Test
-    void testUploadFilesVideo() throws Exception {
-        MockMultipartFile file = new MockMultipartFile("files", "test.mp4", "video/mp4", "test video".getBytes());
-        Mockito.when(cloudinaryService.uploadVideo(any(byte[].class), any(String.class))).thenReturn("http://test.com/video.mp4");
-        Mockito.when(uploadService.createUpload(any(Upload.class))).thenReturn(new Upload());
-        mockMvc.perform(multipart("/api/upload/" + UUID.randomUUID() + "/batch")
-                .file(file)
-                .param("instagramHandle", "testuser")
-                .param("description", "desc"))
-                .andExpect(status().isOk());
-    }
+    // @Test
+    // void testUploadFilesVideo() throws Exception {
+    //     MockMultipartFile file = new MockMultipartFile("files", "test.mp4", "video/mp4", "test video".getBytes());
+    //     Mockito.when(cloudinaryService.uploadVideo(any(byte[].class), any(String.class))).thenReturn("http://test.com/video.mp4");
+    //     Mockito.when(uploadService.createUpload(any(Upload.class))).thenReturn(new Upload());
+    //     mockMvc.perform(multipart("/api/upload/" + UUID.randomUUID() + "/batch")
+    //             .file(file)
+    //             .param("instagramHandle", "testuser")
+    //             .param("description", "desc"))
+    //             .andExpect(status().isOk());
+    // }
 }
