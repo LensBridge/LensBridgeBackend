@@ -14,7 +14,9 @@ import java.util.UUID;
 public class AdminUploadDto {
     private UUID uuid;
     private String fileName;
-    private String fileUrl;
+    private String fileUrl;           // Original Cloudinary URL (internal use only)
+    private String secureUrl;         // Signed URL for actual access
+    private String thumbnailUrl;      // Signed thumbnail URL
     private String uploadDescription;
     private String instagramHandle;
     

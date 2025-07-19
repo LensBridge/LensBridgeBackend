@@ -8,6 +8,7 @@ import com.ibrasoft.lensbridge.model.upload.UploadType;
 import com.ibrasoft.lensbridge.repository.UploadRepository;
 import com.ibrasoft.lensbridge.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -23,6 +24,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class UploadService {
 
     private final UploadRepository uploadRepository;
@@ -131,7 +133,8 @@ public class UploadService {
     }
 
     /**
-     * Convert Upload entity to AdminUploadDto with user information populated.
+     * Convert Upload entity to AdminUploadDto with user information and secure URLs populated.
+     * Generates time-limited signed URLs for admin access.
      */
     private AdminUploadDto convertToAdminUploadDto(Upload upload) {
         AdminUploadDto dto = new AdminUploadDto();
@@ -139,7 +142,7 @@ public class UploadService {
         // Copy upload fields
         dto.setUuid(upload.getUuid());
         dto.setFileName(upload.getFileName());
-        dto.setFileUrl(upload.getFileUrl());
+        dto.setFileUrl(upload.getFileUrl()); // Keep original URL for internal reference
         dto.setUploadDescription(upload.getUploadDescription());
         dto.setInstagramHandle(upload.getInstagramHandle());
         dto.setUploadedBy(upload.getUploadedBy());
@@ -150,13 +153,33 @@ public class UploadService {
         dto.setAnon(upload.isAnon());
         dto.setContentType(upload.getContentType());
 
-        Optional<User> userOpt = userRepository.findById(upload.getUploadedBy());
-        if (userOpt.isPresent()) {
-            User user = userOpt.get();
-            dto.setUploaderFirstName(user.getFirstName());
-            dto.setUploaderLastName(user.getLastName());
-            dto.setUploaderEmail(user.getEmail());
-            dto.setUploaderStudentNumber(user.getStudentNumber());
+        // Generate secure URLs for admin access
+        try {
+            // Admins can view both approved and unapproved content
+            String secureUrl = cloudinaryService.getSecureUrl(upload.getFileUrl(), upload.isApproved(), true);
+            dto.setSecureUrl(secureUrl);
+            
+            // Generate secure thumbnail URL
+            String thumbnailUrl = cloudinaryService.getSecureThumbnailUrl(upload.getFileUrl(), upload.isApproved(), true);
+            dto.setThumbnailUrl(thumbnailUrl);
+            
+        } catch (Exception e) {
+            // If secure URL generation fails, log error but don't break the DTO creation
+            log.error("Failed to generate secure URLs for upload {}: {}", upload.getUuid(), e.getMessage());
+            dto.setSecureUrl(null);
+            dto.setThumbnailUrl(null);
+        }
+
+        // Populate user information if not anonymous
+        if (!upload.isAnon() && upload.getUploadedBy() != null) {
+            Optional<User> userOpt = userRepository.findById(upload.getUploadedBy());
+            if (userOpt.isPresent()) {
+                User user = userOpt.get();
+                dto.setUploaderFirstName(user.getFirstName());
+                dto.setUploaderLastName(user.getLastName());
+                dto.setUploaderEmail(user.getEmail());
+                dto.setUploaderStudentNumber(user.getStudentNumber());
+            }
         }
 
         // Fetch and populate event information
