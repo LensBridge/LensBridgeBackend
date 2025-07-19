@@ -2,9 +2,9 @@
 
 # LensBridge Backend 
 
-![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.9-blue)
-![Java](https://img.shields.io/badge/Java-11-orange)
-![Maven](https://img.shields.io/badge/Maven-3.6.3-red)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.2-blue)
+![Java](https://img.shields.io/badge/Java-21-orange)
+![Maven](https://img.shields.io/badge/Maven-3.3.2-red)
 ![MongoDB](https://img.shields.io/badge/MongoDB-4.4-green)
 
 </p>
@@ -29,7 +29,7 @@ This project is built using Java (duh), Spring Boot, and MongoDB. It follows the
 ### Prerequisites
 
 - Java 21 or higher
-- Maven 3.6.3 or higher (Or use the wrapper)
+- Maven 3.3.2 or higher (Or use the wrapper)
 - Some form of MongoDD and Cloudinary access
 
 ### Setup
