@@ -6,7 +6,6 @@ import com.ibrasoft.lensbridge.model.upload.Upload;
 import com.ibrasoft.lensbridge.model.event.Event;
 import com.ibrasoft.lensbridge.repository.EventsRepository;
 import com.ibrasoft.lensbridge.repository.UploadRepository;
-import com.ibrasoft.lensbridge.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -22,7 +21,7 @@ import java.util.UUID;
 public class GalleryService {
 
     private final UploadRepository uploadRepository;
-    private final UserRepository uploaderRepository;
+    private final UserService userService;
     private final EventsRepository eventsRepository;
     private final CloudinaryService cloudinaryService;
 
@@ -78,7 +77,7 @@ public class GalleryService {
      */
     private GalleryItemDto convertToGalleryItem(Upload upload, boolean isAdmin) {
         GalleryItemDto item = new GalleryItemDto();
-        User uploader = uploaderRepository.findById(upload.getUploadedBy())
+        User uploader = userService.findById(upload.getUploadedBy())
                 .orElse(null);
         
         // Basic info

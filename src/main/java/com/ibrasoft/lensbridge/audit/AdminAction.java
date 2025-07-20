@@ -22,7 +22,20 @@ public enum AdminAction {
     // System Actions
     VIEW_AUDIT_LOGS("View Audit Logs"),
     EXPORT_DATA("Export Data"),
-    SYSTEM_MAINTENANCE("System Maintenance");
+    SYSTEM_MAINTENANCE("System Maintenance"),
+
+    // User Management 
+    VERIFY_USER("Verify User"),
+    UNVERIFY_USER("Unverify User"),
+    RESET_USER_PASSWORD("Reset User Password"),
+    TRIGGER_PASSWORD_RESET_EMAIL("Trigger Password Reset Email"),
+
+    ADD_USER_ROLE("Add User Role"),
+    REMOVE_USER_ROLE("Remove User Role"),
+
+    ADD_USER("Add User"),
+    REMOVE_USER("Remove User"),
+    UPDATE_USER("Update User");
     
     private final String description;
     

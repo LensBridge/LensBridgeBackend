@@ -6,8 +6,10 @@ import com.ibrasoft.lensbridge.audit.AuditEvent;
 import com.ibrasoft.lensbridge.dto.response.AdminUploadDto;
 import com.ibrasoft.lensbridge.dto.response.MessageResponse;
 import com.ibrasoft.lensbridge.model.auth.Role;
+import com.ibrasoft.lensbridge.model.auth.User;
 import com.ibrasoft.lensbridge.model.event.Event;
 import com.ibrasoft.lensbridge.model.event.EventStatus;
+import com.ibrasoft.lensbridge.service.UserService;
 import com.ibrasoft.lensbridge.service.AdminOperationService;
 import com.ibrasoft.lensbridge.service.EventsService;
 import com.ibrasoft.lensbridge.service.UploadService;
@@ -37,6 +39,7 @@ public class AdminController {
     private final EventsService eventsService;
     private final AdminOperationService adminOperationService;
     private final AdminAuditService auditService;
+    private final UserService userService;
 
     @PostMapping("/create-event")
     public ResponseEntity<?> createEvent(@RequestParam("eventName") String eventName,
@@ -191,6 +194,36 @@ public class AdminController {
             log.error("Error retrieving events: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new MessageResponse("Failed to retrieve events: " + e.getMessage()));
+        }
+    }
+
+    @GetMapping("/users")
+    @PreAuthorize("hasRole('" + Role.ROOT + "')")
+    public ResponseEntity<?> getAllUsers(Pageable pageable) {
+        try {
+            log.debug("Admin retrieving all users, page: {}", pageable.getPageNumber());
+            return ResponseEntity.ok(userService.getAllUsers(pageable));
+        } catch (Exception e) {
+            log.error("Error retrieving users: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new MessageResponse("Failed to retrieve users: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/user/{userId}/add-role")
+    @PreAuthorize("hasRole('" + Role.ROOT + "')")
+    public ResponseEntity<?> addRoleToUser(@PathVariable UUID userId, @RequestBody Role role) {
+        try {
+            log.debug("Admin adding role {} to user: {}", role, userId);
+            User updatedUser = userService.addRole(userId, role);
+            return ResponseEntity.ok(updatedUser);
+        } catch (IllegalArgumentException e) {
+            log.error("Error adding role to user: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
+        } catch (Exception e) {
+            log.error("Unexpected error adding role to user: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new MessageResponse("Failed to add role: " + e.getMessage()));
         }
     }
 

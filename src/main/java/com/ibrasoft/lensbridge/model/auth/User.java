@@ -11,6 +11,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
@@ -36,6 +38,7 @@ public class User {
   @Size(max = 50)
   @Email
   @Indexed(unique = true)
+  @JsonIgnore
   private String email;
 
   @NotBlank
@@ -44,7 +47,7 @@ public class User {
 
   private List<String> roles;
 
-  private boolean verified = false;
+  private boolean verified;
   private String verificationToken;
 
   public User() {

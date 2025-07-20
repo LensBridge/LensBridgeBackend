@@ -8,13 +8,15 @@ public enum Role {
     ROLE_USER("ROLE_USER"),
     ROLE_MODERATOR("ROLE_MODERATOR"), 
     ROLE_ADMIN("ROLE_ADMIN"),
-    ROLE_VERIFIED("ROLE_VERIFIED");
+    ROLE_VERIFIED("ROLE_VERIFIED"),
+    ROLE_ROOT("ROLE_ROOT");
 
     // Static constants for use in @PreAuthorize annotations
     public static final String USER = "ROLE_USER";
     public static final String MODERATOR = "ROLE_MODERATOR";
     public static final String ADMIN = "ROLE_ADMIN";
     public static final String VERIFIED = "ROLE_VERIFIED";
+    public static final String ROOT = "ROLE_ROOT";
 
     private final String authority;
 

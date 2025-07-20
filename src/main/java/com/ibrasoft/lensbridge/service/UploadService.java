@@ -6,7 +6,6 @@ import com.ibrasoft.lensbridge.model.event.Event;
 import com.ibrasoft.lensbridge.model.upload.Upload;
 import com.ibrasoft.lensbridge.model.upload.UploadType;
 import com.ibrasoft.lensbridge.repository.UploadRepository;
-import com.ibrasoft.lensbridge.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -28,7 +27,7 @@ import java.util.UUID;
 public class UploadService {
 
     private final UploadRepository uploadRepository;
-    private final UserRepository userRepository;
+    private final UserService userService;
     private final EventsService eventsService;
     private final CloudinaryService cloudinaryService;
     private final MediaConversionService mediaConversionService;
@@ -172,7 +171,7 @@ public class UploadService {
 
         // Populate user information if not anonymous
         if (!upload.isAnon() && upload.getUploadedBy() != null) {
-            Optional<User> userOpt = userRepository.findById(upload.getUploadedBy());
+            Optional<User> userOpt = userService.findById(upload.getUploadedBy());
             if (userOpt.isPresent()) {
                 User user = userOpt.get();
                 dto.setUploaderFirstName(user.getFirstName());
