@@ -38,11 +38,11 @@ public class User {
   @Size(max = 50)
   @Email
   @Indexed(unique = true)
-  @JsonIgnore
   private String email;
 
   @NotBlank
   @Size(max = 120)
+  @JsonIgnore
   private String password;
 
   private List<String> roles;

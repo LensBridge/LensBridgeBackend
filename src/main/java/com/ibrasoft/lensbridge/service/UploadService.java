@@ -131,6 +131,10 @@ public class UploadService {
         return uploads.map(this::convertToAdminUploadDto);
     }
 
+    public Page<Upload> getUploadsByUploadedBy(UUID userId, Pageable pageable) {
+        return uploadRepository.findByUploadedBy(userId, pageable);
+    }
+
     /**
      * Convert Upload entity to AdminUploadDto with user information and secure URLs populated.
      * Generates time-limited signed URLs for admin access.

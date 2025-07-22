@@ -89,7 +89,7 @@ public class UserService {
     /**
      * Create a new user from signup request
      */
-    public User createUser(SignupRequest signUpRequest) throws Exception {
+    public User createUser(SignupRequest signUpRequest, boolean sendConfirmEmail) throws Exception {
         log.info("Creating new user with email: {}", signUpRequest.getEmail());
         
         // Check if user already exists
@@ -103,7 +103,7 @@ public class UserService {
             signUpRequest.getLastName(),
             signUpRequest.getStudentNumber(),
             signUpRequest.getEmail(),
-            passwordEncoder.encode(signUpRequest.getPassword())
+            (signUpRequest.getPassword() == null) ? null : passwordEncoder.encode(signUpRequest.getPassword())
         );
         
         user.setRoles(List.of());
@@ -117,10 +117,18 @@ public class UserService {
         
         // Send verification email
         String verifyUrl = String.format("%s/confirm?token=%s", frontendBaseUrl, verificationToken);
-        emailService.sendVerificationEmail(user.getEmail(), verifyUrl);
+        if (sendConfirmEmail) {
+            emailService.sendVerificationEmail(user.getEmail(), verifyUrl);
+        } else {
+            log.info("Skipping email confirmation for user: {}", user.getEmail());
+        }
         
         log.info("User created successfully: {}", user.getEmail());
         return savedUser;
+    }
+
+    public User createUser(SignupRequest signUpRequest) throws Exception {
+        return createUser(signUpRequest, true); // Default to sending confirmation email
     }
     
     /**
@@ -131,6 +139,25 @@ public class UserService {
         
         User user = findByVerificationToken(verificationToken)
             .orElseThrow(() -> new IllegalArgumentException("Invalid or expired verification token"));
+        
+        user.setVerified(true);
+        user.setVerificationToken(null);
+        user.addRole(Role.ROLE_VERIFIED);
+        
+        User savedUser = saveUser(user);
+        log.info("User email verified successfully: {}", user.getEmail());
+        return savedUser;
+    }
+
+    public User verifyDirectly(UUID userId) {
+        log.info("Directly verifying user with ID: {}", userId);
+        
+        User user = findById(userId)
+            .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        
+        if (user.isVerified()) {
+            throw new IllegalArgumentException("User is already verified");
+        }
         
         user.setVerified(true);
         user.setVerificationToken(null);
@@ -158,6 +185,23 @@ public class UserService {
         User savedUser = saveUser(user);
         
         log.info("Role {} added successfully to user: {}", role.getAuthority(), user.getEmail());
+        return savedUser;
+    }
+
+    public User removeRole(UUID userId, Role role) {
+        log.info("Removing role {} from user: {}", role.getAuthority(), userId);
+        
+        User user = findById(userId)
+            .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        
+        if (!user.hasRole(role)) {
+            throw new IllegalArgumentException("User does not have this role: " + role.getAuthority());
+        }
+        
+        user.getRoles().remove(role.getAuthority());
+        User savedUser = saveUser(user);
+        
+        log.info("Role {} removed successfully from user: {}", role.getAuthority(), user.getEmail());
         return savedUser;
     }
     
