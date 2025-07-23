@@ -175,16 +175,13 @@ public class UploadService {
             dto.setThumbnailUrl(null);
         }
 
-        // Populate user information if not anonymous
-        if (!upload.isAnon() && upload.getUploadedBy() != null) {
-            Optional<User> userOpt = userService.findById(upload.getUploadedBy());
-            if (userOpt.isPresent()) {
-                User user = userOpt.get();
-                dto.setUploaderFirstName(user.getFirstName());
-                dto.setUploaderLastName(user.getLastName());
-                dto.setUploaderEmail(user.getEmail());
-                dto.setUploaderStudentNumber(user.getStudentNumber());
-            }
+        Optional<User> userOpt = userService.findById(upload.getUploadedBy());
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            dto.setUploaderFirstName(user.getFirstName());
+            dto.setUploaderLastName(user.getLastName());
+            dto.setUploaderEmail(user.getEmail());
+            dto.setUploaderStudentNumber(user.getStudentNumber());
         }
 
         // Fetch and populate event information
