@@ -1,6 +1,5 @@
 package com.ibrasoft.lensbridge.dto.request;
 
-import jakarta.annotation.PostConstruct;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
@@ -14,8 +13,7 @@ public class LoginRequest {
     @NotBlank
     private String password;
 
-    @PostConstruct
-    public void init() {
-        this.email = this.email == null? null: this.email.toLowerCase();
+    public void setEmail(String email) {
+        this.email = (email == null) ? null : email.toLowerCase();
     }
 }

@@ -27,8 +27,7 @@ public class SignupRequest {
   @Size(min = 6, max = 40)
   private String password;
 
-  @PostConstruct
-  public void init() {
-    this.email = this.email == null ? null : this.email.toLowerCase();
+  public void setEmail(String email){
+    this.email = email.toLowerCase();
   }
 }
