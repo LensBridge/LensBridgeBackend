@@ -18,7 +18,7 @@ public class CloudinaryService {
 
     private final Cloudinary cloudinary;
     
-    @Value("${cloudinary.api-secret}")
+    @Value("${cloudinary.cloud.apisecret}")
     private String apiSecret;
 
     public String uploadImage(byte[] fileBytes, String fileName) throws IOException {
