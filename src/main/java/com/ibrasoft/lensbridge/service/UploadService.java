@@ -67,18 +67,20 @@ public class UploadService {
         if (contentType != null && contentType.startsWith("image")) {
             uploadType = UploadType.IMAGE;
             // Handle HEIC conversion to JPEG
-            if ("image/heic".equals(contentType)) {
-                outputFile = mediaConversionService.convertHEICToJPEG(file.getInputStream(), originalFilename);
-            } else {
+            // if ("image/heic".equals(contentType)) {
+            //     outputFile = mediaConversionService.convertHEICToJPEG(file.getInputStream(), originalFilename);
+            // } else {
                 outputFile = File.createTempFile("upload_", "_" + originalFilename);
                 file.transferTo(outputFile);
-            }
+            // }
             fileURL = cloudinaryService.uploadImage(outputFile, UUID.randomUUID().toString());
+            outputFile.delete(); 
         } else if (contentType != null && contentType.startsWith("video")) {
             uploadType = UploadType.VIDEO;
             outputFile = File.createTempFile("upload_", "_" + originalFilename);
             file.transferTo(outputFile);
             fileURL = cloudinaryService.uploadVideo(outputFile, UUID.randomUUID().toString());
+            outputFile.delete(); 
         } else {
             throw new IllegalArgumentException("Unsupported file type: " + contentType);
         }

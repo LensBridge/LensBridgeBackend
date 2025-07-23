@@ -25,7 +25,8 @@ public class CloudinaryService {
         Map<?, ?> uploadResult = cloudinary.uploader().upload(fileBytes, ObjectUtils.asMap(
                 "folder", "lensbridge",
                 "public_id", fileName,
-                "type", "private"  // Private upload - requires signed URLs for access
+                "type", "private",  // Private upload - requires signed URLs for access
+                "format", "png"     // Force conversion to PNG
         ));
 
         return (String) uploadResult.get("secure_url");
@@ -35,7 +36,8 @@ public class CloudinaryService {
         Map<?, ?> uploadResult = cloudinary.uploader().upload(imageFile, ObjectUtils.asMap(
                 "folder", "lensbridge",
                 "public_id", fileName,
-                "type", "private"  // Private upload - requires signed URLs for access
+                "type", "private",  // Private upload - requires signed URLs for access
+                "format", "png"     // Force conversion to PNG
         ));
         return (String) uploadResult.get("secure_url");
     }
