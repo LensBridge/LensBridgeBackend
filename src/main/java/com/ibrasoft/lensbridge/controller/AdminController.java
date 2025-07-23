@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.*;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -247,8 +248,9 @@ public class AdminController {
 
     @PostMapping("/user/verify")
     @PreAuthorize("hasRole('" + Role.ROOT + "')")
-    public ResponseEntity<?> verifyUser(@RequestParam UUID userId) {
+    public ResponseEntity<?> verifyUser(@RequestBody Map<String, UUID> payload) {
         try {
+            UUID userId = payload.get("userId");
             log.debug("Admin verifying user with ID: {}", userId);
             User verifiedUser = userService.verifyDirectly(userId);
             return ResponseEntity.ok(verifiedUser);
