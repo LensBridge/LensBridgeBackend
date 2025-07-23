@@ -25,8 +25,6 @@ public class MediaConversionService {
         ProcessBuilder pb = new ProcessBuilder(
                 "ffmpeg",
                 "-i", inputFile.getAbsolutePath(),
-                "-q:v", "2",
-                "-y",
                 outputFile.getAbsolutePath()
         );
 
