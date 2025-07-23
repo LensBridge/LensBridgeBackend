@@ -3,12 +3,14 @@ package com.ibrasoft.lensbridge.controller;
 import com.ibrasoft.lensbridge.audit.AdminAction;
 import com.ibrasoft.lensbridge.audit.AdminAuditService;
 import com.ibrasoft.lensbridge.audit.AuditEvent;
+import com.ibrasoft.lensbridge.dto.request.SignupRequest;
 import com.ibrasoft.lensbridge.dto.response.AdminUploadDto;
 import com.ibrasoft.lensbridge.dto.response.MessageResponse;
 import com.ibrasoft.lensbridge.model.auth.Role;
+import com.ibrasoft.lensbridge.model.auth.User;
 import com.ibrasoft.lensbridge.model.event.Event;
 import com.ibrasoft.lensbridge.model.event.EventStatus;
-import com.ibrasoft.lensbridge.model.upload.Upload;
+import com.ibrasoft.lensbridge.service.UserService;
 import com.ibrasoft.lensbridge.service.AdminOperationService;
 import com.ibrasoft.lensbridge.service.EventsService;
 import com.ibrasoft.lensbridge.service.UploadService;
@@ -38,6 +40,7 @@ public class AdminController {
     private final EventsService eventsService;
     private final AdminOperationService adminOperationService;
     private final AdminAuditService auditService;
+    private final UserService userService;
 
     @PostMapping("/create-event")
     public ResponseEntity<?> createEvent(@RequestParam("eventName") String eventName,
@@ -192,6 +195,103 @@ public class AdminController {
             log.error("Error retrieving events: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new MessageResponse("Failed to retrieve events: " + e.getMessage()));
+        }
+    }
+
+    @GetMapping("/users")
+    @PreAuthorize("hasRole('" + Role.ROOT + "')")
+    public ResponseEntity<?> getAllUsers(Pageable pageable) {
+        try {
+            log.debug("Admin retrieving all users, page: {}", pageable.getPageNumber());
+            return ResponseEntity.ok(userService.getAllUsers(pageable));
+        } catch (Exception e) {
+            log.error("Error retrieving users: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new MessageResponse("Failed to retrieve users: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/user/{userId}/add-role")
+    @PreAuthorize("hasRole('" + Role.ROOT + "')")
+    public ResponseEntity<?> addRoleToUser(@PathVariable UUID userId, @RequestBody Role role) {
+        try {
+            log.debug("Admin adding role {} to user: {}", role, userId);
+            User updatedUser = userService.addRole(userId, role);
+            return ResponseEntity.ok(updatedUser);
+        } catch (IllegalArgumentException e) {
+            log.error("Error adding role to user: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
+        } catch (Exception e) {
+            log.error("Unexpected error adding role to user: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new MessageResponse("Failed to add role: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/user/{userId}/remove-role")
+    @PreAuthorize("hasRole('" + Role.ROOT + "')")
+    public ResponseEntity<?> removeRoleFromUser(@PathVariable UUID userId, @RequestBody Role role) {
+        try {
+            log.debug("Admin removing role {} from user: {}", role, userId);
+            User updatedUser = userService.removeRole(userId, role);
+            return ResponseEntity.ok(updatedUser);
+        } catch (IllegalArgumentException e) {
+            log.error("Error removing role from user: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
+        } catch (Exception e) {
+            log.error("Unexpected error removing role from user: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new MessageResponse("Failed to remove role: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/user/verify")
+    @PreAuthorize("hasRole('" + Role.ROOT + "')")
+    public ResponseEntity<?> verifyUser(@RequestParam UUID userId) {
+        try {
+            log.debug("Admin verifying user with ID: {}", userId);
+            User verifiedUser = userService.verifyDirectly(userId);
+            return ResponseEntity.ok(verifiedUser);
+        } catch (IllegalArgumentException e) {
+            log.error("Error verifying user: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
+        } catch (Exception e) {
+            log.error("Unexpected error verifying user: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new MessageResponse("Failed to verify user: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/user/create")
+    @PreAuthorize("hasRole('" + Role.ROOT + "')")
+    public ResponseEntity<?> createUser(@RequestBody SignupRequest signUpRequest) {
+        try {
+            log.debug("Admin creating user with email: {}", signUpRequest.getEmail());
+            User newUser = userService.createUser(signUpRequest, false);
+            userService.verifyDirectly(newUser.getId());
+            // Send them a forgot your password email to reset their password
+            userService.requestPasswordReset(newUser.getEmail());
+            return ResponseEntity.ok(new MessageResponse("User created successfully: " + newUser.getEmail()));
+        } catch (IllegalArgumentException e) {
+            log.error("Error creating user: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
+        } catch (Exception e) {
+            log.error("Unexpected error creating user: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new MessageResponse("Failed to create user: " + e.getMessage()));
+        }
+    }
+
+    @GetMapping("/roles")
+    @PreAuthorize("hasRole('" + Role.ROOT + "')")
+    public ResponseEntity<?> getAvailableRoles() {
+        try {
+            log.debug("Admin retrieving available roles");
+            return ResponseEntity.ok(Role.values());
+        } catch (Exception e) {
+            log.error("Error retrieving roles: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new MessageResponse("Failed to retrieve roles: " + e.getMessage()));
         }
     }
 

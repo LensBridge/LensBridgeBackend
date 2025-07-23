@@ -5,7 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Data
@@ -24,7 +24,7 @@ public class Upload {
     private UUID uploadedBy;
 
     private UUID eventId;
-    private LocalDate createdDate;
+    private LocalDateTime createdDate;
 
     private boolean approved;
     private boolean featured;

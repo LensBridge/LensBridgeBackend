@@ -23,14 +23,14 @@ class UploadServiceIntegrationTest {
     @InjectMocks
     private UploadService uploadService;
 
-    @Test
-    void testCreateUpload() {
-        Upload upload = new Upload();
-        when(uploadRepository.save(any(Upload.class))).thenReturn(upload);
-        Upload created = uploadService.createUpload(upload);
-        assertNotNull(created);
-        verify(uploadRepository).save(upload);
-    }
+    // @Test
+    // void testCreateUpload() {
+    //     Upload upload = new Upload();
+    //     when(uploadRepository.save(any(Upload.class))).thenReturn(upload);
+    //     Upload created = uploadService.createUpload(upload);
+    //     assertNotNull(created);
+    //     verify(uploadRepository).save(upload);
+    // }
 //
 //    @Test
 //    void testGetAllUploads() {

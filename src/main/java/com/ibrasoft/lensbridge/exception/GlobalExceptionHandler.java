@@ -70,48 +70,49 @@ public class GlobalExceptionHandler {
     public ResponseEntity<MessageResponse> handleUsernameNotFoundException(UsernameNotFoundException ex) {
         log.warn("Authentication failed - user not found: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-            .body(new MessageResponse("Invalid username or password"));
+                .body(new MessageResponse("Invalid username or password"));
     }
 
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<MessageResponse> handleBadCredentialsException(BadCredentialsException ex) {
         log.warn("Authentication failed - bad credentials: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-            .body(new MessageResponse("Invalid username or password"));
+                .body(new MessageResponse("Invalid username or password"));
     }
 
     @ExceptionHandler(DisabledException.class)
     public ResponseEntity<MessageResponse> handleDisabledException(DisabledException ex) {
         log.warn("Authentication failed - account disabled: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-            .body(new MessageResponse("Account is disabled. Please verify your email."));
+                .body(new MessageResponse("Account is disabled. Please verify your email."));
     }
 
     @ExceptionHandler(AuthorizationDeniedException.class)
     public ResponseEntity<MessageResponse> handleAuthorizationDeniedException(AuthorizationDeniedException ex) {
         log.warn("Authorization failed - access denied: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
-            .body(new MessageResponse("Access denied."));
+                .body(new MessageResponse("Access denied."));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<MessageResponse> handleHttpMessageNotReadableException(HttpMessageNotReadableException ex) {
         log.error("Malformed JSON request: ", ex);
         return ResponseEntity.badRequest()
-            .body(new MessageResponse("Malformed JSON request"));
+                .body(new MessageResponse("Malformed JSON request"));
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
-    public ResponseEntity<MessageResponse> handleHttpRequestMethodNotSupportedException(HttpRequestMethodNotSupportedException ex) {
+    public ResponseEntity<MessageResponse> handleHttpRequestMethodNotSupportedException(
+            HttpRequestMethodNotSupportedException ex) {
         log.error("HTTP method not supported: ", ex);
         return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
-            .body(new MessageResponse("HTTP method not supported"));
+                .body(new MessageResponse("HTTP method not supported"));
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<MessageResponse> handleGenericException(Exception ex) {
-        log.error("Unexpected error occurred: ", ex);
+        log.error("Unexpected error occurred: {}", ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-            .body(new MessageResponse("An unexpected error occurred"));
+                .body(new MessageResponse("An unexpected error occurred"));
     }
 }

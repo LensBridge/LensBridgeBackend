@@ -8,10 +8,37 @@ import org.springframework.stereotype.Service;
 import java.io.*;
 
 @Service
-public class VideoProcessingService {
+public class MediaConversionService {
 
     @Value("${uploads.video.maxduration}")
     private double MAX_DURATION_SECONDS;
+
+    public File convertHEICToJPEG(InputStream inputStream, String fileName) throws IOException, InterruptedException {
+        File inputFile = File.createTempFile("input-" + fileName, ".heic");
+        File outputFile = File.createTempFile("output-" + fileName, ".jpg");
+
+        // Save stream to file
+        try (FileOutputStream fos = new FileOutputStream(inputFile)) {
+            inputStream.transferTo(fos);
+        }
+
+        ProcessBuilder pb = new ProcessBuilder(
+                "ffmpeg",
+                "-i", inputFile.getAbsolutePath(),
+                outputFile.getAbsolutePath()
+        );
+
+        Process process = pb.inheritIO().start();
+        int exitCode = process.waitFor();
+
+        inputFile.delete();
+
+        if (exitCode != 0) {
+            outputFile.delete();
+            throw new VideoProcessingException("FFmpeg failed with exit code " + exitCode);
+        }
+        return outputFile;
+    }
 
     public File transcodeToHevc(InputStream inputStream, String fileName) throws IOException, InterruptedException {
         File inputFile = File.createTempFile("input-", ".mp4");
