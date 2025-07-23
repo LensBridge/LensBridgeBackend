@@ -1,7 +1,6 @@
 package com.ibrasoft.lensbridge.dto.request;
 
 import lombok.Data;
-import jakarta.annotation.PostConstruct;
 import jakarta.validation.constraints.*;
 
 @Data
