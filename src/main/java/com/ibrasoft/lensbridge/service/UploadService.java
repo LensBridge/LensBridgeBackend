@@ -1,6 +1,7 @@
 package com.ibrasoft.lensbridge.service;
 
 import com.ibrasoft.lensbridge.dto.response.AdminUploadDto;
+import com.ibrasoft.lensbridge.exception.FileProcessingException;
 import com.ibrasoft.lensbridge.model.auth.User;
 import com.ibrasoft.lensbridge.model.event.Event;
 import com.ibrasoft.lensbridge.model.upload.Upload;
@@ -8,7 +9,6 @@ import com.ibrasoft.lensbridge.model.upload.UploadType;
 import com.ibrasoft.lensbridge.repository.UploadRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -44,56 +44,111 @@ public class UploadService {
     @Value("${uploads.default-featured:false}")
     private boolean defaultFeatured;
 
-    public Upload createUpload(MultipartFile file, UUID eventId, String description, String instagramHandle,
-            boolean anon, UUID uploadedBy) throws Exception {
-
-        if (file.isEmpty()) {
-            throw new IllegalArgumentException("Empty file cannot be uploaded");
+    public void approveUpload(UUID uploadId) {
+        Optional<Upload> uploadOpt = uploadRepository.findById(uploadId);
+        if (uploadOpt.isPresent()) {
+            Upload upload = uploadOpt.get();
+            upload.setApproved(true);
+            uploadRepository.save(upload);
+            log.info("Upload {} approved successfully", uploadId);
+        } else {
+            log.warn("Attempted to approve non-existent upload: {}", uploadId);
+            throw new IllegalArgumentException("Upload not found");
         }
-        if (file.getSize() > maxUploadSize) {
-            throw new IllegalArgumentException("File size exceeds the maximum limit of " + maxUploadSize + " bytes");
+    }
+
+    public void featureUpload(UUID uploadId) {
+        Optional<Upload> uploadOpt = uploadRepository.findById(uploadId);
+        if (uploadOpt.isPresent()) {
+            Upload upload = uploadOpt.get();
+            upload.setFeatured(true);
+            uploadRepository.save(upload);
+            log.info("Upload {} featured successfully", uploadId);
+        } else {
+            log.warn("Attempted to feature non-existent upload: {}", uploadId);
+            throw new IllegalArgumentException("Upload not found");
         }
-        if (file.getContentType() == null || !allowedFileTypes.contains(file.getContentType())) {
-            throw new IllegalArgumentException("Unsupported file type: " + file.getContentType());
+    }
+
+    public void unfeatureUpload(UUID uploadId) {
+        Optional<Upload> uploadOpt = uploadRepository.findById(uploadId);
+        if (uploadOpt.isPresent()) {
+            Upload upload = uploadOpt.get();
+            upload.setFeatured(false);
+            uploadRepository.save(upload);
+            log.info("Upload {} unfeatured successfully", uploadId);
+        } else {
+            log.warn("Attempted to unfeature non-existent upload: {}", uploadId);
+            throw new IllegalArgumentException("Upload not found");
         }
+    }
 
-        String fileURL;
+    public void unapproveUpload(UUID uploadId) {
+        Optional<Upload> uploadOpt = uploadRepository.findById(uploadId);
+        if (uploadOpt.isPresent()) {
+            Upload upload = uploadOpt.get();
+            upload.setApproved(false);
+            uploadRepository.save(upload);
+            log.info("Upload {} unapproved successfully", uploadId);
+        } else {
+            log.warn("Attempted to unapprove non-existent upload: {}", uploadId);
+            throw new IllegalArgumentException("Upload not found");
+        }
+    }
 
-        String contentType = file.getContentType();
-        String originalFilename = file.getOriginalFilename();
-        File outputFile;
-        UploadType uploadType;
+    public Upload createUpload(MultipartFile file, UUID eventId, String description, String instagramHandle, boolean anon, UUID uploadedBy) {
+        try {
+            if (file.isEmpty()) {
+                throw new IllegalArgumentException("Empty file cannot be uploaded");
+            }
+            if (file.getSize() > maxUploadSize) {
+                throw new IllegalArgumentException("File size exceeds the maximum limit of " + maxUploadSize + " bytes");
+            }
+            if (file.getContentType() == null || !allowedFileTypes.contains(file.getContentType())) {
+                throw new IllegalArgumentException("Unsupported file type: " + file.getContentType());
+            }
 
-        if (contentType != null && contentType.startsWith("image")) {
-            uploadType = UploadType.IMAGE;
-            // Handle HEIC conversion to JPEG
-            // if ("image/heic".equals(contentType)) {
-            //     outputFile = mediaConversionService.convertHEICToJPEG(file.getInputStream(), originalFilename);
-            // } else {
+            String fileURL;
+
+            String contentType = file.getContentType();
+            String originalFilename = file.getOriginalFilename();
+            File outputFile;
+            UploadType uploadType;
+
+            if (contentType != null && contentType.startsWith("image")) {
+                uploadType = UploadType.IMAGE;
+
                 outputFile = File.createTempFile("upload_", "_" + originalFilename);
                 file.transferTo(outputFile);
-            // }
-            fileURL = cloudinaryService.uploadImage(outputFile, UUID.randomUUID().toString());
-            outputFile.delete(); 
-        } else if (contentType != null && contentType.startsWith("video")) {
-            uploadType = UploadType.VIDEO;
-            outputFile = File.createTempFile("upload_", "_" + originalFilename);
-            file.transferTo(outputFile);
-            fileURL = cloudinaryService.uploadVideo(outputFile, UUID.randomUUID().toString());
-            outputFile.delete(); 
-        } else {
-            throw new IllegalArgumentException("Unsupported file type: " + contentType);
-        }
+                fileURL = cloudinaryService.uploadImage(outputFile, UUID.randomUUID().toString());
+                outputFile.delete();
+            } else if (contentType != null && contentType.startsWith("video")) {
+                uploadType = UploadType.VIDEO;
+                outputFile = File.createTempFile("upload_", "_" + originalFilename);
+                file.transferTo(outputFile);
+                fileURL = cloudinaryService.uploadVideo(outputFile, UUID.randomUUID().toString());
+                outputFile.delete();
+            } else {
+                throw new IllegalArgumentException("Unsupported file type: " + contentType);
+            }
 
-        UUID uuid = UUID.randomUUID();
-        Upload upload = new Upload(uuid, originalFilename, fileURL, description, instagramHandle, uploadedBy, eventId,
-                LocalDateTime.now(), defaultApproved, defaultFeatured, anon, uploadType);
-        uploadRepository.save(upload);
-        return upload;
+            UUID uuid = UUID.randomUUID();
+            Upload upload = new Upload(uuid, originalFilename, fileURL, description, instagramHandle, uploadedBy, eventId, LocalDateTime.now(), defaultApproved, defaultFeatured, anon, uploadType);
+            uploadRepository.save(upload);
+            return upload;
+        }
+        catch (Exception e) {
+            log.error("Failed to process file for upload: {}", e.getMessage());
+            throw new FileProcessingException("Failed to process file for upload");
+        }
     }
 
     public Page<Upload> getAllUploads(Pageable pageable) {
         return uploadRepository.findAll(pageable);
+    }
+
+    public Page<Upload> getUploadsByEvent(UUID eventId, Pageable pageable) {
+        return uploadRepository.findByEventId(eventId, pageable);
     }
 
     public Optional<Upload> getUploadById(UUID id) {
@@ -163,11 +218,11 @@ public class UploadService {
             // Admins can view both approved and unapproved content
             String secureUrl = cloudinaryService.getSecureUrl(upload.getFileUrl(), upload.isApproved(), true);
             dto.setSecureUrl(secureUrl);
-            
+
             // Generate secure thumbnail URL
             String thumbnailUrl = cloudinaryService.getSecureThumbnailUrl(upload.getFileUrl(), upload.isApproved(), true);
             dto.setThumbnailUrl(thumbnailUrl);
-            
+
         } catch (Exception e) {
             // If secure URL generation fails, log error but don't break the DTO creation
             log.error("Failed to generate secure URLs for upload {}: {}", upload.getUuid(), e.getMessage());
@@ -187,9 +242,7 @@ public class UploadService {
         // Fetch and populate event information
         if (upload.getEventId() != null) {
             Optional<Event> eventOpt = eventsService.getEventById(upload.getEventId());
-            if (eventOpt.isPresent()) {
-                dto.setEventName(eventOpt.get().getName());
-            }
+            eventOpt.ifPresent(event -> dto.setEventName(event.getName()));
         }
 
         return dto;

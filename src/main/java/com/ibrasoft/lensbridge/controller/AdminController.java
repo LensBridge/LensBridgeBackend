@@ -1,8 +1,8 @@
 package com.ibrasoft.lensbridge.controller;
 
-import com.ibrasoft.lensbridge.audit.AdminAction;
-import com.ibrasoft.lensbridge.audit.AdminAuditService;
-import com.ibrasoft.lensbridge.audit.AuditEvent;
+import com.ibrasoft.lensbridge.model.audit.AdminAction;
+import com.ibrasoft.lensbridge.service.AdminAuditService;
+import com.ibrasoft.lensbridge.model.audit.AuditEvent;
 import com.ibrasoft.lensbridge.dto.request.SignupRequest;
 import com.ibrasoft.lensbridge.dto.response.AdminUploadDto;
 import com.ibrasoft.lensbridge.dto.response.MessageResponse;
@@ -10,10 +10,11 @@ import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.model.auth.User;
 import com.ibrasoft.lensbridge.model.event.Event;
 import com.ibrasoft.lensbridge.model.event.EventStatus;
-import com.ibrasoft.lensbridge.service.UserService;
-import com.ibrasoft.lensbridge.service.AdminOperationService;
+import com.ibrasoft.lensbridge.security.services.UserDetailsImpl;
 import com.ibrasoft.lensbridge.service.EventsService;
 import com.ibrasoft.lensbridge.service.UploadService;
+import com.ibrasoft.lensbridge.service.UserService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -22,13 +23,14 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
-import jakarta.servlet.http.HttpServletRequest;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -39,126 +41,88 @@ public class AdminController {
 
     private final UploadService uploadService;
     private final EventsService eventsService;
-    private final AdminOperationService adminOperationService;
     private final AdminAuditService auditService;
     private final UserService userService;
 
+    private ResponseEntity<?> executeUploadAction(UUID uploadId, HttpServletRequest request, Consumer<UUID> serviceAction, AdminAction auditAction, String successMessage) {
+        serviceAction.accept(uploadId);
+        UserDetailsImpl curr = (UserDetailsImpl) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        this.auditService.logAuditEvent(curr.getEmail(), auditAction, "Upload", uploadId, request.getRemoteAddr());
+        return ResponseEntity.ok(new MessageResponse(successMessage));
+    }
+
+    private ResponseEntity<?> executeUserAction(UUID userId, HttpServletRequest request, Consumer<UUID> serviceAction, AdminAction auditAction, String successMessage) {
+        serviceAction.accept(userId);
+        UserDetailsImpl curr = (UserDetailsImpl) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        this.auditService.logAuditEvent(curr.getEmail(), auditAction, "Upload", userId, request.getRemoteAddr());
+        return ResponseEntity.ok(new MessageResponse(successMessage));
+    }
+
+    private <T, R> ResponseEntity<?> executeCreationAction(T input, HttpServletRequest request,
+                                                           Function<T, R> serviceAction, AdminAction auditAction,
+                                                           String entityType, Function<R, UUID> idExtractor,
+                                                           String successMessage) {
+        R createdEntity = serviceAction.apply(input);
+        UserDetailsImpl curr = (UserDetailsImpl) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        UUID entityId = idExtractor.apply(createdEntity);
+
+        this.auditService.logAuditEvent(curr.getEmail(), auditAction, entityType, entityId, request.getRemoteAddr());
+        return ResponseEntity.ok(new MessageResponse(successMessage));
+    }
+
     @PostMapping("/create-event")
     public ResponseEntity<?> createEvent(@RequestParam("eventName") String eventName,
-                                         @RequestParam(value = "eventDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate eventDate,
-                                         @RequestParam(value = "status", required = false) EventStatus status) {
-        try {
-            log.info("Admin creating event: {} for date: {}", eventName, eventDate);
-            
-            Event event = new Event();
-            UUID generatedId = UUID.randomUUID();
-            event.setId(generatedId);
-            event.setName(eventName);
-            event.setDate(eventDate != null ? eventDate : LocalDate.now());
-            event.setStatus(status != null ? status : EventStatus.ONGOING);
+                                         @RequestParam(value = "eventDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime eventDate,
+                                         @RequestParam(value = "status", required = false) EventStatus status,
+                                         HttpServletRequest request) {
 
-            Event savedEvent = eventsService.createEvent(event);
-            log.info("Event created successfully with ID: {}", savedEvent.getId());
-            
-            return ResponseEntity.ok(new MessageResponse("Event created successfully: " + savedEvent.getName()));
-        } catch (Exception e) {
-            log.error("Error creating event: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new MessageResponse("Failed to create event: " + e.getMessage()));
-        }
+        return executeCreationAction(null, request,
+                (ignored) -> eventsService.createEvent(eventName, eventDate),
+                AdminAction.CREATE_EVENT,
+                "Event",
+                Event::getId,
+                "Event created successfully");
     }
 
     // Upload Management Operations
     @PostMapping("/upload/{uploadId}")
     public ResponseEntity<?> approveUpload(@PathVariable UUID uploadId, HttpServletRequest request) {
-        return adminOperationService.executeUploadOperation(uploadId, AdminAction.APPROVE_UPLOAD, upload -> {
-            if (upload.isApproved()) {
-                return ResponseEntity.badRequest()
-                        .body(new MessageResponse("Upload is already approved"));
-            }
-            upload.setApproved(true);
-            uploadService.updateUpload(upload);
-            return ResponseEntity.ok(new MessageResponse("Upload approved successfully"));
-        }, request);
+        return executeUploadAction(uploadId, request, uploadService::approveUpload, AdminAction.APPROVE_UPLOAD, "Upload approved successfully");
     }
 
     @DeleteMapping("/upload/{uploadId}")
     public ResponseEntity<?> deleteUpload(@PathVariable UUID uploadId, HttpServletRequest request) {
-        return adminOperationService.executeUploadOperation(uploadId, AdminAction.DELETE_UPLOAD, upload -> {
-            uploadService.deleteUpload(uploadId);
-            return ResponseEntity.ok(new MessageResponse("Upload deleted successfully"));
-        }, request);
+        return executeUploadAction(uploadId, request, uploadService::deleteUpload, AdminAction.DELETE_UPLOAD, "Upload deleted successfully");
     }
 
     @PostMapping("/feature-upload/{uploadId}")
     public ResponseEntity<?> featureUpload(@PathVariable UUID uploadId, HttpServletRequest request) {
-        return adminOperationService.executeUploadOperation(uploadId, AdminAction.FEATURE_UPLOAD, upload -> {
-            if (!upload.isApproved()) {
-                return ResponseEntity.badRequest()
-                        .body(new MessageResponse("Cannot feature an unapproved upload. Please approve it first."));
-            }
-            if (upload.isFeatured()) {
-                return ResponseEntity.badRequest()
-                        .body(new MessageResponse("Upload is already featured"));
-            }
-            upload.setFeatured(true);
-            uploadService.updateUpload(upload);
-            return ResponseEntity.ok(new MessageResponse("Upload featured successfully"));
-        }, request);
+        return executeUploadAction(uploadId, request, uploadService::featureUpload, AdminAction.FEATURE_UPLOAD, "Upload featured successfully");
     }
 
     @DeleteMapping("/upload/{uploadId}/approval")
     public ResponseEntity<?> unapproveUpload(@PathVariable UUID uploadId, HttpServletRequest request) {
-        return adminOperationService.executeUploadOperation(uploadId, AdminAction.UNAPPROVE_UPLOAD, upload -> {
-            if (!upload.isApproved()) {
-                return ResponseEntity.badRequest()
-                        .body(new MessageResponse("Upload is already unapproved"));
-            }
-            upload.setApproved(false);
-            upload.setFeatured(false); // Can't be featured if not approved
-            uploadService.updateUpload(upload);
-            return ResponseEntity.ok(new MessageResponse("Upload approval removed successfully"));
-        }, request);
+        return executeUploadAction(uploadId, request, uploadService::unapproveUpload, AdminAction.UNAPPROVE_UPLOAD, "Upload unapproved successfully");
     }
 
     @DeleteMapping("/upload/{uploadId}/featured")
     public ResponseEntity<?> unfeatureUpload(@PathVariable UUID uploadId, HttpServletRequest request) {
-        return adminOperationService.executeUploadOperation(uploadId, AdminAction.UNFEATURE_UPLOAD, upload -> {
-            if (!upload.isFeatured()) {
-                return ResponseEntity.badRequest()
-                        .body(new MessageResponse("Upload is already not featured"));
-            }
-            upload.setFeatured(false);
-            uploadService.updateUpload(upload);
-            return ResponseEntity.ok(new MessageResponse("Upload featured status removed successfully"));
-        }, request);
+        return executeUploadAction(uploadId, request, uploadService::unfeatureUpload, AdminAction.UNFEATURE_UPLOAD, "Upload unfeatured successfully");
     }
 
     // Data Retrieval Operations
     @GetMapping("/uploads")
     public ResponseEntity<?> getAllUploads(Pageable pageable) {
-        try {
-            log.debug("Admin retrieving all uploads with user information, page: {}", pageable.getPageNumber());
-            Page<AdminUploadDto> uploads = uploadService.getAllUploadsForAdmin(pageable);
-            return ResponseEntity.ok(uploads);
-        } catch (Exception e) {
-            log.error("Error retrieving uploads: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new MessageResponse("Failed to retrieve uploads: " + e.getMessage()));
-        }
+        log.debug("Admin retrieving all uploads with user information, page: {}", pageable.getPageNumber());
+        Page<AdminUploadDto> uploads = uploadService.getAllUploadsForAdmin(pageable);
+        return ResponseEntity.ok(uploads);
     }
 
     @GetMapping("/uploads/pending")
     public ResponseEntity<?> getPendingUploads(Pageable pageable) {
-        try {
-            log.debug("Admin retrieving pending uploads, page: {}", pageable.getPageNumber());
-            Page<AdminUploadDto> uploads = uploadService.getUploadsByApprovalStatus(false, pageable);
-            return ResponseEntity.ok(uploads);
-        } catch (Exception e) {
-            log.error("Error retrieving pending uploads: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new MessageResponse("Failed to retrieve pending uploads: " + e.getMessage()));
-        }
+        log.debug("Admin retrieving pending uploads, page: {}", pageable.getPageNumber());
+        Page<AdminUploadDto> uploads = uploadService.getUploadsByApprovalStatus(false, pageable);
+        return ResponseEntity.ok(uploads);
     }
 
     @GetMapping("/uploads/approved")
@@ -169,8 +133,7 @@ public class AdminController {
             return ResponseEntity.ok(uploads);
         } catch (Exception e) {
             log.error("Error retrieving approved uploads: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new MessageResponse("Failed to retrieve approved uploads: " + e.getMessage()));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new MessageResponse("Failed to retrieve approved uploads: " + e.getMessage()));
         }
     }
 
@@ -182,8 +145,7 @@ public class AdminController {
             return ResponseEntity.ok(uploads);
         } catch (Exception e) {
             log.error("Error retrieving featured uploads: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new MessageResponse("Failed to retrieve featured uploads: " + e.getMessage()));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new MessageResponse("Failed to retrieve featured uploads: " + e.getMessage()));
         }
     }
 
@@ -194,8 +156,7 @@ public class AdminController {
             return ResponseEntity.ok(eventsService.getAllEvents());
         } catch (Exception e) {
             log.error("Error retrieving events: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new MessageResponse("Failed to retrieve events: " + e.getMessage()));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new MessageResponse("Failed to retrieve events: " + e.getMessage()));
         }
     }
 
@@ -207,81 +168,57 @@ public class AdminController {
             return ResponseEntity.ok(userService.getAllUsers(pageable));
         } catch (Exception e) {
             log.error("Error retrieving users: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new MessageResponse("Failed to retrieve users: " + e.getMessage()));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new MessageResponse("Failed to retrieve users: " + e.getMessage()));
         }
     }
 
     @PostMapping("/user/{userId}/add-role")
     @PreAuthorize("hasRole('" + Role.ROOT + "')")
-    public ResponseEntity<?> addRoleToUser(@PathVariable UUID userId, @RequestBody Role role) {
-        try {
-            log.debug("Admin adding role {} to user: {}", role, userId);
-            User updatedUser = userService.addRole(userId, role);
-            return ResponseEntity.ok(updatedUser);
-        } catch (IllegalArgumentException e) {
-            log.error("Error adding role to user: {}", e.getMessage(), e);
-            return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
-        } catch (Exception e) {
-            log.error("Unexpected error adding role to user: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new MessageResponse("Failed to add role: " + e.getMessage()));
-        }
+    public ResponseEntity<?> addRoleToUser(@PathVariable UUID userId, @RequestBody Role role, HttpServletRequest request) {
+        return executeUserAction(userId, request,
+                (id) -> {
+                    log.debug("Admin adding role {} to user: {}", role, id);
+                    userService.addRole(id, role);
+                },
+                AdminAction.ADD_USER_ROLE,
+                "Role added successfully to user: " + userId);
     }
 
     @PostMapping("/user/{userId}/remove-role")
     @PreAuthorize("hasRole('" + Role.ROOT + "')")
-    public ResponseEntity<?> removeRoleFromUser(@PathVariable UUID userId, @RequestBody Role role) {
-        try {
-            log.debug("Admin removing role {} from user: {}", role, userId);
-            User updatedUser = userService.removeRole(userId, role);
-            return ResponseEntity.ok(updatedUser);
-        } catch (IllegalArgumentException e) {
-            log.error("Error removing role from user: {}", e.getMessage(), e);
-            return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
-        } catch (Exception e) {
-            log.error("Unexpected error removing role from user: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new MessageResponse("Failed to remove role: " + e.getMessage()));
-        }
+    public ResponseEntity<?> removeRoleFromUser(@PathVariable UUID userId, @RequestBody Role role, HttpServletRequest request) {
+        return executeUserAction(userId, request,
+                (id) -> {
+                    log.debug("Admin removing role {} to user: {}", role, id);
+                    userService.addRole(id, role);
+                },
+                AdminAction.REMOVE_USER_ROLE,
+                "Role added successfully to user: " + userId);
     }
 
     @PostMapping("/user/verify")
     @PreAuthorize("hasRole('" + Role.ROOT + "')")
-    public ResponseEntity<?> verifyUser(@RequestBody Map<String, UUID> payload) {
-        try {
-            UUID userId = payload.get("userId");
-            log.debug("Admin verifying user with ID: {}", userId);
-            User verifiedUser = userService.verifyDirectly(userId);
-            return ResponseEntity.ok(verifiedUser);
-        } catch (IllegalArgumentException e) {
-            log.error("Error verifying user: {}", e.getMessage(), e);
-            return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
-        } catch (Exception e) {
-            log.error("Unexpected error verifying user: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new MessageResponse("Failed to verify user: " + e.getMessage()));
-        }
+    public ResponseEntity<?> verifyUser(@RequestBody Map<String, UUID> payload, HttpServletRequest request) {
+        return executeUserAction(payload.get("userId"), request,
+                userService::verifyDirectly, AdminAction.VERIFY_USER,
+                "User verified successfully");
     }
 
     @PostMapping("/user/create")
     @PreAuthorize("hasRole('" + Role.ROOT + "')")
-    public ResponseEntity<?> createUser(@RequestBody SignupRequest signUpRequest) {
-        try {
-            log.debug("Admin creating user with email: {}", signUpRequest.getEmail());
-            User newUser = userService.createUser(signUpRequest, false);
-            userService.verifyDirectly(newUser.getId());
-            // Send them a forgot your password email to reset their password
-            userService.requestPasswordReset(newUser.getEmail());
-            return ResponseEntity.ok(new MessageResponse("User created successfully: " + newUser.getEmail()));
-        } catch (IllegalArgumentException e) {
-            log.error("Error creating user: {}", e.getMessage(), e);
-            return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
-        } catch (Exception e) {
-            log.error("Unexpected error creating user: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new MessageResponse("Failed to create user: " + e.getMessage()));
-        }
+    public ResponseEntity<?> createUser(@RequestBody SignupRequest signUpRequest, HttpServletRequest request) {
+        return executeCreationAction(signUpRequest, request,
+                (signupRequest) -> {
+                    log.debug("Admin creating user with email: {}", signupRequest.getEmail());
+                    User newUser = userService.createUser(signupRequest, false);
+                    userService.verifyDirectly(newUser.getId());
+                    userService.requestPasswordReset(newUser.getEmail());
+                    return newUser;
+                },
+                AdminAction.ADD_USER,
+                "User",
+                User::getId,
+                "User created successfully: " + signUpRequest.getEmail());
     }
 
     @GetMapping("/roles")
@@ -292,8 +229,7 @@ public class AdminController {
             return ResponseEntity.ok(Role.values());
         } catch (Exception e) {
             log.error("Error retrieving roles: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new MessageResponse("Failed to retrieve roles: " + e.getMessage()));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new MessageResponse("Failed to retrieve roles: " + e.getMessage()));
         }
     }
 
@@ -306,8 +242,7 @@ public class AdminController {
             return ResponseEntity.ok(auditEvents);
         } catch (Exception e) {
             log.error("Error retrieving audit events: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new MessageResponse("Failed to retrieve audit events: " + e.getMessage()));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new MessageResponse("Failed to retrieve audit events: " + e.getMessage()));
         }
     }
 
@@ -319,8 +254,7 @@ public class AdminController {
             return ResponseEntity.ok(failedOps);
         } catch (Exception e) {
             log.error("Error retrieving failed operations: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new MessageResponse("Failed to retrieve failed operations: " + e.getMessage()));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new MessageResponse("Failed to retrieve failed operations: " + e.getMessage()));
         }
     }
 
@@ -331,8 +265,7 @@ public class AdminController {
             return ResponseEntity.ok(auditService.getAuditEventsByEntity("Upload", uploadId));
         } catch (Exception e) {
             log.error("Error retrieving upload audit history: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new MessageResponse("Failed to retrieve upload audit history: " + e.getMessage()));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new MessageResponse("Failed to retrieve upload audit history: " + e.getMessage()));
         }
     }
 
@@ -344,24 +277,19 @@ public class AdminController {
             return ResponseEntity.ok(events);
         } catch (Exception e) {
             log.error("Error retrieving audit events by action: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new MessageResponse("Failed to retrieve audit events: " + e.getMessage()));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new MessageResponse("Failed to retrieve audit events: " + e.getMessage()));
         }
     }
 
     @GetMapping("/audit/daterange")
-    public ResponseEntity<?> getAuditEventsByDateRange(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end,
-            Pageable pageable) {
+    public ResponseEntity<?> getAuditEventsByDateRange(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start, @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end, Pageable pageable) {
         try {
             log.debug("Admin retrieving audit events between {} and {}", start, end);
             Page<AuditEvent> events = auditService.getAuditEventsByDateRange(start, end, pageable);
             return ResponseEntity.ok(events);
         } catch (Exception e) {
             log.error("Error retrieving audit events by date range: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new MessageResponse("Failed to retrieve audit events: " + e.getMessage()));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new MessageResponse("Failed to retrieve audit events: " + e.getMessage()));
         }
     }
 
@@ -372,8 +300,7 @@ public class AdminController {
             return ResponseEntity.ok(AdminAction.values());
         } catch (Exception e) {
             log.error("Error retrieving available actions: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new MessageResponse("Failed to retrieve available actions: " + e.getMessage()));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new MessageResponse("Failed to retrieve available actions: " + e.getMessage()));
         }
     }
 }

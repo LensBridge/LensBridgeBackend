@@ -1,5 +1,7 @@
-package com.ibrasoft.lensbridge.audit;
+package com.ibrasoft.lensbridge.repository;
 
+import com.ibrasoft.lensbridge.model.audit.AdminAction;
+import com.ibrasoft.lensbridge.model.audit.AuditEvent;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;

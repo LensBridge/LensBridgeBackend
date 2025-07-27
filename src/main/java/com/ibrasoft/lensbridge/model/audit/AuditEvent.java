@@ -1,4 +1,4 @@
-package com.ibrasoft.lensbridge.audit;
+package com.ibrasoft.lensbridge.model.audit;
 
 import lombok.Builder;
 import lombok.Data;

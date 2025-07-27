@@ -24,21 +24,17 @@ public class GalleryController {
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             System.err.println("Error fetching gallery: " + e.getMessage());
-            e.printStackTrace();
             return ResponseEntity.ok(Page.empty());
         }
     }
 
     @GetMapping("/gallery/event/{eventId}")
     public ResponseEntity<Page<GalleryItemDto>> getGalleryByEvent(@PathVariable UUID eventId, Pageable pageable) {
-        // TODO: Update this to use pagination
         try {
             Page<GalleryItemDto> response = galleryService.getGalleryItemsByEvent(eventId, pageable);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            // Log the error for debugging
             System.err.println("Error fetching gallery for event: " + e.getMessage());
-            e.printStackTrace();
             return ResponseEntity.ok(Page.empty());
         }
     }

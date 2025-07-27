@@ -1,5 +1,8 @@
-package com.ibrasoft.lensbridge.audit;
+package com.ibrasoft.lensbridge.model.audit;
 
+import lombok.Getter;
+
+@Getter
 public enum AdminAction {
     // Upload Management Actions
     APPROVE_UPLOAD("Approve Upload"),
@@ -42,11 +45,7 @@ public enum AdminAction {
     AdminAction(String description) {
         this.description = description;
     }
-    
-    public String getDescription() {
-        return description;
-    }
-    
+
     @Override
     public String toString() {
         return this.name();

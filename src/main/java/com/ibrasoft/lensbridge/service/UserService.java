@@ -89,7 +89,7 @@ public class UserService {
     /**
      * Create a new user from signup request
      */
-    public User createUser(SignupRequest signUpRequest, boolean sendConfirmEmail) throws Exception {
+    public User createUser(SignupRequest signUpRequest, boolean sendConfirmEmail)  {
         log.info("Creating new user with email: {}", signUpRequest.getEmail());
         
         // Check if user already exists
@@ -127,7 +127,7 @@ public class UserService {
         return savedUser;
     }
 
-    public User createUser(SignupRequest signUpRequest) throws Exception {
+    public User createUser(SignupRequest signUpRequest)  {
         return createUser(signUpRequest, true); // Default to sending confirmation email
     }
     

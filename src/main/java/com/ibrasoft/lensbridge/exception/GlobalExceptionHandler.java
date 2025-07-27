@@ -1,5 +1,6 @@
 package com.ibrasoft.lensbridge.exception;
 
+import com.ibrasoft.lensbridge.dto.response.MessageResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,8 +15,6 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
-
-import com.ibrasoft.lensbridge.dto.response.MessageResponse;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -55,8 +54,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Map<String, String>> handleValidationExceptions(
-            MethodArgumentNotValidException ex) {
+    public ResponseEntity<Map<String, String>> handleValidationExceptions(MethodArgumentNotValidException ex) {
         Map<String, String> errors = new HashMap<>();
         ex.getBindingResult().getAllErrors().forEach((error) -> {
             String fieldName = ((FieldError) error).getField();
@@ -69,50 +67,48 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(UsernameNotFoundException.class)
     public ResponseEntity<MessageResponse> handleUsernameNotFoundException(UsernameNotFoundException ex) {
         log.warn("Authentication failed - user not found: {}", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new MessageResponse("Invalid username or password"));
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new MessageResponse("Invalid username or password"));
     }
 
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<MessageResponse> handleBadCredentialsException(BadCredentialsException ex) {
         log.warn("Authentication failed - bad credentials: {}", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new MessageResponse("Invalid username or password"));
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new MessageResponse("Invalid username or password"));
     }
 
     @ExceptionHandler(DisabledException.class)
     public ResponseEntity<MessageResponse> handleDisabledException(DisabledException ex) {
         log.warn("Authentication failed - account disabled: {}", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new MessageResponse("Account is disabled. Please verify your email."));
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new MessageResponse("Account is disabled. Please verify your email."));
     }
 
     @ExceptionHandler(AuthorizationDeniedException.class)
     public ResponseEntity<MessageResponse> handleAuthorizationDeniedException(AuthorizationDeniedException ex) {
         log.warn("Authorization failed - access denied: {}", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(new MessageResponse("Access denied."));
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new MessageResponse("Access denied."));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<MessageResponse> handleHttpMessageNotReadableException(HttpMessageNotReadableException ex) {
         log.error("Malformed JSON request: ", ex);
-        return ResponseEntity.badRequest()
-                .body(new MessageResponse("Malformed JSON request"));
+        return ResponseEntity.badRequest().body(new MessageResponse("Malformed JSON request"));
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
-    public ResponseEntity<MessageResponse> handleHttpRequestMethodNotSupportedException(
-            HttpRequestMethodNotSupportedException ex) {
+    public ResponseEntity<MessageResponse> handleHttpRequestMethodNotSupportedException(HttpRequestMethodNotSupportedException ex) {
         log.error("HTTP method not supported: ", ex);
-        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
-                .body(new MessageResponse("HTTP method not supported"));
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(new MessageResponse("HTTP method not supported"));
+    }
+
+    @ExceptionHandler(FileProcessingException.class)
+    public ResponseEntity<MessageResponse> handleIOException(FileProcessingException ex) {
+        log.error("I/O error occurred: {}", ex.getMessage(), ex);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new MessageResponse("Failed to process upload"));
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<MessageResponse> handleGenericException(Exception ex) {
         log.error("Unexpected error occurred: {}", ex.getMessage(), ex);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new MessageResponse("An unexpected error occurred"));
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new MessageResponse("An unexpected error occurred"));
     }
 }
