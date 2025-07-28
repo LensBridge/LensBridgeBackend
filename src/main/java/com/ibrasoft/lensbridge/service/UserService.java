@@ -118,7 +118,7 @@ public class UserService {
         // Send verification email
         String verifyUrl = String.format("%s/confirm?token=%s", frontendBaseUrl, verificationToken);
         if (sendConfirmEmail) {
-            emailService.sendVerificationEmail(user.getEmail(), verifyUrl);
+            emailService.sendVerificationEmail(user.getEmail(), user.getFirstName(), verifyUrl);
         } else {
             log.info("Skipping email confirmation for user: {}", user.getEmail());
         }
@@ -146,6 +146,7 @@ public class UserService {
         
         User savedUser = saveUser(user);
         log.info("User email verified successfully: {}", user.getEmail());
+        emailService.sendWelcomeEmail(user.getEmail(), user.getFirstName());
         return savedUser;
     }
 
@@ -225,7 +226,7 @@ public class UserService {
         
         // Send password reset email
         String resetUrl = String.format("%s/reset-password?token=%s", frontendBaseUrl, resetToken);
-        emailService.sendPasswordResetEmail(user.getEmail(), resetUrl);
+        emailService.sendPasswordResetEmail(user.getEmail(), user.getFirstName(), resetUrl);
         
         log.info("Password reset email sent to: {}", email);
     }
