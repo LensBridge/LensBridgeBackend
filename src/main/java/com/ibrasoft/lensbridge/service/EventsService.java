@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -28,12 +29,7 @@ public class EventsService {
     }
 
     public Event createEvent(String name, LocalDateTime date) {
-        Event event = Event.builder()
-                .id(UUID.randomUUID())
-                .name(name)
-                .date(date)
-                .status(EventStatus.UPCOMING)
-                .build();
+        Event event = Event.builder().id(UUID.randomUUID()).name(name).date(date).status(EventStatus.UPCOMING).build();
         return createEvent(event);
     }
 
@@ -55,23 +51,35 @@ public class EventsService {
 
     @Scheduled(cron = "0 0 0 * * ?") // Runs daily at midnight
     public void cleanUpOldEvents() {
+        this.cleanUpOldEvents(LocalDateTime.now());
+    }
+
+    public void cleanUpOldEvents(LocalDateTime now) {
+        LocalDate today = now.toLocalDate();
         List<Event> allEvents = eventsRepository.findAll();
+
         for (Event event : allEvents) {
-            // If the event is date has passed, update the status to PAST
-            if (event.getDate() != null && event.getDate().isBefore(java.time.LocalDateTime.now())) {
-                event.setStatus(EventStatus.PAST);
-                eventsRepository.save(event);
+            if (event.getDate() == null) continue;
+
+            LocalDate eventDate = event.getDate().toLocalDate();
+            EventStatus newStatus;
+
+            if (eventDate.isBefore(today)) {
+                newStatus = EventStatus.PAST;
+            } else if (eventDate.isAfter(today)) {
+                newStatus = EventStatus.UPCOMING;
+            } else {
+                if (!now.isBefore(event.getDate())) {
+                    newStatus = EventStatus.ONGOING;
+                } else {
+                    newStatus = EventStatus.UPCOMING;
+                }
             }
-            // If the event is today, update the status to ONGOING
-            else if (event.getDate() != null && event.getDate().isEqual(java.time.LocalDateTime.now())) {
-                event.setStatus(EventStatus.ONGOING);
-                eventsRepository.save(event);
-            }
-            // If the event is in the future, update the status to UPCOMING
-            else if (event.getDate() != null && event.getDate().isAfter(java.time.LocalDateTime.now())) {
-                event.setStatus(EventStatus.UPCOMING);
-                eventsRepository.save(event);
-            }
+
+            event.setStatus(newStatus);
+            eventsRepository.save(event);
         }
     }
+
+
 }
