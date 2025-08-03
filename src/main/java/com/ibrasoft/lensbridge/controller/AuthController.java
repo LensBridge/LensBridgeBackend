@@ -293,6 +293,47 @@ public class AuthController {
         return ResponseEntity.ok(new MessageResponse("Logged out from all devices successfully"));
     }
 
+    @PostMapping("/validate-token")
+    public ResponseEntity<?> validateToken(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(401)
+                .body(new MessageResponse("Invalid or expired token"));
+        }
+
+        try {
+            UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+            User user = userService.findById(userDetails.getId()).orElse(null);
+            
+            if (user == null) {
+                return ResponseEntity.status(401)
+                    .body(new MessageResponse("User not found"));
+            }
+            
+            // Return user information if token is valid
+            return ResponseEntity.ok(new TokenValidationResponse(
+                true,
+                userDetails.getId(),
+                userDetails.getFirstName(),
+                userDetails.getLastName(),
+                userDetails.getEmail(),
+                userDetails.isVerified(),
+                userDetails.getAuthorities().stream()
+                    .map(authority -> authority.getAuthority())
+                    .collect(Collectors.toList())
+            ));
+            
+        } catch (Exception e) {
+            log.error("Error validating token: {}", e.getMessage(), e);
+            return ResponseEntity.status(401)
+                .body(new MessageResponse("Invalid or expired token"));
+        }
+    }
+
+    @GetMapping("/validate-token")
+    public ResponseEntity<?> validateTokenGet(Authentication authentication) {
+        return validateToken(authentication);
+    }
+
     /**
      * Helper method to get client IP address
      */
