@@ -26,4 +26,11 @@ public interface UploadRepository extends MongoRepository<Upload, UUID> {
     Page<Upload> findByApprovedTrueAndFeaturedFalse(Pageable pageable);
     
     Page<Upload> findByUploadedBy(UUID uploadedBy, Pageable pageable);
+    
+    // Count methods for user statistics
+    long countByUploadedBy(UUID uploadedBy);
+    
+    long countByUploadedByAndApproved(UUID uploadedBy, boolean approved);
+    
+    long countByUploadedByAndFeatured(UUID uploadedBy, boolean featured);
 }

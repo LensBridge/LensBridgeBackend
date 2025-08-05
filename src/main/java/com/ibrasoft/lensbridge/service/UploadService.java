@@ -1,6 +1,8 @@
 package com.ibrasoft.lensbridge.service;
 
 import com.ibrasoft.lensbridge.dto.response.AdminUploadDto;
+import com.ibrasoft.lensbridge.dto.response.UserStatsResponse;
+import com.ibrasoft.lensbridge.dto.response.GalleryItemDto;
 import com.ibrasoft.lensbridge.exception.FileProcessingException;
 import com.ibrasoft.lensbridge.model.auth.User;
 import com.ibrasoft.lensbridge.model.event.Event;
@@ -164,6 +166,29 @@ public class UploadService {
     }
 
     /**
+     * Delete user's own upload with ownership validation
+     */
+    public void deleteUserUpload(UUID uploadId, UUID userId) {
+        log.info("User {} attempting to delete upload {}", userId, uploadId);
+        
+        Optional<Upload> uploadOpt = uploadRepository.findById(uploadId);
+        if (uploadOpt.isEmpty()) {
+            throw new IllegalArgumentException("Upload not found");
+        }
+        
+        Upload upload = uploadOpt.get();
+        
+        // Verify ownership
+        if (!upload.getUploadedBy().equals(userId)) {
+            throw new SecurityException("You can only delete your own uploads");
+        }
+        
+        // Delete the upload
+        uploadRepository.deleteById(uploadId);
+        log.info("Upload {} deleted successfully by user {}", uploadId, userId);
+    }
+
+    /**
      * Get all uploads with user information populated for admin interface.
      * This method fetches uploads and includes the uploader's name and details.
      */
@@ -190,6 +215,93 @@ public class UploadService {
 
     public Page<Upload> getUploadsByUploadedBy(UUID userId, Pageable pageable) {
         return uploadRepository.findByUploadedBy(userId, pageable);
+    }
+
+    /**
+     * Get user upload statistics
+     */
+    public UserStatsResponse getUserStats(UUID userId) {
+        long totalUploads = uploadRepository.countByUploadedBy(userId);
+        long approvedUploads = uploadRepository.countByUploadedByAndApproved(userId, true);
+        long featuredUploads = uploadRepository.countByUploadedByAndFeatured(userId, true);
+        long pendingUploads = totalUploads - approvedUploads;
+        
+        return new UserStatsResponse(
+            (int) totalUploads,
+            (int) approvedUploads, 
+            (int) featuredUploads,
+            (int) pendingUploads
+        );
+    }
+
+    /**
+     * Get user uploads as GalleryItemDTOs (user can see their own uploads regardless of approval status)
+     */
+    public Page<GalleryItemDto> getUserUploadsAsGalleryItems(UUID userId, Pageable pageable) {
+        Page<Upload> uploads = uploadRepository.findByUploadedBy(userId, pageable);
+        return uploads.map(upload -> convertToUserGalleryItem(upload, userId));
+    }
+
+    /**
+     * Convert Upload to GalleryItemDto for user's own uploads (can see all their own content)
+     */
+    private GalleryItemDto convertToUserGalleryItem(Upload upload, UUID userId) {
+        // Verify the user owns this upload
+        if (!upload.getUploadedBy().equals(userId)) {
+            throw new SecurityException("User can only access their own uploads");
+        }
+
+        GalleryItemDto item = new GalleryItemDto();
+        
+        // Basic info
+        item.setId(upload.getUuid().toString());
+        item.setTitle(upload.getUploadDescription() != null ? upload.getUploadDescription() : "Untitled");
+        item.setFeatured(upload.isFeatured());
+        item.setType(upload.getContentType().toString().toLowerCase());
+
+        // Generate secure URL (user can see their own content regardless of approval)
+        try {
+            String secureUrl = cloudinaryService.getSecureUrl(upload.getFileUrl(), true, false); // true for approved access, false for not admin
+            item.setSrc(secureUrl);
+        } catch (Exception e) {
+            log.error("Failed to generate secure URL for user upload {}: {}", upload.getUuid(), e.getMessage());
+            item.setSrc(null);
+        }
+
+        // Generate secure thumbnail
+        try {
+            String thumbnailUrl = cloudinaryService.getSecureThumbnailUrl(upload.getFileUrl(), true, false);
+            item.setThumbnail(thumbnailUrl);
+        } catch (Exception e) {
+            log.error("Failed to generate thumbnail for user upload {}: {}", upload.getUuid(), e.getMessage());
+            item.setThumbnail(null);
+        }
+
+        // Set author (always the user's name for their own uploads, even if marked anonymous)
+        Optional<User> userOpt = userService.findById(userId);
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            item.setAuthor(user.getFirstName() + " " + user.getLastName());
+        } else {
+            item.setAuthor("You");
+        }
+
+        // Event information
+        if (upload.getEventId() != null) {
+            Optional<Event> eventOpt = eventsService.getEventById(upload.getEventId());
+            item.setEvent(eventOpt.map(Event::getName).orElse("General"));
+        } else {
+            item.setEvent("General");
+        }
+
+        // Format date
+        if (upload.getCreatedDate() != null) {
+            item.setDate(upload.getCreatedDate().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE));
+        } else {
+            item.setDate("Unknown");
+        }
+
+        return item;
     }
 
     /**
