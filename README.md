@@ -30,7 +30,7 @@ This project is built using Java (duh), Spring Boot, and MongoDB. It follows the
 
 - Java 21 or higher
 - Maven 3.3.2 or higher (Or use the wrapper)
-- Some form of MongoDD and Cloudinary access
+- Some form of MongoDB and Cloudflare R2 access
 
 ### Setup
 
@@ -60,10 +60,12 @@ spring.data.mongodb.database=
 # For CORS - Fill in with the frontend URL. 
 frontend.baseurl=
 
-# Cloudinary configuration
-cloudinary.cloud.name=
-cloudinary.cloud.apikey=
-cloudinary.cloud.apisecret=
+# Cloudflare R2 configuration
+cloudflare.r2.access-key-id=your-access-key-id
+cloudflare.r2.secret-access-key=your-secret-access-key
+cloudflare.r2.endpoint=https://your-account-id.r2.cloudflarestorage.com
+cloudflare.r2.bucket-name=your-bucket-name
+cloudflare.r2.public-url=https://your-account-id.r2.cloudflarestorage.com/your-bucket-name
 
 # Uploads Config
 uploads.video.maxduration=240

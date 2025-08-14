@@ -31,7 +31,7 @@ public class UploadService {
     private final UploadRepository uploadRepository;
     private final UserService userService;
     private final EventsService eventsService;
-    private final CloudinaryService cloudinaryService;
+    private final R2StorageService r2StorageService;
     private final MediaConversionService mediaConversionService;
 
     @Value("${uploads.max-size}")
@@ -122,13 +122,13 @@ public class UploadService {
 
                 outputFile = File.createTempFile("upload_", "_" + originalFilename);
                 file.transferTo(outputFile);
-                fileURL = cloudinaryService.uploadImage(outputFile, UUID.randomUUID().toString());
+                fileURL = r2StorageService.uploadImage(outputFile, UUID.randomUUID().toString());
                 outputFile.delete();
             } else if (contentType != null && contentType.startsWith("video")) {
                 uploadType = UploadType.VIDEO;
                 outputFile = File.createTempFile("upload_", "_" + originalFilename);
                 file.transferTo(outputFile);
-                fileURL = cloudinaryService.uploadVideo(outputFile, UUID.randomUUID().toString());
+                fileURL = r2StorageService.uploadVideo(outputFile, UUID.randomUUID().toString());
                 outputFile.delete();
             } else {
                 throw new IllegalArgumentException("Unsupported file type: " + contentType);
@@ -162,6 +162,20 @@ public class UploadService {
     }
 
     public void deleteUpload(UUID id) {
+        Optional<Upload> uploadOpt = uploadRepository.findById(id);
+        if (uploadOpt.isPresent()) {
+            Upload upload = uploadOpt.get();
+            try {
+                // Delete from R2 storage
+                String objectKey = r2StorageService.extractObjectKeyFromUrl(upload.getFileUrl());
+                if (objectKey != null) {
+                    r2StorageService.deleteObject(objectKey);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to delete file from R2 storage for upload {}: {}", id, e.getMessage());
+                // Continue with database deletion even if R2 deletion fails
+            }
+        }
         uploadRepository.deleteById(id);
     }
 
@@ -183,7 +197,18 @@ public class UploadService {
             throw new SecurityException("You can only delete your own uploads");
         }
         
-        // Delete the upload
+        try {
+            // Delete from R2 storage
+            String objectKey = r2StorageService.extractObjectKeyFromUrl(upload.getFileUrl());
+            if (objectKey != null) {
+                r2StorageService.deleteObject(objectKey);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to delete file from R2 storage for upload {}: {}", uploadId, e.getMessage());
+            // Continue with database deletion even if R2 deletion fails
+        }
+        
+        // Delete the upload from database
         uploadRepository.deleteById(uploadId);
         log.info("Upload {} deleted successfully by user {}", uploadId, userId);
     }
@@ -261,7 +286,8 @@ public class UploadService {
 
         // Generate secure URL (user can see their own content regardless of approval)
         try {
-            String secureUrl = cloudinaryService.getSecureUrl(upload.getFileUrl(), true, false); // true for approved access, false for not admin
+            String objectKey = r2StorageService.extractObjectKeyFromUrl(upload.getFileUrl());
+            String secureUrl = r2StorageService.getSecureUrl(objectKey, true, false); // true for approved access, false for not admin
             item.setSrc(secureUrl);
         } catch (Exception e) {
             log.error("Failed to generate secure URL for user upload {}: {}", upload.getUuid(), e.getMessage());
@@ -270,7 +296,8 @@ public class UploadService {
 
         // Generate secure thumbnail
         try {
-            String thumbnailUrl = cloudinaryService.getSecureThumbnailUrl(upload.getFileUrl(), true, false);
+            String objectKey = r2StorageService.extractObjectKeyFromUrl(upload.getFileUrl());
+            String thumbnailUrl = r2StorageService.getSecureThumbnailUrl(objectKey, true, false);
             item.setThumbnail(thumbnailUrl);
         } catch (Exception e) {
             log.error("Failed to generate thumbnail for user upload {}: {}", upload.getUuid(), e.getMessage());
@@ -328,11 +355,12 @@ public class UploadService {
         // Generate secure URLs for admin access
         try {
             // Admins can view both approved and unapproved content
-            String secureUrl = cloudinaryService.getSecureUrl(upload.getFileUrl(), upload.isApproved(), true);
+            String objectKey = r2StorageService.extractObjectKeyFromUrl(upload.getFileUrl());
+            String secureUrl = r2StorageService.getSecureUrl(objectKey, upload.isApproved(), true);
             dto.setSecureUrl(secureUrl);
 
             // Generate secure thumbnail URL
-            String thumbnailUrl = cloudinaryService.getSecureThumbnailUrl(upload.getFileUrl(), upload.isApproved(), true);
+            String thumbnailUrl = r2StorageService.getSecureThumbnailUrl(objectKey, upload.isApproved(), true);
             dto.setThumbnailUrl(thumbnailUrl);
 
         } catch (Exception e) {
