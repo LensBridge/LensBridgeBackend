@@ -43,8 +43,6 @@ public class MediaConversionService {
         ProcessBuilder pb = new ProcessBuilder(
                 magickExecutable,
                 inputHeic.getAbsolutePath(),
-                "-strip",
-                "-quality", "90",
                 outputJpg.getAbsolutePath()
         );
 
