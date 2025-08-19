@@ -89,15 +89,11 @@
             <version>3.1.8</version>
         </dependency>
 
+        <!-- AWS SDK for Cloudflare R2 -->
         <dependency>
-            <groupId>com.cloudinary</groupId>
-            <artifactId>cloudinary-http5</artifactId>
-            <version>2.0.0</version>
-        </dependency>
-        <dependency>
-            <groupId>com.cloudinary</groupId>
-            <artifactId>cloudinary-taglib</artifactId>
-            <version>2.0.0</version>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>2.20.162</version>
         </dependency>
 
         <!-- Spring Security Test -->
@@ -142,14 +138,14 @@
             <scope>test</scope>
         </dependency>
 
-    </dependencies>
+        <dependency>
+        <groupId>com.github.gotson.nightmonkeys</groupId>
+        <artifactId>imageio-heif</artifactId>
+        <version>1.1.0</version>
+        <scope>runtime</scope>
+        </dependency>        
 
-    <repositories>
-        <repository>
-            <id>cloudinary</id>
-            <url>https://maven.cloudinary.com</url>
-        </repository>
-    </repositories>
+    </dependencies>
 
     <build>
         <plugins>

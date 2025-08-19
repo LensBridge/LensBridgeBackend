@@ -1,6 +1,8 @@
 package com.ibrasoft.lensbridge.service;
 
 import com.ibrasoft.lensbridge.dto.response.AdminUploadDto;
+import com.ibrasoft.lensbridge.dto.response.UserStatsResponse;
+import com.ibrasoft.lensbridge.dto.response.GalleryItemDto;
 import com.ibrasoft.lensbridge.exception.FileProcessingException;
 import com.ibrasoft.lensbridge.model.auth.User;
 import com.ibrasoft.lensbridge.model.event.Event;
@@ -29,7 +31,7 @@ public class UploadService {
     private final UploadRepository uploadRepository;
     private final UserService userService;
     private final EventsService eventsService;
-    private final CloudinaryService cloudinaryService;
+    private final R2StorageService r2StorageService;
     private final MediaConversionService mediaConversionService;
 
     @Value("${uploads.max-size}")
@@ -120,13 +122,13 @@ public class UploadService {
 
                 outputFile = File.createTempFile("upload_", "_" + originalFilename);
                 file.transferTo(outputFile);
-                fileURL = cloudinaryService.uploadImage(outputFile, UUID.randomUUID().toString());
+                fileURL = r2StorageService.uploadImage(outputFile, UUID.randomUUID().toString());
                 outputFile.delete();
             } else if (contentType != null && contentType.startsWith("video")) {
                 uploadType = UploadType.VIDEO;
                 outputFile = File.createTempFile("upload_", "_" + originalFilename);
                 file.transferTo(outputFile);
-                fileURL = cloudinaryService.uploadVideo(outputFile, UUID.randomUUID().toString());
+                fileURL = r2StorageService.uploadVideo(outputFile, UUID.randomUUID().toString());
                 outputFile.delete();
             } else {
                 throw new IllegalArgumentException("Unsupported file type: " + contentType);
@@ -160,7 +162,55 @@ public class UploadService {
     }
 
     public void deleteUpload(UUID id) {
+        Optional<Upload> uploadOpt = uploadRepository.findById(id);
+        if (uploadOpt.isPresent()) {
+            Upload upload = uploadOpt.get();
+            try {
+                // Delete from R2 storage
+                String objectKey = r2StorageService.extractObjectKeyFromUrl(upload.getFileUrl());
+                if (objectKey != null) {
+                    r2StorageService.deleteObject(objectKey);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to delete file from R2 storage for upload {}: {}", id, e.getMessage());
+                // Continue with database deletion even if R2 deletion fails
+            }
+        }
         uploadRepository.deleteById(id);
+    }
+
+    /**
+     * Delete user's own upload with ownership validation
+     */
+    public void deleteUserUpload(UUID uploadId, UUID userId) {
+        log.info("User {} attempting to delete upload {}", userId, uploadId);
+        
+        Optional<Upload> uploadOpt = uploadRepository.findById(uploadId);
+        if (uploadOpt.isEmpty()) {
+            throw new IllegalArgumentException("Upload not found");
+        }
+        
+        Upload upload = uploadOpt.get();
+        
+        // Verify ownership
+        if (!upload.getUploadedBy().equals(userId)) {
+            throw new SecurityException("You can only delete your own uploads");
+        }
+        
+        try {
+            // Delete from R2 storage
+            String objectKey = r2StorageService.extractObjectKeyFromUrl(upload.getFileUrl());
+            if (objectKey != null) {
+                r2StorageService.deleteObject(objectKey);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to delete file from R2 storage for upload {}: {}", uploadId, e.getMessage());
+            // Continue with database deletion even if R2 deletion fails
+        }
+        
+        // Delete the upload from database
+        uploadRepository.deleteById(uploadId);
+        log.info("Upload {} deleted successfully by user {}", uploadId, userId);
     }
 
     /**
@@ -193,6 +243,95 @@ public class UploadService {
     }
 
     /**
+     * Get user upload statistics
+     */
+    public UserStatsResponse getUserStats(UUID userId) {
+        long totalUploads = uploadRepository.countByUploadedBy(userId);
+        long approvedUploads = uploadRepository.countByUploadedByAndApproved(userId, true);
+        long featuredUploads = uploadRepository.countByUploadedByAndFeatured(userId, true);
+        long pendingUploads = totalUploads - approvedUploads;
+        
+        return new UserStatsResponse(
+            (int) totalUploads,
+            (int) approvedUploads, 
+            (int) featuredUploads,
+            (int) pendingUploads
+        );
+    }
+
+    /**
+     * Get user uploads as GalleryItemDTOs (user can see their own uploads regardless of approval status)
+     */
+    public Page<GalleryItemDto> getUserUploadsAsGalleryItems(UUID userId, Pageable pageable) {
+        Page<Upload> uploads = uploadRepository.findByUploadedBy(userId, pageable);
+        return uploads.map(upload -> convertToUserGalleryItem(upload, userId));
+    }
+
+    /**
+     * Convert Upload to GalleryItemDto for user's own uploads (can see all their own content)
+     */
+    private GalleryItemDto convertToUserGalleryItem(Upload upload, UUID userId) {
+        // Verify the user owns this upload
+        if (!upload.getUploadedBy().equals(userId)) {
+            throw new SecurityException("User can only access their own uploads");
+        }
+
+        GalleryItemDto item = new GalleryItemDto();
+        
+        // Basic info
+        item.setId(upload.getUuid().toString());
+        item.setTitle(upload.getUploadDescription() != null ? upload.getUploadDescription() : "Untitled");
+        item.setFeatured(upload.isFeatured());
+        item.setType(upload.getContentType().toString().toLowerCase());
+
+        // Generate secure URL (user can see their own content regardless of approval)
+        try {
+            String objectKey = r2StorageService.extractObjectKeyFromUrl(upload.getFileUrl());
+            String secureUrl = r2StorageService.getSecureUrl(objectKey, true, false); // true for approved access, false for not admin
+            item.setSrc(secureUrl);
+        } catch (Exception e) {
+            log.error("Failed to generate secure URL for user upload {}: {}", upload.getUuid(), e.getMessage());
+            item.setSrc(null);
+        }
+
+        // Generate secure thumbnail
+        try {
+            String objectKey = r2StorageService.extractObjectKeyFromUrl(upload.getFileUrl());
+            String thumbnailUrl = r2StorageService.getSecureThumbnailUrl(objectKey, true, false);
+            item.setThumbnail(thumbnailUrl);
+        } catch (Exception e) {
+            log.error("Failed to generate thumbnail for user upload {}: {}", upload.getUuid(), e.getMessage());
+            item.setThumbnail(null);
+        }
+
+        // Set author (always the user's name for their own uploads, even if marked anonymous)
+        Optional<User> userOpt = userService.findById(userId);
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            item.setAuthor(user.getFirstName() + " " + user.getLastName());
+        } else {
+            item.setAuthor("You");
+        }
+
+        // Event information
+        if (upload.getEventId() != null) {
+            Optional<Event> eventOpt = eventsService.getEventById(upload.getEventId());
+            item.setEvent(eventOpt.map(Event::getName).orElse("General"));
+        } else {
+            item.setEvent("General");
+        }
+
+        // Format date
+        if (upload.getCreatedDate() != null) {
+            item.setDate(upload.getCreatedDate().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE));
+        } else {
+            item.setDate("Unknown");
+        }
+
+        return item;
+    }
+
+    /**
      * Convert Upload entity to AdminUploadDto with user information and secure URLs populated.
      * Generates time-limited signed URLs for admin access.
      */
@@ -216,11 +355,12 @@ public class UploadService {
         // Generate secure URLs for admin access
         try {
             // Admins can view both approved and unapproved content
-            String secureUrl = cloudinaryService.getSecureUrl(upload.getFileUrl(), upload.isApproved(), true);
+            String objectKey = r2StorageService.extractObjectKeyFromUrl(upload.getFileUrl());
+            String secureUrl = r2StorageService.getSecureUrl(objectKey, upload.isApproved(), true);
             dto.setSecureUrl(secureUrl);
 
             // Generate secure thumbnail URL
-            String thumbnailUrl = cloudinaryService.getSecureThumbnailUrl(upload.getFileUrl(), upload.isApproved(), true);
+            String thumbnailUrl = r2StorageService.getSecureThumbnailUrl(objectKey, upload.isApproved(), true);
             dto.setThumbnailUrl(thumbnailUrl);
 
         } catch (Exception e) {

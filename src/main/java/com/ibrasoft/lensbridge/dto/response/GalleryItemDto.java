@@ -17,6 +17,4 @@ public class GalleryItemDto {
     private String date;
     private String event;
     private boolean featured;
-    private int likes;
-    private int views;
 }

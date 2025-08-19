@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import com.ibrasoft.lensbridge.dto.request.ChangePasswordRequest;
 import com.ibrasoft.lensbridge.dto.request.SignupRequest;
+import com.ibrasoft.lensbridge.dto.request.UpdateProfileRequest;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.model.auth.User;
 import com.ibrasoft.lensbridge.repository.UserRepository;
@@ -279,6 +280,38 @@ public class UserService {
         User savedUser = saveUser(user);
         
         log.info("Password changed successfully for user: {}", user.getEmail());
+        return savedUser;
+    }
+
+    /**
+     * Update user profile information
+     */
+    public User updateProfile(UUID userId, UpdateProfileRequest updateRequest) {
+        log.info("Updating profile for user: {}", userId);
+        
+        User user = findById(userId)
+            .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        
+        // Update fields if provided
+        if (updateRequest.getFirstName() != null && !updateRequest.getFirstName().trim().isEmpty()) {
+            user.setFirstName(updateRequest.getFirstName().trim());
+        }
+        
+        if (updateRequest.getLastName() != null && !updateRequest.getLastName().trim().isEmpty()) {
+            user.setLastName(updateRequest.getLastName().trim());
+        }
+        
+        if (updateRequest.getStudentNumber() != null && !updateRequest.getStudentNumber().trim().isEmpty()) {
+            // Check if the new student number is already taken by another user
+            String newStudentNumber = updateRequest.getStudentNumber().trim();
+            if (!newStudentNumber.equals(user.getStudentNumber()) && existsByStudentNumber(newStudentNumber)) {
+                throw new IllegalArgumentException("Student number is already taken by another user");
+            }
+            user.setStudentNumber(newStudentNumber);
+        }
+        
+        User savedUser = saveUser(user);
+        log.info("Profile updated successfully for user: {}", user.getEmail());
         return savedUser;
     }
 }

@@ -23,7 +23,7 @@ public class GalleryService {
     private final UploadRepository uploadRepository;
     private final UserService userService;
     private final EventsRepository eventsRepository;
-    private final CloudinaryService cloudinaryService;
+    private final R2StorageService r2StorageService;
 
     /**
      * Get all approved gallery items with secure URLs for public access.
@@ -83,9 +83,10 @@ public class GalleryService {
         // Basic info
         item.setId(upload.getUuid().toString());
         
-        // Generate secure URL instead of using direct Cloudinary URL
+        // Generate secure URL instead of using direct R2 URL
         try {
-            String secureUrl = cloudinaryService.getSecureUrl(upload.getFileUrl(), upload.isApproved(), isAdmin);
+            String objectKey = r2StorageService.extractObjectKeyFromUrl(upload.getFileUrl());
+            String secureUrl = r2StorageService.getSecureUrl(objectKey, upload.isApproved(), isAdmin);
             item.setSrc(secureUrl);
         } catch (SecurityException e) {
             log.warn("Access denied for upload {}: {}", upload.getUuid(), e.getMessage());
@@ -128,7 +129,8 @@ public class GalleryService {
         if (fileUrl == null) return null;
         
         try {
-            return cloudinaryService.getSecureThumbnailUrl(fileUrl, isApproved, isAdmin);
+            String objectKey = r2StorageService.extractObjectKeyFromUrl(fileUrl);
+            return r2StorageService.getSecureThumbnailUrl(objectKey, isApproved, isAdmin);
         } catch (SecurityException e) {
             log.warn("Access denied for thumbnail: {}", e.getMessage());
             return null;

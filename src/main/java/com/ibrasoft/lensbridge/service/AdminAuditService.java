@@ -37,7 +37,6 @@ public class AdminAuditService {
         return logAuditEvent(event);
     }
 
-
     public Page<AuditEvent> getAllAuditEvents(Pageable pageable) {
         return auditEventRepository.findAllByOrderByTimestampDesc(pageable);
     }

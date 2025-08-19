@@ -54,7 +54,7 @@ public class AdminController {
     private ResponseEntity<?> executeUserAction(UUID userId, HttpServletRequest request, Consumer<UUID> serviceAction, AdminAction auditAction, String successMessage) {
         serviceAction.accept(userId);
         UserDetailsImpl curr = (UserDetailsImpl) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        this.auditService.logAuditEvent(curr.getEmail(), auditAction, "Upload", userId, request.getRemoteAddr());
+        this.auditService.logAuditEvent(curr.getEmail(), auditAction, "User", userId, request.getRemoteAddr());
         return ResponseEntity.ok(new MessageResponse(successMessage));
     }
 

@@ -1,10 +1,12 @@
 package com.ibrasoft.lensbridge.service;
 
+import com.ibrasoft.lensbridge.exception.ImageProcessingException;
 import com.ibrasoft.lensbridge.exception.VideoProcessingException;
 import com.ibrasoft.lensbridge.exception.VideoTooLongException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.io.*;
 
 @Service
@@ -13,32 +15,50 @@ public class MediaConversionService {
     @Value("${uploads.video.maxduration}")
     private double MAX_DURATION_SECONDS;
 
-    public File convertHEICToJPEG(InputStream inputStream, String fileName) throws IOException, InterruptedException {
-        File inputFile = File.createTempFile("input-" + fileName, ".heic");
-        File outputFile = File.createTempFile("output-" + fileName, ".jpg");
+    private static String magickExecutable;
 
-        // Save stream to file
-        try (FileOutputStream fos = new FileOutputStream(inputFile)) {
-            inputStream.transferTo(fos);
+    @Value("${conversion.magick.executable:magick}")
+    public void setMagickExecutable(String magickExecutable) {
+        MediaConversionService.magickExecutable = magickExecutable;
+    }
+
+    /**
+     * Converts a HEIC image to JPEG using ImageMagick.
+     *
+     * @param inputHeic  the HEIC file
+     * @param outputJpg  the desired JPEG file
+     * @throws IOException          if process fails
+     * @throws InterruptedException if process is interrupted
+     */
+    public static void convertHeicToJpg(File inputHeic, File outputJpg) throws IOException, InterruptedException {
+
+        if (!inputHeic.exists()) {
+            throw new IllegalArgumentException("Input file does not exist: " + inputHeic.getAbsolutePath());
+        }
+
+        if (outputJpg.getParentFile() != null) {
+            outputJpg.getParentFile().mkdirs();
         }
 
         ProcessBuilder pb = new ProcessBuilder(
-                "ffmpeg",
-                "-i", inputFile.getAbsolutePath(),
-                outputFile.getAbsolutePath()
+                magickExecutable,
+                inputHeic.getAbsolutePath(),
+                "-strip",
+                "-quality", "90",
+                outputJpg.getAbsolutePath()
         );
 
-        Process process = pb.inheritIO().start();
+        pb.redirectErrorStream(true);
+        Process process = pb.start();
+
+        // wait for da fork
+        // For the CSC209 Students, this is the equivalent of waitpid ;P
         int exitCode = process.waitFor();
-
-        inputFile.delete();
-
         if (exitCode != 0) {
-            outputFile.delete();
-            throw new VideoProcessingException("FFmpeg failed with exit code " + exitCode);
+            throw new ImageProcessingException("ImageMagick failed with exit code " + exitCode);
         }
-        return outputFile;
     }
+
 
     public File transcodeToHevc(InputStream inputStream, String fileName) throws IOException, InterruptedException {
         File inputFile = File.createTempFile("input-", ".mp4");
