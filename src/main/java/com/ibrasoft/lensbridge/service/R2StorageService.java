@@ -96,7 +96,7 @@ public class R2StorageService {
      */
     public String uploadImage(File imageFile, String fileName) throws IOException {
         String lowerName = fileName.toLowerCase();
-        if (lowerName.endsWith(".heic")) {
+        if (lowerName.endsWith(".heic") || lowerName.endsWith(".heif")) {
             // Convert HEIC to JPG before uploading
             File jpgFile = File.createTempFile("converted-", ".jpg");
             try {
@@ -119,7 +119,7 @@ public class R2StorageService {
      */
     public String uploadImage(byte[] fileBytes, String fileName) throws IOException {
         String lowerName = fileName.toLowerCase();
-        if (lowerName.endsWith(".heic")) {
+        if (lowerName.endsWith(".heic") || lowerName.endsWith(".heif")) {
             // Convert HEIC bytes to JPG before uploading
             File tempHeicFile = File.createTempFile("temp-heic-", ".heic");
             File jpgFile = File.createTempFile("converted-", ".jpg");

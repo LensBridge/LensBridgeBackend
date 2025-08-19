@@ -15,8 +15,12 @@ public class MediaConversionService {
     @Value("${uploads.video.maxduration}")
     private double MAX_DURATION_SECONDS;
 
-    @Value("${conversion.magick.executable:magick}")
     private static String magickExecutable;
+
+    @Value("${conversion.magick.executable:magick}")
+    public void setMagickExecutable(String magickExecutable) {
+        MediaConversionService.magickExecutable = magickExecutable;
+    }
 
     /**
      * Converts a HEIC image to JPEG using ImageMagick.
