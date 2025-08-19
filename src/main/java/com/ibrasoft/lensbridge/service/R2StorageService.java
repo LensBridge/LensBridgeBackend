@@ -1,5 +1,6 @@
 package com.ibrasoft.lensbridge.service;
 
+import com.ibrasoft.lensbridge.exception.ImageProcessingException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,6 +28,8 @@ import java.time.Duration;
 @RequiredArgsConstructor
 @Slf4j
 public class R2StorageService {
+
+    private final MediaConversionService mediaConversionService;
 
     @Value("${cloudflare.r2.access-key-id}")
     private String accessKeyId;
@@ -92,6 +95,22 @@ public class R2StorageService {
      * Upload an image file to R2
      */
     public String uploadImage(File imageFile, String fileName) throws IOException {
+        String lowerName = fileName.toLowerCase();
+        if (lowerName.endsWith(".heic")) {
+            // Convert HEIC to JPG before uploading
+            File jpgFile = File.createTempFile("converted-", ".jpg");
+            try {
+                MediaConversionService.convertHeicToJpg(imageFile, jpgFile);
+                String jpgName = fileName.replaceAll("(?i)\\.heic$", ".jpg");
+                String result = uploadFile(jpgFile, jpgName, "images/");
+                jpgFile.delete();
+                return result;
+            } catch (Exception e) {
+                jpgFile.delete();
+                log.error("HEIC to JPG conversion failed", e);
+                throw new IOException("HEIC to JPG conversion failed", e);
+            }
+        }
         return uploadFile(imageFile, fileName, "images/");
     }
 
@@ -99,6 +118,26 @@ public class R2StorageService {
      * Upload an image from bytes to R2
      */
     public String uploadImage(byte[] fileBytes, String fileName) throws IOException {
+        String lowerName = fileName.toLowerCase();
+        if (lowerName.endsWith(".heic")) {
+            // Convert HEIC bytes to JPG before uploading
+            File tempHeicFile = File.createTempFile("temp-heic-", ".heic");
+            File jpgFile = File.createTempFile("converted-", ".jpg");
+            try {
+                Files.write(tempHeicFile.toPath(), fileBytes);
+                MediaConversionService.convertHeicToJpg(tempHeicFile, jpgFile);
+                String jpgName = fileName.replaceAll("(?i)\\.heic$", ".jpg");
+                String result = uploadFile(jpgFile, jpgName, "images/");
+                tempHeicFile.delete();
+                jpgFile.delete();
+                return result;
+            } catch (Exception e) {
+                tempHeicFile.delete();
+                jpgFile.delete();
+                log.error("HEIC to JPG conversion failed", e);
+                throw new ImageProcessingException("HEIC to JPG conversion failed", e);
+            }
+        }
         return uploadFile(fileBytes, fileName, "images/", detectContentType(fileName));
     }
 
@@ -141,7 +180,7 @@ public class R2StorageService {
             return key;
         } catch (Exception e) {
             log.error("Failed to upload file to R2: {}", key, e);
-            throw new IOException("Failed to upload file to R2", e);
+            throw e;
         }
     }
 
@@ -165,7 +204,7 @@ public class R2StorageService {
             return key;
         } catch (Exception e) {
             log.error("Failed to upload file to R2: {}", key, e);
-            throw new IOException("Failed to upload file to R2", e);
+            throw e;
         }
     }
 

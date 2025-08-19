@@ -27,4 +27,6 @@ public interface RefreshTokenRepository extends MongoRepository<RefreshToken, UU
     void deleteByUserIdAndRevokedTrue(UUID userId);
     
     long countByUserIdAndRevokedFalse(UUID userId);
+
+    List<RefreshToken> findByRevokedTrueAndCreatedDateBefore(LocalDateTime minusDays);
 }

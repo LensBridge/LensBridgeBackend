@@ -153,10 +153,8 @@ public class RefreshTokenService {
             refreshTokenRepository.deleteByExpiryDateBefore(now);
             
             // Clean up revoked tokens (older than 7 days)
-            List<RefreshToken> oldRevokedTokens = refreshTokenRepository.findAll().stream()
-                .filter(token -> token.isRevoked() && 
-                    token.getCreatedDate().isBefore(now.minusDays(7)))
-                .toList();
+            List<RefreshToken> oldRevokedTokens = refreshTokenRepository
+                .findByRevokedTrueAndCreatedDateBefore(now.minusDays(7));
             
             if (!oldRevokedTokens.isEmpty()) {
                 refreshTokenRepository.deleteAll(oldRevokedTokens);
