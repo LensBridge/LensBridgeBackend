@@ -145,6 +145,51 @@ public class UploadService {
         }
     }
 
+    /**
+     * Create an Upload entity for a file that has been directly uploaded to R2.
+     * This method is used when files are uploaded via presigned URLs.
+     */
+    public Upload createDirectUpload(String objectKey, String fileName, String contentType, 
+                                   UUID eventId, String description, String instagramHandle, 
+                                   boolean anon, UUID uploadedBy) {
+        try {
+            // Determine upload type from content type
+            UploadType uploadType;
+            if (contentType != null && contentType.startsWith("image")) {
+                uploadType = UploadType.IMAGE;
+            } else if (contentType != null && contentType.startsWith("video")) {
+                uploadType = UploadType.VIDEO;
+            } else {
+                uploadType = UploadType.IMAGE; // Default fallback
+            }
+
+            // Create Upload entity
+            UUID uuid = UUID.randomUUID();
+            Upload upload = new Upload(
+                uuid, 
+                fileName, 
+                objectKey,
+                description, 
+                instagramHandle, 
+                uploadedBy, 
+                eventId, 
+                LocalDateTime.now(), 
+                defaultApproved, 
+                defaultFeatured, 
+                anon, 
+                uploadType
+            );
+            
+            uploadRepository.save(upload);
+            log.info("Created direct upload record: {} for object: {}", uuid, objectKey);
+            return upload;
+            
+        } catch (Exception e) {
+            log.error("Failed to create direct upload record for object: {}", objectKey, e);
+            throw new FileProcessingException("Failed to create upload record for direct upload");
+        }
+    }
+
     public Page<Upload> getAllUploads(Pageable pageable) {
         return uploadRepository.findAll(pageable);
     }

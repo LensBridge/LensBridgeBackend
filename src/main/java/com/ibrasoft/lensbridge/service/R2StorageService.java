@@ -43,6 +43,9 @@ public class R2StorageService {
     @Value("${cloudflare.r2.bucket-name}")
     private String bucketName;
 
+    @Value("${cloudflare.r2.public-url}")
+    private String publicUrl;
+
     @Value("${cloudflare.r2.url-expiration-minutes:15}")
     private long urlExpirationMinutes;
 
@@ -68,7 +71,7 @@ public class R2StorageService {
                 .serviceConfiguration(s3Config)
                 .region(Region.US_EAST_1)
                 .build();
-        log.info("R2StorageService initialized with path-style access (endpoint='{}', bucket='{}')", normalizedEndpoint, bucketName);
+        log.info("R2StorageService initialized with path-style access (endpoint='{}', bucket='{}', publicUrl='{}')", normalizedEndpoint, bucketName, publicUrl);
     }
 
     private String normalizeEndpoint(String ep) {
@@ -79,6 +82,49 @@ public class R2StorageService {
             trimmed = trimmed.substring(0, trimmed.length() - 1);
         }
         return trimmed;
+    }
+
+    /**
+     * Replace the CloudFlare R2 endpoint in a presigned URL with our custom domain
+     */
+    private String replaceEndpointWithCustomDomain(String presignedUrl) {
+        if (publicUrl == null || publicUrl.isBlank()) {
+            return presignedUrl; // Return original URL if no custom domain configured
+        }
+        
+        try {
+            URI originalUri = URI.create(presignedUrl);
+            String originalHost = originalUri.getHost();
+            String originalPath = originalUri.getPath();
+            String queryString = originalUri.getQuery();
+            
+            // Extract the custom domain from publicUrl
+            URI customUri = URI.create(publicUrl);
+            String customHost = customUri.getHost();
+            String customScheme = customUri.getScheme();
+            
+            // Remove bucket name from path if it exists
+            String newPath = originalPath;
+            if (originalPath != null && originalPath.startsWith("/" + bucketName + "/")) {
+                newPath = originalPath.substring(bucketName.length() + 1); // Remove "/bucketName"
+            }
+            
+            // Construct the new URL with custom domain
+            StringBuilder customUrl = new StringBuilder();
+            customUrl.append(customScheme).append("://").append(customHost);
+            customUrl.append(newPath);
+            if (queryString != null && !queryString.isEmpty()) {
+                customUrl.append("?").append(queryString);
+            }
+            
+            String result = customUrl.toString();
+            log.debug("Replaced CloudFlare endpoint '{}' with custom domain '{}' and removed bucket from path: '{}' -> '{}'", 
+                     originalHost, customHost, originalPath, newPath);
+            return result;
+        } catch (Exception e) {
+            log.error("Failed to replace endpoint with custom domain in URL: {}", presignedUrl, e);
+            return presignedUrl; // Return original URL on error
+        }
     }
 
     @PreDestroy
@@ -230,11 +276,15 @@ public class R2StorageService {
                     .signatureDuration(Duration.ofMinutes(urlExpirationMinutes))
                     .getObjectRequest(getObjectRequest)
                     .build();
-            String url = presigner.presignGetObject(presignRequest).url().toString();
+            String presignedUrl = presigner.presignGetObject(presignRequest).url().toString();
+            
+            // Replace the CloudFlare endpoint with our custom domain
+            String customUrl = replaceEndpointWithCustomDomain(presignedUrl);
+            
             if (log.isDebugEnabled()) {
-                log.debug("Generated presigned URL (adminAccess={}): key='{}' -> '{}'", isAdmin, objectKey, url.split("\\?",2)[0]);
+                log.debug("Generated presigned URL (adminAccess={}): key='{}' -> '{}'", isAdmin, objectKey, customUrl.split("\\?",2)[0]);
             }
-            return url;
+            return customUrl;
         } catch (Exception e) {
             log.error("Failed to presign GET URL for {}: {}", objectKey, e.getMessage());
             throw new RuntimeException("Failed to generate secure URL", e);
@@ -251,18 +301,24 @@ public class R2StorageService {
     /**
      * Generate a presigned PUT URL for direct uploads (optional helper if needed later).
      */
-    public String generatePresignedUploadUrl(String objectKey, String contentType) {
+    public String generatePresignedUploadUrl(String objectKey, String contentType, String sha256hash, long contentLength) {
         try {
             PutObjectRequest putObjectRequest = PutObjectRequest.builder()
                     .bucket(bucketName)
                     .key(objectKey)
                     .contentType(contentType)
+                    .contentLength(contentLength)
+                    // .checksumSHA256(sha256hash)
                     .build();
             PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()
                     .signatureDuration(Duration.ofMinutes(urlExpirationMinutes))
                     .putObjectRequest(putObjectRequest)
                     .build();
-            return presigner.presignPutObject(presignRequest).url().toString();
+            String presignedUrl = presigner.presignPutObject(presignRequest).url().toString();
+            
+            // For upload URLs, we must return the original R2 endpoint, not the custom domain
+            // Custom domains only work for downloads, not authenticated uploads
+            return presignedUrl;
         } catch (Exception e) {
             log.error("Failed to presign PUT URL for {}: {}", objectKey, e.getMessage());
             throw new RuntimeException("Failed to generate upload URL", e);
