@@ -44,8 +44,18 @@ public class UploadProperties {
     );
     
     /**
+     * Per-role daily upload limits
+     */
+    private Map<String, Integer> dailyLimit = new HashMap<>();
+    
+    /**
+     * Global daily upload limit (fallback)
+     */
+    private int globalDailyLimit = 25;
+    
+    /**
      * Get the maximum allowed file size for a specific role.
-     * Falls back to user limit if role not found.
+     * Falls back to verified limit if role not found.
      */
     public DataSize getMaxSizeForRole(String role) {
         String roleKey = role;
@@ -58,8 +68,28 @@ public class UploadProperties {
             return roleLimit;
         }
         
-        // Fallback to user limit, then global limit
-        DataSize userLimit = maxSize.get("user");
-        return userLimit != null ? userLimit : globalMaxSize;
+        // Fallback to verified limit, then global limit
+        DataSize verifiedLimit = maxSize.get("verified");
+        return verifiedLimit != null ? verifiedLimit : globalMaxSize;
+    }
+    
+    /**
+     * Get the daily upload limit for a specific role.
+     * Falls back to verified limit if role not found.
+     */
+    public int getDailyLimitForRole(String role) {
+        String roleKey = role;
+        if (roleKey.startsWith("ROLE_")) {
+            roleKey = roleKey.substring(5).toLowerCase();
+        }
+        
+        Integer roleLimit = dailyLimit.get(roleKey);
+        if (roleLimit != null) {
+            return roleLimit;
+        }
+        
+        // Fallback to verified limit, then global limit
+        Integer verifiedLimit = dailyLimit.get("verified");
+        return verifiedLimit != null ? verifiedLimit : globalDailyLimit;
     }
 }

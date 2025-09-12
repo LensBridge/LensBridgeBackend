@@ -54,12 +54,26 @@ public class EventsService {
         this.cleanUpOldEvents(LocalDateTime.now());
     }
 
+    public boolean isEventAcceptingUploads(UUID eventId) {
+        Optional<Event> eventOpt = eventsRepository.findById(eventId);
+        if (eventOpt.isEmpty()) {
+            return false;
+        }
+        Event event = eventOpt.get();
+
+        return event.getStatus() == EventStatus.ONGOING ||
+                (event.getStatus() == EventStatus.PAST &&
+                        event.getDate().isAfter(LocalDateTime.now().minusDays(7)));
+
+    }
+
     public void cleanUpOldEvents(LocalDateTime now) {
         LocalDate today = now.toLocalDate();
         List<Event> allEvents = eventsRepository.findAll();
 
         for (Event event : allEvents) {
-            if (event.getDate() == null) continue;
+            if (event.getDate() == null)
+                continue;
 
             LocalDate eventDate = event.getDate().toLocalDate();
             EventStatus newStatus;
@@ -80,6 +94,5 @@ public class EventsService {
             eventsRepository.save(event);
         }
     }
-
 
 }

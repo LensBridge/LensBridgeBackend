@@ -1,9 +1,11 @@
 package com.ibrasoft.lensbridge.controller;
 
 import com.ibrasoft.lensbridge.config.UploadProperties;
+import com.ibrasoft.lensbridge.dto.response.*;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.model.upload.Upload;
 import com.ibrasoft.lensbridge.security.services.UserDetailsImpl;
+import com.ibrasoft.lensbridge.service.EventsService;
 import com.ibrasoft.lensbridge.service.R2StorageService;
 import com.ibrasoft.lensbridge.service.UploadService;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +20,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.util.unit.DataSize;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
@@ -28,7 +29,8 @@ import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.*;
+import java.util.Collection;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/upload")
@@ -40,25 +42,10 @@ public class FileUploadController {
     private final R2StorageService r2StorageService;
     private final UploadProperties uploadProperties;
     private final S3Client s3Client;
+    private final EventsService eventsService;
     
     @Value("${cloudflare.r2.bucket-name}")
     private String bucketName;
-
-    @PostMapping("/{eventId}/batch")
-    @PreAuthorize("hasRole('" + Role.VERIFIED + "')")
-    public ResponseEntity<?> uploadFiles(@PathVariable UUID eventId, @RequestParam("files") List<MultipartFile> files, @RequestParam(value = "instagramHandle", required = false) String instagramHandle, @RequestParam(value = "description", required = false) String description, @RequestParam(value = "anon") boolean anon) {
-        List<UUID> uploadedUuids = new ArrayList<>();
-        UserDetailsImpl user = (UserDetailsImpl) org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        for (MultipartFile file : files) {
-            if (file.isEmpty()) {
-                return ResponseEntity.badRequest().body("File is empty: " + file.getOriginalFilename());
-            }
-
-            Upload upload = uploadService.createUpload(file, eventId, description, instagramHandle, anon, user.getId());
-            uploadedUuids.add(upload.getUuid());
-        }
-        return ResponseEntity.ok("Files uploaded successfully. UUIDs: " + uploadedUuids);
-    }
 
     @GetMapping("/{uploadId}")
     @PreAuthorize("hasRole('" + Role.VERIFIED + "')")
@@ -66,7 +53,7 @@ public class FileUploadController {
         try {
             return uploadService.getUploadById(uploadId).map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error fetching upload: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ErrorResponse.of("Error fetching upload: " + e.getMessage()));
         }
     }
 
@@ -77,11 +64,9 @@ public class FileUploadController {
             Page<Upload> uploads = uploadService.getUploadsByEvent(eventId, pageable);
             return ResponseEntity.ok(uploads);
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error fetching uploads: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ErrorResponse.of("Error fetching uploads: " + e.getMessage()));
         }
     }
-
-    // ===== DIRECT-TO-R2 UPLOAD METHODS =====
 
     /**
      * Generate a presigned URL for direct upload to R2 for a specific event.
@@ -94,26 +79,39 @@ public class FileUploadController {
             @RequestParam String filename,
             @RequestParam String contentType,
             @RequestParam long fileSize,
-            @RequestParam(required = false) String expectedSha256,
+            @RequestParam String expectedSha256,
             Authentication authentication) {
 
+        if (!eventsService.isEventAcceptingUploads(eventId) || eventsService.getEventById(eventId).isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of("Event is not accepting uploads"));
+        }
+
         try {
+            UserDetailsImpl user = (UserDetailsImpl) authentication.getPrincipal();
+            String highestRole = getHighestRole(authentication);
+            
+            // Check daily limit FIRST
+            ResponseEntity<?> limitCheck = checkDailyLimit(user.getId(), highestRole);
+            if (limitCheck != null) {
+                return limitCheck;
+            }
+            
             // Validate content type
             if (!uploadProperties.getAllowedFileTypes().contains(contentType)) {
                 return ResponseEntity.badRequest()
-                    .body(Map.of("error", "Content type not allowed: " + contentType));
+                    .body(ErrorResponse.of("Content type not allowed: " + contentType));
             }
 
             // Get user's highest role and check file size limit
-            String highestRole = getHighestRole(authentication);
             DataSize maxAllowed = uploadProperties.getMaxSizeForRole(highestRole);
             
             if (fileSize > maxAllowed.toBytes()) {
                 return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
-                    .body(Map.of(
-                        "error", "File size exceeds limit for role " + highestRole,
-                        "maxAllowed", maxAllowed.toMegabytes() + "MB",
-                        "requested", (fileSize / 1024 / 1024) + "MB"
+                    .body(FileSizeErrorResponse.of(
+                        "File size exceeds limit for role " + highestRole,
+                        maxAllowed.toMegabytes() + "MB",
+                        (fileSize / 1024 / 1024) + "MB"
                     ));
             }
 
@@ -126,7 +124,7 @@ public class FileUploadController {
                 folder = "videos/";
             } else {
                 return ResponseEntity.badRequest()
-                    .body(Map.of("error", "Unsupported content type: " + contentType));
+                    .body(ErrorResponse.of("Unsupported content type: " + contentType));
             }
             
             // Use UUID as filename to match existing structure
@@ -135,17 +133,19 @@ public class FileUploadController {
             // Generate presigned URL for upload
             String presignedUrl = r2StorageService.generatePresignedUploadUrl(objectKey, contentType, expectedSha256, fileSize);
 
-            Map<String, Object> response = new HashMap<>();
-            response.put("uploadUrl", presignedUrl);
-            response.put("objectKey", objectKey);
-            response.put("eventId", eventId);
-            response.put("method", "PUT");
-            response.put("contentType", contentType);
-            response.put("expiresInMinutes", 15);
+            PresignedUploadResponse.PresignedUploadResponseBuilder responseBuilder = PresignedUploadResponse.builder()
+                .uploadUrl(presignedUrl)
+                .objectKey(objectKey)
+                .eventId(eventId)
+                .method("PUT")
+                .contentType(contentType)
+                .expiresInMinutes(15);
             
             if (expectedSha256 != null) {
-                response.put("expectedSha256", expectedSha256);
+                responseBuilder.expectedSha256(expectedSha256);
             }
+            
+            PresignedUploadResponse response = responseBuilder.build();
 
             log.info("Generated presigned upload URL for event '{}', user role '{}', file: '{}', size: {}MB", 
                 eventId, highestRole, filename, fileSize / 1024 / 1024);
@@ -155,7 +155,7 @@ public class FileUploadController {
         } catch (Exception e) {
             log.error("Failed to generate presigned upload URL for event: {}", eventId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", "Failed to generate upload URL: " + e.getMessage()));
+                .body(ErrorResponse.of("Failed to generate upload URL: " + e.getMessage()));
         }
     }
 
@@ -174,14 +174,14 @@ public class FileUploadController {
             @RequestParam(value = "instagramHandle", required = false) String instagramHandle,
             @RequestParam(value = "description", required = false) String description,
             @RequestParam(value = "anon", defaultValue = "false") boolean anon,
-            @RequestParam(required = false) String expectedSha256,
+            @RequestParam String expectedSha256,
             Authentication authentication) {
 
         try {
             // Verify the object exists in R2
             if (!r2StorageService.objectExists(objectKey)) {
                 return ResponseEntity.badRequest()
-                    .body(Map.of("error", "File not found in storage: " + objectKey));
+                    .body(ErrorResponse.of("File not found in storage: " + objectKey));
             }
 
             // Get object metadata and verify
@@ -195,7 +195,7 @@ public class FileUploadController {
             // Verify file size matches
             if (!headResponse.contentLength().equals(fileSize)) {
                 return ResponseEntity.badRequest()
-                    .body(Map.of("error", "File size mismatch in storage"));
+                    .body(ErrorResponse.of("File size mismatch in storage"));
             }
 
             // Verify SHA-256 hash if provided
@@ -204,12 +204,12 @@ public class FileUploadController {
                     String actualSha256 = calculateSha256Hash(objectKey);
                     if (!actualSha256.equalsIgnoreCase(expectedSha256)) {
                         return ResponseEntity.badRequest()
-                            .body(Map.of("error", "File integrity verification failed"));
+                            .body(ErrorResponse.of("File integrity verification failed"));
                     }
                 } catch (Exception e) {
                     log.error("Failed to verify file hash for {}: {}", objectKey, e.getMessage());
                     return ResponseEntity.badRequest()
-                        .body(Map.of("error", "Failed to verify file integrity: " + e.getMessage()));
+                        .body(ErrorResponse.of("Failed to verify file integrity: " + e.getMessage()));
                 }
             }
 
@@ -220,16 +220,13 @@ public class FileUploadController {
                 instagramHandle, anon, user.getId()
             );
 
-            Map<String, Object> response = new HashMap<>();
-            response.put("uploadId", upload.getUuid());
-            response.put("objectKey", objectKey);
-            response.put("eventId", eventId);
-            response.put("verified", true);
-            response.put("fileSize", fileSize);
-            
-            // Generate secure URL for the uploaded file
-            String secureUrl = r2StorageService.getSecureUrl(objectKey, upload.isApproved(), isAdmin(authentication));
-            response.put("secureUrl", secureUrl);
+            UploadCompletionResponse response = UploadCompletionResponse.builder()
+                .uploadId(upload.getUuid())
+                .objectKey(objectKey)
+                .eventId(eventId)
+                .verified(true)
+                .fileSize(fileSize)
+                .build();
 
             log.info("Successfully completed direct upload for event '{}': {}", eventId, upload.getUuid());
             return ResponseEntity.ok(response);
@@ -237,7 +234,7 @@ public class FileUploadController {
         } catch (Exception e) {
             log.error("Failed to complete direct upload for event '{}', objectKey: {}", eventId, objectKey, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", "Failed to complete upload: " + e.getMessage()));
+                .body(ErrorResponse.of("Failed to complete upload: " + e.getMessage()));
         }
     }
 
@@ -248,32 +245,59 @@ public class FileUploadController {
     @PreAuthorize("hasRole('" + Role.VERIFIED + "')")
     public ResponseEntity<?> getUploadLimits(Authentication authentication) {
         try {
+            UserDetailsImpl user = (UserDetailsImpl) authentication.getPrincipal();
             String highestRole = getHighestRole(authentication);
             DataSize maxSize = uploadProperties.getMaxSizeForRole(highestRole);
+            int dailyLimit = uploadProperties.getDailyLimitForRole(highestRole);
+            long uploadsToday = uploadService.countUploadsToday(user.getId());
 
-            Map<String, Object> limits = new HashMap<>();
-            limits.put("role", highestRole);
-            limits.put("maxSizeBytes", maxSize.toBytes());
-            limits.put("maxSizeMB", maxSize.toMegabytes());
-            limits.put("allowedContentTypes", uploadProperties.getAllowedFileTypes());
-            limits.put("videoMaxDurationSeconds", uploadProperties.getVideoMaxduration());
+            UploadLimitsResponse limits = UploadLimitsResponse.builder()
+                .role(highestRole)
+                .maxSizeBytes(maxSize.toBytes())
+                .maxSizeMB(maxSize.toMegabytes())
+                .allowedContentTypes(uploadProperties.getAllowedFileTypes())
+                .videoMaxDurationSeconds(uploadProperties.getVideoMaxduration())
+                .dailyLimit(dailyLimit)
+                .uploadsToday(uploadsToday)
+                .uploadsRemaining(Math.max(0, dailyLimit - uploadsToday))
+                .build();
 
             return ResponseEntity.ok(limits);
         } catch (Exception e) {
             log.error("Failed to get upload limits", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", "Failed to get upload limits"));
+                .body(ErrorResponse.of("Failed to get upload limits"));
         }
     }
 
-    // ===== HELPER METHODS =====
+    /**
+     * Check if the user has reached their daily upload limit.
+     * @param userId The user ID to check
+     * @param role The user's highest role
+     * @return ResponseEntity with error if limit exceeded, null otherwise
+     */
+    private ResponseEntity<?> checkDailyLimit(UUID userId, String role) {
+        int dailyLimit = uploadProperties.getDailyLimitForRole(role);
+        
+        if (uploadService.hasReachedDailyLimit(userId, dailyLimit)) {
+            long uploadCount = uploadService.countUploadsToday(userId);
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(DailyLimitErrorResponse.of(
+                    "Daily upload limit exceeded",
+                    dailyLimit,
+                    uploadCount,
+                    role
+                ));
+        }
+        return null; // No limit exceeded
+    }
 
     /**
      * Get the highest role for the authenticated user.
      */
     private String getHighestRole(Authentication authentication) {
         if (authentication == null || authentication.getAuthorities() == null) {
-            return "user";
+            return "verified"; // Default to verified (lowest role)
         }
 
         Collection<? extends GrantedAuthority> authorities = authentication.getAuthorities();
@@ -290,23 +314,8 @@ public class FileUploadController {
         if (authorities.stream().anyMatch(a -> Role.VERIFIED.equals(a.getAuthority()))) {
             return "verified";
         }
-        if (authorities.stream().anyMatch(a -> Role.USER.equals(a.getAuthority()))) {
-            return "user";
-        }
         
-        return "user";
-    }
-
-    /**
-     * Check if the user has admin privileges.
-     */
-    private boolean isAdmin(Authentication authentication) {
-        if (authentication == null || authentication.getAuthorities() == null) {
-            return false;
-        }
-        
-        return authentication.getAuthorities().stream()
-            .anyMatch(a -> Role.ADMIN.equals(a.getAuthority()) || Role.ROOT.equals(a.getAuthority()));
+        return "verified"; // Default to verified
     }
 
     /**
