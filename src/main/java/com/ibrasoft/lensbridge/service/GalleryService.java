@@ -108,8 +108,8 @@ public class GalleryService {
             item.setAuthor("Unknown");
         }
 
-        // Generate secure thumbnail
-        String thumbnail = generateSecureThumbnail(upload.getFileUrl(), upload.getContentType().toString().toLowerCase(), upload.isApproved(), isAdmin);
+        // Generate secure thumbnail using the stored thumbnail key
+        String thumbnail = generateSecureThumbnail(upload, isAdmin);
         item.setThumbnail(thumbnail);
         
         String eventName = getEventName(upload.getEventId());
@@ -124,18 +124,26 @@ public class GalleryService {
 
     /**
      * Generate secure thumbnail URL with access control.
+     * Uses the stored thumbnail key if available, otherwise falls back to original image.
      */
-    private String generateSecureThumbnail(String fileUrl, String contentType, boolean isApproved, boolean isAdmin) {
-        if (fileUrl == null) return null;
+    private String generateSecureThumbnail(Upload upload, boolean isAdmin) {
+        if (upload == null || upload.getFileUrl() == null) return null;
         
         try {
-            String objectKey = r2StorageService.extractObjectKeyFromUrl(fileUrl);
-            return r2StorageService.getSecureThumbnailUrl(objectKey, isApproved, isAdmin);
+            // Use stored thumbnail key if available
+            String thumbnailKey = upload.getThumbnailUrl();
+            if (thumbnailKey != null && !thumbnailKey.isBlank()) {
+                return r2StorageService.getSecureThumbnailUrl(thumbnailKey, upload.isApproved(), isAdmin);
+            }
+            
+            // Fallback: use original image URL as thumbnail
+            String objectKey = r2StorageService.extractObjectKeyFromUrl(upload.getFileUrl());
+            return r2StorageService.getSecureUrl(objectKey, upload.isApproved(), isAdmin);
         } catch (SecurityException e) {
             log.warn("Access denied for thumbnail: {}", e.getMessage());
             return null;
         } catch (Exception e) {
-            log.error("Failed to generate secure thumbnail for URL {}: {}", fileUrl, e.getMessage());
+            log.error("Failed to generate secure thumbnail for upload {}: {}", upload.getUuid(), e.getMessage());
             return null;
         }
     }

@@ -7,6 +7,7 @@ import com.ibrasoft.lensbridge.model.upload.Upload;
 import com.ibrasoft.lensbridge.security.services.UserDetailsImpl;
 import com.ibrasoft.lensbridge.service.EventsService;
 import com.ibrasoft.lensbridge.service.R2StorageService;
+import com.ibrasoft.lensbridge.service.ThumbnailService;
 import com.ibrasoft.lensbridge.service.UploadService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,6 +44,7 @@ public class FileUploadController {
     private final UploadProperties uploadProperties;
     private final S3Client s3Client;
     private final EventsService eventsService;
+    private final ThumbnailService thumbnailService;
     
     @Value("${cloudflare.r2.bucket-name}")
     private String bucketName;
@@ -219,6 +221,12 @@ public class FileUploadController {
                 objectKey, filename, contentType, eventId, description, 
                 instagramHandle, anon, user.getId()
             );
+
+            // Generate thumbnail asynchronously for images
+            if (contentType != null && contentType.startsWith("image")) {
+                thumbnailService.generateThumbnailAsync(upload.getUuid(), objectKey);
+                log.debug("Triggered async thumbnail generation for upload: {}", upload.getUuid());
+            }
 
             UploadCompletionResponse response = UploadCompletionResponse.builder()
                 .uploadId(upload.getUuid())

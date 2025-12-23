@@ -160,7 +160,7 @@ public class UploadService {
             }
 
             UUID uuid = UUID.randomUUID();
-            Upload upload = new Upload(uuid, originalFilename, fileURL, description, instagramHandle, uploadedBy,
+            Upload upload = new Upload(uuid, originalFilename, fileURL, null, description, instagramHandle, uploadedBy,
                     eventId, LocalDateTime.now(), defaultApproved, defaultFeatured, anon, uploadType);
             uploadRepository.save(upload);
             return upload;
@@ -194,6 +194,7 @@ public class UploadService {
                     uuid,
                     fileName,
                     objectKey,
+                    null, // thumbnailUrl - will be set async by ThumbnailService
                     description,
                     instagramHandle,
                     uploadedBy,
@@ -235,10 +236,15 @@ public class UploadService {
         if (uploadOpt.isPresent()) {
             Upload upload = uploadOpt.get();
             try {
-                // Delete from R2 storage
+                // Delete original file from R2 storage
                 String objectKey = r2StorageService.extractObjectKeyFromUrl(upload.getFileUrl());
                 if (objectKey != null) {
                     r2StorageService.deleteObject(objectKey);
+                }
+                // Delete thumbnail from R2 storage if exists
+                String thumbnailKey = upload.getThumbnailUrl();
+                if (thumbnailKey != null && !thumbnailKey.isBlank()) {
+                    r2StorageService.deleteObject(thumbnailKey);
                 }
             } catch (Exception e) {
                 log.warn("Failed to delete file from R2 storage for upload {}: {}", id, e.getMessage());
@@ -267,10 +273,15 @@ public class UploadService {
         }
 
         try {
-            // Delete from R2 storage
+            // Delete original file from R2 storage
             String objectKey = r2StorageService.extractObjectKeyFromUrl(upload.getFileUrl());
             if (objectKey != null) {
                 r2StorageService.deleteObject(objectKey);
+            }
+            // Delete thumbnail from R2 storage if exists
+            String thumbnailKey = upload.getThumbnailUrl();
+            if (thumbnailKey != null && !thumbnailKey.isBlank()) {
+                r2StorageService.deleteObject(thumbnailKey);
             }
         } catch (Exception e) {
             log.warn("Failed to delete file from R2 storage for upload {}: {}", uploadId, e.getMessage());
@@ -432,9 +443,15 @@ public class UploadService {
             String secureUrl = r2StorageService.getSecureUrl(objectKey, upload.isApproved(), true);
             dto.setSecureUrl(secureUrl);
 
-            // Generate secure thumbnail URL
-            String thumbnailUrl = r2StorageService.getSecureThumbnailUrl(objectKey, upload.isApproved(), true);
-            dto.setThumbnailUrl(thumbnailUrl);
+            // Generate secure thumbnail URL using the stored thumbnail key
+            String thumbnailKey = upload.getThumbnailUrl();
+            if (thumbnailKey != null && !thumbnailKey.isBlank()) {
+                String thumbnailUrl = r2StorageService.getSecureThumbnailUrl(thumbnailKey, upload.isApproved(), true);
+                dto.setThumbnailUrl(thumbnailUrl);
+            } else {
+                // Fallback: use original image URL as thumbnail if no thumbnail generated yet
+                dto.setThumbnailUrl(secureUrl);
+            }
 
         } catch (Exception e) {
             // If secure URL generation fails, log error but don't break the DTO creation

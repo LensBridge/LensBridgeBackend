@@ -39,7 +39,7 @@ public class UploadProperties {
      * Allowed file types (MIME types)
      */
     private List<String> allowedFileTypes = List.of(
-        "video/mp4", "video/quicktime", "video/x-matroska", "video/x-msvideo",
+//        "video/mp4", "video/quicktime", "video/x-matroska", "video/x-msvideo",
         "image/jpeg", "image/png", "image/heic"
     );
     

@@ -292,10 +292,16 @@ public class R2StorageService {
     }
 
     /**
-     * Generate a secure URL for thumbnails (currently same as object). Could be adjusted to a resized variant.
+     * Generate a secure URL for thumbnails.
+     * @param thumbnailKey The object key of the thumbnail (e.g., "thumbnails/uuid")
+     * @param isApproved Whether the content is approved
+     * @param isAdmin Whether the requester is an admin
      */
-    public String getSecureThumbnailUrl(String objectKey, boolean isApproved, boolean isAdmin) {
-        return getSecureUrl(objectKey, isApproved, isAdmin);
+    public String getSecureThumbnailUrl(String thumbnailKey, boolean isApproved, boolean isAdmin) {
+        if (thumbnailKey == null || thumbnailKey.isBlank()) {
+            return null;
+        }
+        return getSecureUrl(thumbnailKey, isApproved, isAdmin);
     }
 
     /**
