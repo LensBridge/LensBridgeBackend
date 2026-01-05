@@ -15,11 +15,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
-
-import java.io.File;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -32,13 +29,6 @@ public class UploadService {
     private final UserService userService;
     private final EventsService eventsService;
     private final R2StorageService r2StorageService;
-    private final MediaConversionService mediaConversionService;
-
-    @Value("${uploads.max-size}")
-    private long maxUploadSize;
-
-    @Value("${uploads.allowed-file-types}")
-    private List<String> allowedFileTypes;
 
     @Value("${uploads.default-approved:false}")
     private boolean defaultApproved;
@@ -98,50 +88,69 @@ public class UploadService {
         }
     }
 
-    public Upload createUpload(MultipartFile file, UUID eventId, String description, String instagramHandle, boolean anon, UUID uploadedBy) {
+    /**
+     * Count uploads for a user today
+     */
+    public long countUploadsToday(UUID userId) {
+        LocalDate today = LocalDate.now();
+        LocalDateTime startOfDay = today.atStartOfDay();
+        LocalDateTime endOfDay = today.atTime(23, 59, 59);
+
+        return uploadRepository.countByUploadedByAndCreatedDateBetween(
+                userId,
+                startOfDay,
+                endOfDay);
+    }
+
+    /**
+     * Check if user has reached their daily upload limit
+     */
+    public boolean hasReachedDailyLimit(UUID userId, int dailyLimit) {
+        return countUploadsToday(userId) >= dailyLimit;
+    }
+
+    /**
+     * Create an Upload entity for a file that has been directly uploaded to R2.
+     * This method is used when files are uploaded via presigned URLs.
+     */
+    public Upload createDirectUpload(String objectKey, String fileName, String contentType,
+            UUID eventId, String description, String instagramHandle,
+            boolean anon, UUID uploadedBy) {
         try {
-            if (file.isEmpty()) {
-                throw new IllegalArgumentException("Empty file cannot be uploaded");
-            }
-            if (file.getSize() > maxUploadSize) {
-                throw new IllegalArgumentException("File size exceeds the maximum limit of " + maxUploadSize + " bytes");
-            }
-            if (file.getContentType() == null || !allowedFileTypes.contains(file.getContentType())) {
-                throw new IllegalArgumentException("Unsupported file type: " + file.getContentType());
-            }
-
-            String fileURL;
-
-            String contentType = file.getContentType();
-            String originalFilename = file.getOriginalFilename();
-            File outputFile;
+            // Determine upload type from content type
             UploadType uploadType;
-
             if (contentType != null && contentType.startsWith("image")) {
                 uploadType = UploadType.IMAGE;
-
-                outputFile = File.createTempFile("upload_", "_" + originalFilename);
-                file.transferTo(outputFile);
-                fileURL = r2StorageService.uploadImage(outputFile, UUID.randomUUID().toString());
-                outputFile.delete();
             } else if (contentType != null && contentType.startsWith("video")) {
                 uploadType = UploadType.VIDEO;
-                outputFile = File.createTempFile("upload_", "_" + originalFilename);
-                file.transferTo(outputFile);
-                fileURL = r2StorageService.uploadVideo(outputFile, UUID.randomUUID().toString());
-                outputFile.delete();
             } else {
-                throw new IllegalArgumentException("Unsupported file type: " + contentType);
+                uploadType = UploadType.IMAGE; // Default fallback
             }
 
+            // Create Upload entity
             UUID uuid = UUID.randomUUID();
-            Upload upload = new Upload(uuid, originalFilename, fileURL, description, instagramHandle, uploadedBy, eventId, LocalDateTime.now(), defaultApproved, defaultFeatured, anon, uploadType);
+            Upload upload = new Upload(
+                    uuid,
+                    fileName,
+                    objectKey,
+                    null, // thumbnailUrl - will be set async by ThumbnailService
+                    description,
+                    instagramHandle,
+                    uploadedBy,
+                    eventId,
+                    LocalDateTime.now(),
+                    defaultApproved,
+                    defaultFeatured,
+                    anon,
+                    uploadType);
+
             uploadRepository.save(upload);
+            log.info("Created direct upload record: {} for object: {}", uuid, objectKey);
             return upload;
-        }
-        catch (Exception e) {
-            log.error("Failed to process file for upload: {}", e.getMessage());
-            throw new FileProcessingException("Failed to process file for upload");
+
+        } catch (Exception e) {
+            log.error("Failed to create direct upload record for object: {}", objectKey, e);
+            throw new FileProcessingException("Failed to create upload record for direct upload");
         }
     }
 
@@ -166,10 +175,15 @@ public class UploadService {
         if (uploadOpt.isPresent()) {
             Upload upload = uploadOpt.get();
             try {
-                // Delete from R2 storage
+                // Delete original file from R2 storage
                 String objectKey = r2StorageService.extractObjectKeyFromUrl(upload.getFileUrl());
                 if (objectKey != null) {
                     r2StorageService.deleteObject(objectKey);
+                }
+                // Delete thumbnail from R2 storage if exists
+                String thumbnailKey = upload.getThumbnailUrl();
+                if (thumbnailKey != null && !thumbnailKey.isBlank()) {
+                    r2StorageService.deleteObject(thumbnailKey);
                 }
             } catch (Exception e) {
                 log.warn("Failed to delete file from R2 storage for upload {}: {}", id, e.getMessage());
@@ -184,30 +198,35 @@ public class UploadService {
      */
     public void deleteUserUpload(UUID uploadId, UUID userId) {
         log.info("User {} attempting to delete upload {}", userId, uploadId);
-        
+
         Optional<Upload> uploadOpt = uploadRepository.findById(uploadId);
         if (uploadOpt.isEmpty()) {
             throw new IllegalArgumentException("Upload not found");
         }
-        
+
         Upload upload = uploadOpt.get();
-        
+
         // Verify ownership
         if (!upload.getUploadedBy().equals(userId)) {
             throw new SecurityException("You can only delete your own uploads");
         }
-        
+
         try {
-            // Delete from R2 storage
+            // Delete original file from R2 storage
             String objectKey = r2StorageService.extractObjectKeyFromUrl(upload.getFileUrl());
             if (objectKey != null) {
                 r2StorageService.deleteObject(objectKey);
+            }
+            // Delete thumbnail from R2 storage if exists
+            String thumbnailKey = upload.getThumbnailUrl();
+            if (thumbnailKey != null && !thumbnailKey.isBlank()) {
+                r2StorageService.deleteObject(thumbnailKey);
             }
         } catch (Exception e) {
             log.warn("Failed to delete file from R2 storage for upload {}: {}", uploadId, e.getMessage());
             // Continue with database deletion even if R2 deletion fails
         }
-        
+
         // Delete the upload from database
         uploadRepository.deleteById(uploadId);
         log.info("Upload {} deleted successfully by user {}", uploadId, userId);
@@ -250,17 +269,17 @@ public class UploadService {
         long approvedUploads = uploadRepository.countByUploadedByAndApproved(userId, true);
         long featuredUploads = uploadRepository.countByUploadedByAndFeatured(userId, true);
         long pendingUploads = totalUploads - approvedUploads;
-        
+
         return new UserStatsResponse(
-            (int) totalUploads,
-            (int) approvedUploads, 
-            (int) featuredUploads,
-            (int) pendingUploads
-        );
+                (int) totalUploads,
+                (int) approvedUploads,
+                (int) featuredUploads,
+                (int) pendingUploads);
     }
 
     /**
-     * Get user uploads as GalleryItemDTOs (user can see their own uploads regardless of approval status)
+     * Get user uploads as GalleryItemDTOs (user can see their own uploads
+     * regardless of approval status)
      */
     public Page<GalleryItemDto> getUserUploadsAsGalleryItems(UUID userId, Pageable pageable) {
         Page<Upload> uploads = uploadRepository.findByUploadedBy(userId, pageable);
@@ -268,7 +287,8 @@ public class UploadService {
     }
 
     /**
-     * Convert Upload to GalleryItemDto for user's own uploads (can see all their own content)
+     * Convert Upload to GalleryItemDto for user's own uploads (can see all their
+     * own content)
      */
     private GalleryItemDto convertToUserGalleryItem(Upload upload, UUID userId) {
         // Verify the user owns this upload
@@ -277,7 +297,7 @@ public class UploadService {
         }
 
         GalleryItemDto item = new GalleryItemDto();
-        
+
         // Basic info
         item.setId(upload.getUuid().toString());
         item.setTitle(upload.getUploadDescription() != null ? upload.getUploadDescription() : "Untitled");
@@ -287,7 +307,8 @@ public class UploadService {
         // Generate secure URL (user can see their own content regardless of approval)
         try {
             String objectKey = r2StorageService.extractObjectKeyFromUrl(upload.getFileUrl());
-            String secureUrl = r2StorageService.getSecureUrl(objectKey, true, false); // true for approved access, false for not admin
+            String secureUrl = r2StorageService.getSecureUrl(objectKey, true, false); // true for approved access, false
+                                                                                      // for not admin
             item.setSrc(secureUrl);
         } catch (Exception e) {
             log.error("Failed to generate secure URL for user upload {}: {}", upload.getUuid(), e.getMessage());
@@ -304,7 +325,8 @@ public class UploadService {
             item.setThumbnail(null);
         }
 
-        // Set author (always the user's name for their own uploads, even if marked anonymous)
+        // Set author (always the user's name for their own uploads, even if marked
+        // anonymous)
         Optional<User> userOpt = userService.findById(userId);
         if (userOpt.isPresent()) {
             User user = userOpt.get();
@@ -332,7 +354,8 @@ public class UploadService {
     }
 
     /**
-     * Convert Upload entity to AdminUploadDto with user information and secure URLs populated.
+     * Convert Upload entity to AdminUploadDto with user information and secure URLs
+     * populated.
      * Generates time-limited signed URLs for admin access.
      */
     private AdminUploadDto convertToAdminUploadDto(Upload upload) {
@@ -359,9 +382,15 @@ public class UploadService {
             String secureUrl = r2StorageService.getSecureUrl(objectKey, upload.isApproved(), true);
             dto.setSecureUrl(secureUrl);
 
-            // Generate secure thumbnail URL
-            String thumbnailUrl = r2StorageService.getSecureThumbnailUrl(objectKey, upload.isApproved(), true);
-            dto.setThumbnailUrl(thumbnailUrl);
+            // Generate secure thumbnail URL using the stored thumbnail key
+            String thumbnailKey = upload.getThumbnailUrl();
+            if (thumbnailKey != null && !thumbnailKey.isBlank()) {
+                String thumbnailUrl = r2StorageService.getSecureThumbnailUrl(thumbnailKey, upload.isApproved(), true);
+                dto.setThumbnailUrl(thumbnailUrl);
+            } else {
+                // Fallback: use original image URL as thumbnail if no thumbnail generated yet
+                dto.setThumbnailUrl(secureUrl);
+            }
 
         } catch (Exception e) {
             // If secure URL generation fails, log error but don't break the DTO creation

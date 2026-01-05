@@ -18,6 +18,7 @@ public class Upload {
 
     private String fileName;
     private String fileUrl;
+    private String thumbnailUrl;
     private String uploadDescription;
 
     private String instagramHandle;
