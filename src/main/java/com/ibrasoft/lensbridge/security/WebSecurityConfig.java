@@ -1,6 +1,7 @@
 package com.ibrasoft.lensbridge.security;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -14,10 +15,15 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import com.ibrasoft.lensbridge.security.jwt.AuthEntryPointJwt;
 import com.ibrasoft.lensbridge.security.jwt.AuthTokenFilter;
 import com.ibrasoft.lensbridge.security.services.UserDetailsServiceImpl;
+
+import java.util.Arrays;
 
 @Configuration
 @EnableMethodSecurity
@@ -27,6 +33,12 @@ public class WebSecurityConfig {
 
   @Autowired
   private AuthEntryPointJwt unauthorizedHandler;
+
+  @Value("${frontend.baseurl}")
+  private String frontendBaseUrl;
+
+  @Value("${musallahboard.baseurl}")
+  private String musallahBoardBaseUrl;
 
   @Bean
   public AuthTokenFilter authenticationJwtTokenFilter() {
@@ -52,14 +64,29 @@ public class WebSecurityConfig {
   }
 
   @Bean
+  public CorsConfigurationSource corsConfigurationSource() {
+    CorsConfiguration configuration = new CorsConfiguration();
+    configuration.setAllowedOrigins(Arrays.asList(frontendBaseUrl, musallahBoardBaseUrl));
+    configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+    configuration.setAllowedHeaders(Arrays.asList("*"));
+    configuration.setAllowCredentials(true);
+    
+    UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+    source.registerCorsConfiguration("/api/**", configuration);
+    return source;
+  }
+
+  @Bean
   public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-    http.cors(cors -> {}) 
+    http.cors(cors -> cors.configurationSource(corsConfigurationSource())) 
         .csrf(csrf -> csrf.disable())
         .exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizedHandler))
         .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(auth -> auth.requestMatchers("/api/gallery/**").permitAll()
             .requestMatchers("/api/auth/**").permitAll()
-            .requestMatchers("/api/events/**").permitAll() 
+            .requestMatchers("/api/events/**").permitAll()
+            .requestMatchers("/api/musallah/**").permitAll()
+            .requestMatchers("/api/refresh-musallahboard").permitAll()
             .anyRequest().authenticated());
 
     http.authenticationProvider(authenticationProvider());

@@ -11,7 +11,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-@Document(collection = "events")
+@Document(collection = "board_events")
 @Data
 @Builder
 @NoArgsConstructor
