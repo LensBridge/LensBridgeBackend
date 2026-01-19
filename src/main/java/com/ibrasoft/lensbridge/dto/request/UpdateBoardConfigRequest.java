@@ -8,6 +8,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 /**
  * Request DTO for updating board configuration.
  * All fields are optional - only non-null fields will be updated.
@@ -52,7 +54,7 @@ public class UpdateBoardConfigRequest {
     private Boolean enableScrollingMessage;
     
     /**
-     * The scrolling message text.
+     * The scrolling message texts (will rotate through them).
      */
-    private String scrollingMessage;
+    private List<String> scrollingMessages;
 }

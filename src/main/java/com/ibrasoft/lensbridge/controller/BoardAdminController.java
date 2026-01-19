@@ -399,7 +399,7 @@ public class BoardAdminController {
     @PostMapping("/refresh")
     public ResponseEntity<String> refreshSignboard() {
         signboardHandler.sendRefreshCommand();
-        return ResponseEntity.ok("Refresh command sent");
+        return ResponseEntity.ok("Refresh command sent to MusallahBoard instances");
     }
 
     // ==================== Helper Methods ====================

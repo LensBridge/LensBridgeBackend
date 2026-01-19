@@ -88,8 +88,8 @@ public class BoardService {
         if (request.getEnableScrollingMessage() != null) {
             existing.setEnableScrollingMessage(request.getEnableScrollingMessage());
         }
-        if (request.getScrollingMessage() != null) {
-            existing.setScrollingMessage(request.getScrollingMessage());
+        if (request.getScrollingMessages() != null) {
+            existing.setScrollingMessages(request.getScrollingMessages());
         }
         
         BoardConfig saved = boardConfigRepository.save(existing);

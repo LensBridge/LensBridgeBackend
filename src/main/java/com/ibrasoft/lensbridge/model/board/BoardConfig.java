@@ -8,6 +8,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Document("board_configs")
 @Data
 @Builder
@@ -53,7 +55,7 @@ public class BoardConfig {
     private boolean enableScrollingMessage;
 
     /**
-     * The scrolling message text
+     * The scrolling message texts (will rotate through them)
      */
-    private String scrollingMessage;
+    private List<String> scrollingMessages;
 }
