@@ -13,13 +13,13 @@ import java.time.temporal.ChronoUnit;
 public class LoginAttemptService {
 
     @Value("${login.maxAttempts:5}")
-    private static int MAX_ATTEMPTS;
+    private int maxAttempts;
 
     @Value("${login.lockdownDurationMinutes:15}")
-    private static int LOCKOUT_DURATION_MINUTES;
+    private int lockoutDurationMinutes;
 
     @Value("${login.maxCacheSize:1000}")
-    private static int MAX_CACHE_SIZE;
+    private int maxCacheSize;
 
     private final ConcurrentMap<String, AttemptRecord> attemptsCache = new ConcurrentHashMap<>();
 
@@ -29,7 +29,7 @@ public class LoginAttemptService {
     }
 
     public void recordFailedAttempt(String key) {
-        if (attemptsCache.size() >= MAX_ATTEMPTS) {
+        if (attemptsCache.size() >= maxCacheSize) {
             cleanupExpiredEntries();
         }
 
@@ -53,18 +53,18 @@ public class LoginAttemptService {
             return false;
         }
 
-        return record.getAttempts() >= MAX_ATTEMPTS;
+        return record.getAttempts() >= maxAttempts;
     }
 
     public int getRemainingAttempts(String key) {
         AttemptRecord record = attemptsCache.get(key);
         if (record == null) {
-            return MAX_ATTEMPTS;
+            return maxAttempts;
         }
-        return Math.max(0, MAX_ATTEMPTS - record.getAttempts());
+        return Math.max(0, maxAttempts - record.getAttempts());
     }
 
-    private static class AttemptRecord {
+    private class AttemptRecord {
         private int attempts = 0;
         private LocalDateTime lastAttempt = LocalDateTime.now();
 
@@ -78,7 +78,7 @@ public class LoginAttemptService {
         }
 
         public boolean isLockoutExpired() {
-            return ChronoUnit.MINUTES.between(lastAttempt, LocalDateTime.now()) >= LOCKOUT_DURATION_MINUTES;
+            return ChronoUnit.MINUTES.between(lastAttempt, LocalDateTime.now()) >= lockoutDurationMinutes;
         }
     }
 }

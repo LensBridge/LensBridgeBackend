@@ -189,11 +189,11 @@ public class AdminController {
     public ResponseEntity<?> removeRoleFromUser(@PathVariable UUID userId, @RequestBody Role role, HttpServletRequest request) {
         return executeUserAction(userId, request,
                 (id) -> {
-                    log.debug("Admin removing role {} to user: {}", role, id);
-                    userService.addRole(id, role);
+                    log.debug("Admin removing role {} from user: {}", role, id);
+                    userService.removeRole(id, role);
                 },
                 AdminAction.REMOVE_USER_ROLE,
-                "Role added successfully to user: " + userId);
+                "Role removed successfully from user: " + userId);
     }
 
     @PostMapping("/user/verify")

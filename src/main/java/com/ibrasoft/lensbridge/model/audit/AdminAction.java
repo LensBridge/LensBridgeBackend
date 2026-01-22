@@ -15,6 +15,16 @@ public enum AdminAction {
     CREATE_EVENT("Create Event"),
     UPDATE_EVENT("Update Event"),
     DELETE_EVENT("Delete Event"),
+
+    // Calendar Event Management Actions (Musallah Board)
+    CREATE_CALENDAR_EVENT("Create Calendar Event"),
+    UPDATE_CALENDAR_EVENT("Update Calendar Event"),
+    DELETE_CALENDAR_EVENT("Delete Calendar Event"),
+
+    // Poster/Frame Management Actions (Musallah Board)
+    CREATE_POSTER("Create Poster"),
+    UPDATE_POSTER("Update Poster"),
+    DELETE_POSTER("Delete Poster"),
     
     // User Management Actions
     PROMOTE_USER("Promote User to Admin"),

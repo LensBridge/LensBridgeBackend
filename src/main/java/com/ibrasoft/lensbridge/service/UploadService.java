@@ -15,13 +15,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
-
-import java.io.File;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -34,13 +29,6 @@ public class UploadService {
     private final UserService userService;
     private final EventsService eventsService;
     private final R2StorageService r2StorageService;
-    private final MediaConversionService mediaConversionService;
-
-    @Value("${uploads.max-size}")
-    private long maxUploadSize;
-
-    @Value("${uploads.allowed-file-types}")
-    private List<String> allowedFileTypes;
 
     @Value("${uploads.default-approved:false}")
     private boolean defaultApproved;
@@ -119,55 +107,6 @@ public class UploadService {
      */
     public boolean hasReachedDailyLimit(UUID userId, int dailyLimit) {
         return countUploadsToday(userId) >= dailyLimit;
-    }
-
-    public Upload createUpload(MultipartFile file, UUID eventId, String description, String instagramHandle,
-            boolean anon, UUID uploadedBy) {
-        try {
-            if (file.isEmpty()) {
-                throw new IllegalArgumentException("Empty file cannot be uploaded");
-            }
-            if (file.getSize() > maxUploadSize) {
-                throw new IllegalArgumentException(
-                        "File size exceeds the maximum limit of " + maxUploadSize + " bytes");
-            }
-            if (file.getContentType() == null || !allowedFileTypes.contains(file.getContentType())) {
-                throw new IllegalArgumentException("Unsupported file type: " + file.getContentType());
-            }
-
-            String fileURL;
-
-            String contentType = file.getContentType();
-            String originalFilename = file.getOriginalFilename();
-            File outputFile;
-            UploadType uploadType;
-
-            if (contentType != null && contentType.startsWith("image")) {
-                uploadType = UploadType.IMAGE;
-
-                outputFile = File.createTempFile("upload_", "_" + originalFilename);
-                file.transferTo(outputFile);
-                fileURL = r2StorageService.uploadImage(outputFile, UUID.randomUUID().toString());
-                outputFile.delete();
-            } else if (contentType != null && contentType.startsWith("video")) {
-                uploadType = UploadType.VIDEO;
-                outputFile = File.createTempFile("upload_", "_" + originalFilename);
-                file.transferTo(outputFile);
-                fileURL = r2StorageService.uploadVideo(outputFile, UUID.randomUUID().toString());
-                outputFile.delete();
-            } else {
-                throw new IllegalArgumentException("Unsupported file type: " + contentType);
-            }
-
-            UUID uuid = UUID.randomUUID();
-            Upload upload = new Upload(uuid, originalFilename, fileURL, null, description, instagramHandle, uploadedBy,
-                    eventId, LocalDateTime.now(), defaultApproved, defaultFeatured, anon, uploadType);
-            uploadRepository.save(upload);
-            return upload;
-        } catch (Exception e) {
-            log.error("Failed to process file for upload: {}", e.getMessage());
-            throw new FileProcessingException("Failed to process file for upload");
-        }
     }
 
     /**

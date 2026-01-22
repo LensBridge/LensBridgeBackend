@@ -1,5 +1,7 @@
 package com.ibrasoft.lensbridge.config;
 
+import java.util.List;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -14,6 +16,9 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Value("${frontend.baseurl}")
     String frontendBaseUrl;
+
+    @Value("${musallahboard.baseurl}")
+    String musallahBoardBaseUrl;
 
     @Autowired
     private RateLimitingFilter rateLimitingFilter;
@@ -30,7 +35,7 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(@NonNull CorsRegistry registry) {
         registry.addMapping("/api/**")
-                .allowedOrigins(frontendBaseUrl)
+                .allowedOrigins(frontendBaseUrl, musallahBoardBaseUrl)
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true); 

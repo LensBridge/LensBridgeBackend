@@ -29,6 +29,8 @@ import java.time.Duration;
 @Slf4j
 public class R2StorageService {
 
+    private final S3Client s3Client;
+    private final S3Presigner presigner;
     private final MediaConversionService mediaConversionService;
 
     @Value("${cloudflare.r2.access-key-id}")
@@ -49,29 +51,9 @@ public class R2StorageService {
     @Value("${cloudflare.r2.url-expiration-minutes:15}")
     private long urlExpirationMinutes;
 
-    private S3Client s3Client;
-    private S3Presigner presigner;
-
     @PostConstruct
     public void init() {
-        AwsBasicCredentials credentials = AwsBasicCredentials.create(accessKeyId, secretAccessKey);
-        String normalizedEndpoint = normalizeEndpoint(endpoint);
-        S3Configuration s3Config = S3Configuration.builder()
-                .pathStyleAccessEnabled(true) // Cloudflare R2 requires path-style for the root endpoint
-                .build();
-        this.s3Client = S3Client.builder()
-                .endpointOverride(URI.create(normalizedEndpoint))
-                .credentialsProvider(StaticCredentialsProvider.create(credentials))
-                .serviceConfiguration(s3Config)
-                .region(Region.US_EAST_1)
-                .build();
-        this.presigner = S3Presigner.builder()
-                .endpointOverride(URI.create(normalizedEndpoint))
-                .credentialsProvider(StaticCredentialsProvider.create(credentials))
-                .serviceConfiguration(s3Config)
-                .region(Region.US_EAST_1)
-                .build();
-        log.info("R2StorageService initialized with path-style access (endpoint='{}', bucket='{}', publicUrl='{}')", normalizedEndpoint, bucketName, publicUrl);
+        log.info("R2StorageService initialized (endpoint='{}', bucket='{}', publicUrl='{}')", endpoint, bucketName, publicUrl);
     }
 
     private String normalizeEndpoint(String ep) {
@@ -127,15 +109,6 @@ public class R2StorageService {
         }
     }
 
-    @PreDestroy
-    public void cleanup() {
-        if (s3Client != null) {
-            s3Client.close();
-        }
-        if (presigner != null) {
-            presigner.close();
-        }
-    }
 
     /**
      * Upload an image file to R2

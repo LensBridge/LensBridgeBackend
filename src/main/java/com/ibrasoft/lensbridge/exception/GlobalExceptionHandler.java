@@ -22,6 +22,11 @@ import java.util.Map;
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
+    @ExceptionHandler(ApiResponseException.class)
+    public ResponseEntity<Object> handleApiResponseException(ApiResponseException ex) {
+        return ResponseEntity.status(ex.getStatus()).body(ex.getBody());
+    }
+
 
     @ExceptionHandler(VideoProcessingException.class)
     public ResponseEntity<Map<String, Object>> handleVideoProcessingException(VideoProcessingException ex) {
