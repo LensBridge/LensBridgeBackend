@@ -11,6 +11,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 /**
  * Request DTO for creating or updating weekly content.
  */
@@ -43,5 +45,5 @@ public class WeeklyContentRequest {
     /**
      * Jummah prayer details for the week.
      */
-    private JummahPrayer[] jummahPrayer;
+    private List<JummahPrayer> jummahPrayer;
 }

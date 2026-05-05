@@ -29,9 +29,9 @@ public class Event {
 
     private String location;
 
-    private long startTimestamp;
+    private Long startTimestamp;
 
-    private long endTimestamp;
+    private Long endTimestamp;
 
     private Boolean allDay;
 

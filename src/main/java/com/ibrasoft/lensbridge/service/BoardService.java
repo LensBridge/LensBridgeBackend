@@ -4,7 +4,6 @@ import com.ibrasoft.lensbridge.dto.request.UpdateBoardConfigRequest;
 import com.ibrasoft.lensbridge.dto.request.WeeklyContentRequest;
 import com.ibrasoft.lensbridge.dto.response.ErrorResponse;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
-import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.BoardConfig;
 import com.ibrasoft.lensbridge.model.board.BoardLocation;
 import com.ibrasoft.lensbridge.model.board.Event;
@@ -13,6 +12,7 @@ import com.ibrasoft.lensbridge.model.board.WeeklyContent;
 import com.ibrasoft.lensbridge.repository.BoardConfigRepository;
 import com.ibrasoft.lensbridge.repository.EventRepository;
 import com.ibrasoft.lensbridge.repository.WeeklyContentRepository;
+import com.ibrasoft.lensbridge.util.Patch;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Sort;
@@ -69,29 +69,15 @@ public class BoardService {
      */
     public BoardConfig updateBoardConfig(BoardLocation boardLocation, UpdateBoardConfigRequest request) {
         BoardConfig existing = getBoardConfigOrThrow(boardLocation);
-        
-        if (request.getLocation() != null) {
-            existing.setLocation(request.getLocation());
-        }
-        if (request.getPosterCycleInterval() != null) {
-            existing.setPosterCycleInterval(request.getPosterCycleInterval());
-        }
-        if (request.getRefreshAfterIshaaMinutes() != null) {
-            existing.setRefreshAfterIshaaMinutes(request.getRefreshAfterIshaaMinutes());
-        }
-        if (request.getDarkModeAfterIsha() != null) {
-            existing.setDarkModeAfterIsha(request.getDarkModeAfterIsha());
-        }
-        if (request.getDarkModeMinutesAfterIsha() != null) {
-            existing.setDarkModeMinutesAfterIsha(request.getDarkModeMinutesAfterIsha());
-        }
-        if (request.getEnableScrollingMessage() != null) {
-            existing.setEnableScrollingMessage(request.getEnableScrollingMessage());
-        }
-        if (request.getScrollingMessages() != null) {
-            existing.setScrollingMessages(request.getScrollingMessages());
-        }
-        
+
+        Patch.apply(request.getLocation(), existing::setLocation);
+        Patch.apply(request.getPosterCycleInterval(), existing::setPosterCycleInterval);
+        Patch.apply(request.getRefreshAfterIshaaMinutes(), existing::setRefreshAfterIshaaMinutes);
+        Patch.apply(request.getDarkModeAfterIsha(), existing::setDarkModeAfterIsha);
+        Patch.apply(request.getDarkModeMinutesAfterIsha(), existing::setDarkModeMinutesAfterIsha);
+        Patch.apply(request.getEnableScrollingMessage(), existing::setEnableScrollingMessage);
+        Patch.apply(request.getScrollingMessages(), existing::setScrollingMessages);
+
         BoardConfig saved = boardConfigRepository.save(existing);
         log.info("Updated board config for location: {}", boardLocation);
         return saved;
@@ -161,17 +147,11 @@ public class BoardService {
         
         WeeklyContent content = weeklyContentRepository.findById(weekId)
                 .orElse(WeeklyContent.builder().weekId(weekId).build());
-        
-        if (request.getVerse() != null) {
-            content.setVerse(request.getVerse());
-        }
-        if (request.getHadith() != null) {
-            content.setHadith(request.getHadith());
-        }
-        if (request.getJummahPrayer() != null) {
-            content.setJummahPrayer(request.getJummahPrayer());
-        }
-        
+
+        Patch.apply(request.getVerse(), content::setVerse);
+        Patch.apply(request.getHadith(), content::setHadith);
+        Patch.apply(request.getJummahPrayer(), content::setJummahPrayer);
+
         WeeklyContent saved = weeklyContentRepository.save(content);
         log.info("Saved weekly content for week {} of {}", request.getWeekNumber(), request.getYear());
         return saved;
@@ -215,8 +195,7 @@ public class BoardService {
      * Returns events that match the board's audience or BOTH.
      */
     public List<Event> getEventsForBoard(BoardLocation boardLocation) {
-        Audience audience = boardLocationToAudience(boardLocation);
-        return eventRepository.findByAudienceOrBoth(audience, SORT_BY_START_TIMESTAMP_ASC);
+        return eventRepository.findByAudienceOrBoth(boardLocation.audience(), SORT_BY_START_TIMESTAMP_ASC);
     }
 
     /**
@@ -224,17 +203,15 @@ public class BoardService {
      * Returns events with startTimestamp >= now.
      */
     public List<Event> getUpcomingEventsForBoard(BoardLocation boardLocation) {
-        Audience audience = boardLocationToAudience(boardLocation);
         long nowTimestamp = Instant.now().toEpochMilli();
-        return eventRepository.findUpcomingByAudienceOrBoth(audience, nowTimestamp, SORT_BY_START_TIMESTAMP_ASC);
+        return eventRepository.findUpcomingByAudienceOrBoth(boardLocation.audience(), nowTimestamp, SORT_BY_START_TIMESTAMP_ASC);
     }
 
     /**
      * Get events for a specific board within a time range.
      */
     public List<Event> getEventsForBoardInRange(BoardLocation boardLocation, long rangeStart, long rangeEnd) {
-        Audience audience = boardLocationToAudience(boardLocation);
-        return eventRepository.findByAudienceOrBothInTimeRange(audience, rangeStart, rangeEnd, SORT_BY_START_TIMESTAMP_ASC);
+        return eventRepository.findOverlappingForAudienceOrBoth(boardLocation.audience(), rangeStart, rangeEnd, SORT_BY_START_TIMESTAMP_ASC);
     }
 
     /**
@@ -254,28 +231,14 @@ public class BoardService {
      */
     public Event updateEvent(UUID eventId, Event updates) {
         Event existing = getEventById(eventId);
-        
-        if (updates.getName() != null) {
-            existing.setName(updates.getName());
-        }
-        if (updates.getDescription() != null) {
-            existing.setDescription(updates.getDescription());
-        }
-        if (updates.getLocation() != null) {
-            existing.setLocation(updates.getLocation());
-        }
-        if (updates.getStartTimestamp() != 0) {
-            existing.setStartTimestamp(updates.getStartTimestamp());
-        }
-        if (updates.getEndTimestamp() != 0) {
-            existing.setEndTimestamp(updates.getEndTimestamp());
-        }
-        if (updates.getAllDay() != null) {
-            existing.setAllDay(updates.getAllDay());
-        }
-        if (updates.getAudience() != null) {
-            existing.setAudience(updates.getAudience());
-        }
+
+        Patch.apply(updates.getName(), existing::setName);
+        Patch.apply(updates.getDescription(), existing::setDescription);
+        Patch.apply(updates.getLocation(), existing::setLocation);
+        Patch.apply(updates.getStartTimestamp(), existing::setStartTimestamp);
+        Patch.apply(updates.getEndTimestamp(), existing::setEndTimestamp);
+        Patch.apply(updates.getAllDay(), existing::setAllDay);
+        Patch.apply(updates.getAudience(), existing::setAudience);
 
         Event saved = eventRepository.save(existing);
         log.info("Updated event: id={}", eventId);
@@ -291,12 +254,4 @@ public class BoardService {
         log.info("Deleted event: id={}", eventId);
     }
 
-    // ==================== Helper Methods ====================
-
-    private Audience boardLocationToAudience(BoardLocation boardLocation) {
-        return switch (boardLocation) {
-            case BROTHERS_MUSALLAH -> Audience.BROTHERS;
-            case SISTERS_MUSALLAH -> Audience.SISTERS;
-        };
-    }
 }

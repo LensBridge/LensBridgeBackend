@@ -13,7 +13,12 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
     property = "type"
 )
 @JsonSubTypes({
-    @JsonSubTypes.Type(value = PosterFrameConfig.class, name = "poster")
+    @JsonSubTypes.Type(value = PosterFrameConfig.class,        name = "poster"),
+    @JsonSubTypes.Type(value = EventListFrameConfig.class,     name = "event_list"),
+    @JsonSubTypes.Type(value = DailyScheduleFrameConfig.class, name = "daily_schedule"),
+    @JsonSubTypes.Type(value = NextPrayerFrameConfig.class,    name = "next_prayer"),
+    @JsonSubTypes.Type(value = JummahFrameConfig.class,        name = "jummah"),
+    @JsonSubTypes.Type(value = IslamicQuoteFrameConfig.class,  name = "islamic_quote")
 })
 public abstract class FrameConfig {
 

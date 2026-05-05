@@ -9,6 +9,7 @@ import com.ibrasoft.lensbridge.dto.request.WeeklyContentRequest;
 import com.ibrasoft.lensbridge.dto.response.MessageResponse;
 import com.ibrasoft.lensbridge.handler.SignboardHandler;
 import com.ibrasoft.lensbridge.model.audit.AdminAction;
+import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.BoardConfig;
 import com.ibrasoft.lensbridge.model.board.BoardLocation;
 import com.ibrasoft.lensbridge.model.board.Event;
@@ -25,6 +26,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -32,6 +34,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.time.LocalDate;
 
 import java.util.List;
 import java.util.UUID;
@@ -200,20 +204,20 @@ public class BoardAdminController {
     public ResponseEntity<Poster> createPoster(
             @RequestParam("title") String title,
             @RequestParam("duration") int duration,
-            @RequestParam("startDate") String startDate,
-            @RequestParam("endDate") String endDate,
-            @RequestParam("audience") String audience,
+            @RequestParam("startDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam("endDate")   @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam("audience") Audience audience,
             @RequestParam("image") MultipartFile imageFile,
             HttpServletRequest request) {
-        
+
         log.info("Admin creating new poster: title={}", title);
 
         CreatePosterRequest createRequest = CreatePosterRequest.builder()
                 .title(title)
                 .duration(duration)
-                .startDate(java.time.LocalDate.parse(startDate))
-                .endDate(java.time.LocalDate.parse(endDate))
-                .audience(com.ibrasoft.lensbridge.model.board.Audience.valueOf(audience.toUpperCase()))
+                .startDate(startDate)
+                .endDate(endDate)
+                .audience(audience)
                 .build();
 
         Poster response = posterService.createPoster(createRequest, imageFile);
@@ -359,8 +363,8 @@ public class BoardAdminController {
                 .name(updateRequest.getName())
                 .description(updateRequest.getDescription())
                 .location(updateRequest.getLocation())
-                .startTimestamp(updateRequest.getStartTimestamp() != null ? updateRequest.getStartTimestamp() : 0)
-                .endTimestamp(updateRequest.getEndTimestamp() != null ? updateRequest.getEndTimestamp() : 0)
+                .startTimestamp(updateRequest.getStartTimestamp())
+                .endTimestamp(updateRequest.getEndTimestamp())
                 .allDay(updateRequest.getAllDay())
                 .audience(updateRequest.getAudience())
                 .build();

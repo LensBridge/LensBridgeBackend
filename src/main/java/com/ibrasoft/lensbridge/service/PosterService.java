@@ -4,9 +4,11 @@ import com.ibrasoft.lensbridge.dto.request.CreatePosterRequest;
 import com.ibrasoft.lensbridge.dto.request.UpdatePosterRequest;
 import com.ibrasoft.lensbridge.dto.response.ErrorResponse;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
-import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.BoardLocation;
 import com.ibrasoft.lensbridge.model.board.Poster;
+import com.ibrasoft.lensbridge.service.board.BoardContext;
+import com.ibrasoft.lensbridge.service.board.transformer.PosterFrameTransformer;
+import com.ibrasoft.lensbridge.util.Patch;
 import com.ibrasoft.lensbridge.repository.PosterRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +31,7 @@ public class PosterService {
 
     private final PosterRepository posterRepository;
     private final R2StorageService r2StorageService;
+    private final PosterFrameTransformer posterFrameTransformer;
 
     @Value("${cloudflare.r2.public-url}")
     private String publicUrl;
@@ -58,8 +61,7 @@ public class PosterService {
      * Returns posters that match the board's audience or BOTH.
      */
     public List<Poster> getPostersForBoard(BoardLocation boardLocation) {
-        Audience audience = boardLocationToAudience(boardLocation);
-        return posterRepository.findByAudienceOrBoth(audience, SORT_BY_START_DATE_DESC);
+        return posterRepository.findByAudienceOrBoth(boardLocation.audience(), SORT_BY_START_DATE_DESC);
     }
 
     /**
@@ -68,10 +70,8 @@ public class PosterService {
      * and match the board's audience or BOTH.
      */
     public List<Poster> getActivePosterFramesForBoard(BoardLocation boardLocation) {
-        Audience audience = boardLocationToAudience(boardLocation);
         LocalDate today = LocalDate.now();
-        
-        return posterRepository.findActivePostersForAudienceAt(today, audience, SORT_BY_START_DATE_DESC);
+        return posterRepository.findActivePostersForAudienceAt(today, boardLocation.audience(), SORT_BY_START_DATE_DESC);
     }
 
     /**
@@ -128,21 +128,11 @@ public class PosterService {
                         ErrorResponse.of("Poster not found with id: " + posterId)));
 
         // Update only non-null fields
-        if (request.getTitle() != null) {
-            poster.setTitle(request.getTitle());
-        }
-        if (request.getDuration() != null) {
-            poster.setDuration(request.getDuration());
-        }
-        if (request.getStartDate() != null) {
-            poster.setStartDate(request.getStartDate());
-        }
-        if (request.getEndDate() != null) {
-            poster.setEndDate(request.getEndDate());
-        }
-        if (request.getAudience() != null) {
-            poster.setAudience(request.getAudience());
-        }
+        Patch.apply(request.getTitle(), poster::setTitle);
+        Patch.apply(request.getDuration(), poster::setDuration);
+        Patch.apply(request.getStartDate(), poster::setStartDate);
+        Patch.apply(request.getEndDate(), poster::setEndDate);
+        Patch.apply(request.getAudience(), poster::setAudience);
 
         // Validate dates after update
         validateDates(poster.getStartDate(), poster.getEndDate());
@@ -225,10 +215,8 @@ public class PosterService {
      * Sorted by startDate descending (newest first).
      */
     public List<com.ibrasoft.lensbridge.model.board.frames.FrameDefinition> getActivePosterFrameDefinitions(BoardLocation boardLocation) {
-        Audience audience = boardLocationToAudience(boardLocation);
         LocalDate today = LocalDate.now();
-        
-        return posterRepository.findActivePostersForAudienceAt(today, audience, SORT_BY_START_DATE_DESC)
+        return posterRepository.findActivePostersForAudienceAt(today, boardLocation.audience(), SORT_BY_START_DATE_DESC)
                 .stream()
                 .map(this::toFrameDefinition)
                 .collect(Collectors.toList());
@@ -236,30 +224,13 @@ public class PosterService {
 
     /**
      * Convert a Poster to a FrameDefinition for the musallah board.
+     * Delegates to PosterFrameTransformer — single source of truth.
      */
     private com.ibrasoft.lensbridge.model.board.frames.FrameDefinition toFrameDefinition(Poster poster) {
-        
-        com.ibrasoft.lensbridge.model.board.frames.PosterFrameConfig config = 
-            com.ibrasoft.lensbridge.model.board.frames.PosterFrameConfig.builder()
-                .posterUrl(poster.getImage())
-                .title(poster.getTitle())
-                .build();
-        
-        return com.ibrasoft.lensbridge.model.board.frames.FrameDefinition.builder()
-                .frameType(com.ibrasoft.lensbridge.model.board.frames.FrameType.POSTER)
-                .durationInSeconds(poster.getDuration())
-                .frameConfig(config)
-                .build();
+        return posterFrameTransformer.transform(poster, null);
     }
 
     // ==================== Helper Methods ====================
-
-    private Audience boardLocationToAudience(BoardLocation boardLocation) {
-        return switch (boardLocation) {
-            case BROTHERS_MUSALLAH -> Audience.BROTHERS;
-            case SISTERS_MUSALLAH -> Audience.SISTERS;
-        };
-    }
 
     private String generatePosterFilename(String originalFilename) {
         String extension = "";

@@ -7,6 +7,8 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.util.List;
+
 @Document(collection = "weekly_content")
 @Data
 @Builder
@@ -17,5 +19,5 @@ public class WeeklyContent {
     private WeekId weekId;
     private IslamicQuote verse;
     private IslamicQuote hadith;
-    private JummahPrayer[] jummahPrayer;
+    private List<JummahPrayer> jummahPrayer;
 }
