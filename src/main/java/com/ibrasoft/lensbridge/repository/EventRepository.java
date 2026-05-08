@@ -20,11 +20,16 @@ public interface EventRepository extends MongoRepository<Event, UUID> {
     List<Event> findByAudienceOrBoth(Audience audience, Sort sort);
 
     /**
-     * Find events for a specific audience or BOTH within a time range.
-     * Events overlap with range if: startTimestamp <= rangeEnd AND endTimestamp >= rangeStart
+     * Find events whose audience matches the given audience or BOTH, AND whose time interval
+     * [startTimestamp, endTimestamp] overlaps the given range [rangeStart, rangeEnd].
+     *
+     * Overlap semantics: event.startTimestamp <= rangeEnd AND event.endTimestamp >= rangeStart.
+     * (An event overlaps the range iff it starts before the range ends and ends after the range starts.)
+     *
+     * Parameter indices: ?0 = audience, ?1 = rangeStart, ?2 = rangeEnd.
      */
     @Query("{ 'audience': { $in: [?0, 'BOTH'] }, 'startTimestamp': { $lte: ?2 }, 'endTimestamp': { $gte: ?1 } }")
-    List<Event> findByAudienceOrBothInTimeRange(Audience audience, long rangeStart, long rangeEnd, Sort sort);
+    List<Event> findOverlappingForAudienceOrBoth(Audience audience, long rangeStart, long rangeEnd, Sort sort);
 
     /**
      * Find all upcoming events for a specific audience or BOTH (startTimestamp >= now).

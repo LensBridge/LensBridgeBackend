@@ -26,6 +26,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
@@ -282,7 +283,7 @@ public class AdminController {
     }
 
     @GetMapping("/audit/daterange")
-    public ResponseEntity<?> getAuditEventsByDateRange(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start, @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end, Pageable pageable) {
+    public ResponseEntity<?> getAuditEventsByDateRange(@RequestParam Instant start, @RequestParam Instant end, Pageable pageable) {
         try {
             log.debug("Admin retrieving audit events between {} and {}", start, end);
             Page<AuditEvent> events = auditService.getAuditEventsByDateRange(start, end, pageable);

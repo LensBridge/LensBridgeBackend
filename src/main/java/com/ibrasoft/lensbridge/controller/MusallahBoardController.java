@@ -1,5 +1,6 @@
 package com.ibrasoft.lensbridge.controller;
 
+import com.ibrasoft.lensbridge.dto.response.MusallahBoardPayload;
 import com.ibrasoft.lensbridge.model.board.BoardConfig;
 import com.ibrasoft.lensbridge.model.board.BoardLocation;
 import com.ibrasoft.lensbridge.model.board.Event;
@@ -7,17 +8,12 @@ import com.ibrasoft.lensbridge.model.board.WeeklyContent;
 import com.ibrasoft.lensbridge.model.board.frames.FrameDefinition;
 import com.ibrasoft.lensbridge.service.BoardService;
 import com.ibrasoft.lensbridge.service.PosterService;
+import com.ibrasoft.lensbridge.service.board.BoardPayloadAssembler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.DayOfWeek;
-import java.time.Instant;
-import java.time.LocalTime;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
-import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 
 /**
@@ -34,6 +30,7 @@ public class MusallahBoardController {
 
     private final PosterService posterService;
     private final BoardService boardService;
+    private final BoardPayloadAssembler payloadAssembler;
 
     // ==================== Board Configuration ====================
 
@@ -136,46 +133,6 @@ public class MusallahBoardController {
     public ResponseEntity<MusallahBoardPayload> getBoardPayload(
             @RequestParam("board") BoardLocation boardLocation) {
         log.debug("Musallah board fetching full payload for: {}", boardLocation);
-        
-        BoardConfig config = boardService.getBoardConfig(boardLocation).orElse(null);
-        List<FrameDefinition> posterFrames = posterService.getActivePosterFrameDefinitions(boardLocation);
-        
-        // Get events for the current week (Sunday to Saturday)
-        ZonedDateTime now = ZonedDateTime.now(ZoneId.systemDefault());
-        ZonedDateTime weekStart = now.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY))
-            .with(LocalTime.MIN);
-        ZonedDateTime weekEnd = now.with(TemporalAdjusters.nextOrSame(DayOfWeek.SATURDAY))
-            .with(LocalTime.MAX);
-        
-        List<Event> upcomingEvents = boardService.getEventsForBoardInRange(
-                boardLocation, 
-                weekStart.toInstant().toEpochMilli(), 
-                weekEnd.toInstant().toEpochMilli()
-        );
-        
-        WeeklyContent weeklyContent = boardService.getCurrentWeeklyContent().orElse(null);
-        
-        MusallahBoardPayload payload = MusallahBoardPayload.builder()
-                .boardConfig(config)
-                .posterFrames(posterFrames)
-                .upcomingEvents(upcomingEvents)
-                .weeklyContent(weeklyContent)
-                .build();
-        
-        return ResponseEntity.ok(payload);
-    }
-
-    /**
-     * Payload containing all data needed for the musallah board display.
-     */
-    @lombok.Data
-    @lombok.Builder
-    @lombok.NoArgsConstructor
-    @lombok.AllArgsConstructor
-    public static class MusallahBoardPayload {
-        private BoardConfig boardConfig;
-        private List<FrameDefinition> posterFrames;
-        private List<Event> upcomingEvents;
-        private WeeklyContent weeklyContent;
+        return ResponseEntity.ok(payloadAssembler.assemble(boardLocation));
     }
 }

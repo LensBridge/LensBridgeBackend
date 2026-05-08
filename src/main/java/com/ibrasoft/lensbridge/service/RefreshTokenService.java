@@ -31,6 +31,12 @@ public class RefreshTokenService {
     
     private final SecureRandom secureRandom = new SecureRandom();
 
+    public void invalidateAllRefreshTokensForUser(UUID userId) {
+        List<RefreshToken> tokens = refreshTokenRepository.findByUserIdAndRevokedFalse(userId);
+        tokens.forEach(token -> token.setRevoked(true));
+        refreshTokenRepository.saveAll(tokens);
+    }
+
     /**
      * Create a new refresh token for a user
      */

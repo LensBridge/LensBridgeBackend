@@ -1,17 +1,16 @@
 package com.ibrasoft.lensbridge.model.board;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
+import jakarta.persistence.*;
+import lombok.*;
 
-@Builder
-@Data
-@AllArgsConstructor
+@Embeddable
+@Data @Builder @NoArgsConstructor @AllArgsConstructor
 public class Location {
     private String city;
     private String country;
     private double latitude;
     private double longitude;
     private String timezone;
-    private int method;
+    @Enumerated(EnumType.STRING)
+    private CalculationMethod method;
 }

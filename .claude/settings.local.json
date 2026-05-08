@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"\\\\.java$\")",
+      "Bash(Remove-Item *)",
+      "Bash(./mvnw compile *)",
+      "Bash(.\\\\mvnw.cmd compile *)",
+      "Bash(cmd *)",
+      "Bash(powershell *)",
+      "Bash(New-Item -ItemType Directory -Force \"C:\\\\Code\\\\LensBridgeBackend\\\\src\\\\main\\\\java\\\\com\\\\ibrasoft\\\\lensbridge\\\\config\\\\converter\")",
+      "Bash(Out-Null)",
+      "Bash(Write-Output \"done\")",
+      "Bash(./mvnw.cmd compile *)",
+      "Bash(git *)"
+    ]
+  }
+}

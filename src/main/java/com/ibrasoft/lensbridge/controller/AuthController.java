@@ -192,7 +192,9 @@ public class AuthController {
 
         try {
             userService.changePassword(user, changePasswordRequest);
-            return ResponseEntity.ok(new MessageResponse("Password changed successfully."));
+            refreshTokenService.revokeAllUserTokens(user.getId());
+            // Create new refresh token + jwt and return to user.... at some point
+            return ResponseEntity.ok(new MessageResponse("Password changed successfully. Please log in again."));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
         }

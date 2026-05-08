@@ -1,61 +1,30 @@
 package com.ibrasoft.lensbridge.model.board;
 
-import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.mapping.Document;
-
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
+import jakarta.persistence.*;
+import lombok.*;
 import java.util.List;
 
-@Document("board_configs")
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
+@Entity
+@Table(name = "board_configs")
+@Data @Builder @NoArgsConstructor @AllArgsConstructor
 public class BoardConfig {
-    /**
-     * The location of the board (e.g., brothers' musallah, sisters' musallah).
-     * Since there will only be one of each, we use the location as the document ID.
-     * Two-for-one design!
-     */
     @Id
+    @Enumerated(EnumType.STRING)
+    @Column(name = "board_location", length = 50)
     private BoardLocation boardLocation;
 
-    /**
-     * The prayer location details (city, country, coordinates, timezone, calculation method).
-     */
+    @Embedded
     private Location location;
 
-    /**
-     * Default poster cycle duration in milliseconds
-     */
-    private int posterCycleInterval;
-
-    /**
-     * How long to wait before refreshing data after Ishaa
-     */
-    private int refreshAfterIshaaMinutes;
-
-    /**
-     * Enable dark mode after Ishaa
-     */
+    private int posterCycleIntervalMs;
+    private int refreshAfterIshaMinutes;
     private boolean darkModeAfterIsha;
-
-    /**
-     * How long to wait after isha (in minutes) before enabling dark mode
-     */
-    private int darkModeMinutesAfterIsha;
-
-    /**
-     * Enable scrolling message at the bottom of the screen
-     */
+    private int darkModeAfterIshaMinutes;
     private boolean enableScrollingMessage;
 
-    /**
-     * The scrolling message texts (will rotate through them)
-     */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "board_config_messages",
+        joinColumns = @JoinColumn(name = "board_location"))
+    @Column(name = "message")
     private List<String> scrollingMessages;
 }

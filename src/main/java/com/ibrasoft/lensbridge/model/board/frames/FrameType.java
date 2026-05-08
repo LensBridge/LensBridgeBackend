@@ -1,11 +1,12 @@
 package com.ibrasoft.lensbridge.model.board.frames;
 
 public enum FrameType {
-    WEEK_AT_A_GLANCE("week_at_a_glance"),
+    POSTER("poster"),
+    EVENT_LIST("event_list"),
     DAILY_SCHEDULE("daily_schedule"),
     NEXT_PRAYER("next_prayer"),
-    POSTER("poster"),
-    ISLAMIC_QUOTES("islamic_quotes");
+    JUMMAH("jummah"),
+    ISLAMIC_QUOTE("islamic_quote");
 
     private final String typeName;
     FrameType(String typeName) {
@@ -16,6 +17,4 @@ public enum FrameType {
     public String toString() {
         return typeName;
     }
-    
-
 }
