@@ -1,5 +1,6 @@
 package com.ibrasoft.lensbridge.service.board.transformer;
 
+import com.ibrasoft.lensbridge.dto.response.frames.EventView;
 import com.ibrasoft.lensbridge.model.board.Event;
 import com.ibrasoft.lensbridge.model.board.frames.EventListFrameConfig;
 import com.ibrasoft.lensbridge.model.board.frames.FrameDefinition;
@@ -25,7 +26,7 @@ public class EventListFrameTransformer implements FrameTransformer<List<Event>> 
 
     @Override
     public FrameDefinition transform(List<Event> events, BoardContext ctx) {
-        List<EventListFrameConfig.EventView> eventViews = events.stream()
+        List<EventView> eventViews = events.stream()
                 .map(this::toEventView)
                 .collect(Collectors.toList());
 
@@ -43,13 +44,13 @@ public class EventListFrameTransformer implements FrameTransformer<List<Event>> 
                 .build();
     }
 
-    private EventListFrameConfig.EventView toEventView(Event event) {
-        return EventListFrameConfig.EventView.builder()
+    private EventView toEventView(Event event) {
+        return EventView.builder()
                 .name(event.getName())
                 .description(event.getDescription())
                 .location(event.getLocation())
-                .startTimestamp(event.getStartTimestamp())
-                .endTimestamp(event.getEndTimestamp())
+                .startEpochMs(event.getStartEpochMs())
+                .endEpochMs(event.getEndEpochMs())
                 .allDay(event.getAllDay())
                 .build();
     }

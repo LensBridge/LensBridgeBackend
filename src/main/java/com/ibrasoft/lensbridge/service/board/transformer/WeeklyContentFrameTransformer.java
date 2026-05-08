@@ -16,12 +16,11 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Transforms a WeeklyContent document into up to three FrameDefinitions:
- * one for the verse, one for the hadith, and one for jummah prayer info.
+ * Transforms a WeeklyContent entity into FrameDefinitions:
+ * one per quote (VERSE/HADITH kind) and one for jummah prayer info.
  *
  * This transformer intentionally does NOT implement FrameTransformer<T> because
- * one source expands to multiple frames. The assembler (Phase 4) will inject it
- * by concrete class.
+ * one source expands to multiple frames. The assembler injects it by concrete class.
  */
 @Component
 public class WeeklyContentFrameTransformer {
@@ -30,15 +29,17 @@ public class WeeklyContentFrameTransformer {
         List<FrameDefinition> out = new ArrayList<>();
         if (content == null) return out;
 
-        if (content.getVerse() != null) {
-            out.add(quoteFrame(content.getVerse(), IslamicQuoteFrameConfig.Kind.VERSE));
+        for (IslamicQuote quote : content.getQuotes()) {
+            IslamicQuoteFrameConfig.Kind kind = quote.getKind() == IslamicQuote.Kind.VERSE
+                    ? IslamicQuoteFrameConfig.Kind.VERSE
+                    : IslamicQuoteFrameConfig.Kind.HADITH;
+            out.add(quoteFrame(quote, kind));
         }
-        if (content.getHadith() != null) {
-            out.add(quoteFrame(content.getHadith(), IslamicQuoteFrameConfig.Kind.HADITH));
+
+        if (!content.getJummahPrayers().isEmpty()) {
+            out.add(jummahFrame(content.getJummahPrayers()));
         }
-        if (content.getJummahPrayer() != null && !content.getJummahPrayer().isEmpty()) {
-            out.add(jummahFrame(content.getJummahPrayer()));
-        }
+
         return out;
     }
 
@@ -65,7 +66,7 @@ public class WeeklyContentFrameTransformer {
                 .map(p -> JummahFrameConfig.JummahSlot.builder()
                         .prayerTime(p.getPrayerTime() != null ? p.getPrayerTime().toString() : null)
                         .khatib(p.getKhatib())
-                        .location(p.getLocation())
+                        .room(p.getRoom())
                         .build())
                 .collect(Collectors.toList());
 

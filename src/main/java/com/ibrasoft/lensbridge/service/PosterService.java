@@ -9,11 +9,10 @@ import com.ibrasoft.lensbridge.model.board.Poster;
 import com.ibrasoft.lensbridge.service.board.BoardContext;
 import com.ibrasoft.lensbridge.service.board.transformer.PosterFrameTransformer;
 import com.ibrasoft.lensbridge.util.Patch;
-import com.ibrasoft.lensbridge.repository.PosterRepository;
+import com.ibrasoft.lensbridge.repository.sql.PosterRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -35,8 +34,6 @@ public class PosterService {
 
     @Value("${cloudflare.r2.public-url}")
     private String publicUrl;
-
-    private static final Sort SORT_BY_START_DATE_DESC = Sort.by(Sort.Direction.DESC, "startDate");
 
     /**
      * Get all posters, sorted by startDate descending (newest first).
@@ -61,7 +58,7 @@ public class PosterService {
      * Returns posters that match the board's audience or BOTH.
      */
     public List<Poster> getPostersForBoard(BoardLocation boardLocation) {
-        return posterRepository.findByAudienceOrBoth(boardLocation.audience(), SORT_BY_START_DATE_DESC);
+        return posterRepository.findByAudienceOrBoth(boardLocation.audience());
     }
 
     /**
@@ -71,7 +68,7 @@ public class PosterService {
      */
     public List<Poster> getActivePosterFramesForBoard(BoardLocation boardLocation) {
         LocalDate today = LocalDate.now();
-        return posterRepository.findActivePostersForAudienceAt(today, boardLocation.audience(), SORT_BY_START_DATE_DESC);
+        return posterRepository.findActivePostersForAudienceAt(today, boardLocation.audience());
     }
 
     /**
@@ -103,7 +100,6 @@ public class PosterService {
         }
 
         Poster poster = Poster.builder()
-                .id(UUID.randomUUID())
                 .title(request.getTitle())
                 .image(publicUrl + "/" + objectKey)
                 .duration(request.getDuration())
@@ -216,7 +212,7 @@ public class PosterService {
      */
     public List<com.ibrasoft.lensbridge.model.board.frames.FrameDefinition> getActivePosterFrameDefinitions(BoardLocation boardLocation) {
         LocalDate today = LocalDate.now();
-        return posterRepository.findActivePostersForAudienceAt(today, boardLocation.audience(), SORT_BY_START_DATE_DESC)
+        return posterRepository.findActivePostersForAudienceAt(today, boardLocation.audience())
                 .stream()
                 .map(this::toFrameDefinition)
                 .collect(Collectors.toList());

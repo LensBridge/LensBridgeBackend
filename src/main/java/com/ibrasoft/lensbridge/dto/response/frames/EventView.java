@@ -1,15 +1,13 @@
-package com.ibrasoft.lensbridge.dto.request;
+package com.ibrasoft.lensbridge.dto.response.frames;
 
-import com.ibrasoft.lensbridge.model.board.Audience;
 import lombok.*;
 
 @Data @Builder @NoArgsConstructor @AllArgsConstructor
-public class UpdateCalendarEventRequest {
+public class EventView {
     private String name;
     private String description;
     private String location;
     private Long startEpochMs;
     private Long endEpochMs;
     private Boolean allDay;
-    private Audience audience;
 }

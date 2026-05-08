@@ -1,39 +1,22 @@
 package com.ibrasoft.lensbridge.model.board;
 
-import java.time.LocalDateTime;
+import jakarta.persistence.*;
+import lombok.*;
 import java.util.UUID;
 
-import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.mapping.Document;
-
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-@Document(collection = "board_events")
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
+@Entity
+@Table(name = "board_events")
+@Data @Builder @NoArgsConstructor @AllArgsConstructor
 public class Event {
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
-
-    /**
-     * Event name/title
-     */
     private String name;
-
     private String description;
-
     private String location;
-
-    private Long startTimestamp;
-
-    private Long endTimestamp;
-
+    private Long startEpochMs;
+    private Long endEpochMs;
     private Boolean allDay;
-
+    @Enumerated(EnumType.STRING)
     private Audience audience;
 }
