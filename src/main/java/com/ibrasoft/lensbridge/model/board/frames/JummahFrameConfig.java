@@ -25,6 +25,6 @@ public class JummahFrameConfig extends FrameConfig {
         /** ISO-8601 LocalTime string, e.g. "13:30" */
         private String prayerTime;
         private String khatib;
-        private String location;
+        private String room;
     }
 }
