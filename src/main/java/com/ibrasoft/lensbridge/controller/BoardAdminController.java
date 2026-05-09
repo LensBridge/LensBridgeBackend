@@ -10,8 +10,7 @@ import com.ibrasoft.lensbridge.dto.response.MessageResponse;
 import com.ibrasoft.lensbridge.handler.SignboardHandler;
 import com.ibrasoft.lensbridge.model.audit.AdminAction;
 import com.ibrasoft.lensbridge.model.board.Audience;
-import com.ibrasoft.lensbridge.model.board.BoardConfig;
-import com.ibrasoft.lensbridge.model.board.BoardLocation;
+import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
 import com.ibrasoft.lensbridge.model.board.Event;
 import com.ibrasoft.lensbridge.model.board.Poster;
 import com.ibrasoft.lensbridge.model.board.WeeklyContent;
@@ -35,8 +34,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.time.LocalDate;
-
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -61,37 +59,36 @@ public class BoardAdminController {
     // ==================== Board Config Endpoints ====================
 
     @GetMapping("/configs")
-    public ResponseEntity<List<BoardConfig>> getAllBoardConfigs() {
+    public ResponseEntity<List<DeviceConfig>> getAllBoardConfigs() {
         log.debug("Admin fetching all board configs");
         return ResponseEntity.ok(boardService.getAllBoardConfigs());
     }
 
-    @GetMapping("/configs/{boardLocation}")
-    public ResponseEntity<BoardConfig> getBoardConfig(@PathVariable BoardLocation boardLocation) {
-        log.debug("Admin fetching board config for: {}", boardLocation);
-        return ResponseEntity.ok(boardService.getBoardConfigOrThrow(boardLocation));
+    @GetMapping("/configs/{deviceId}")
+    public ResponseEntity<DeviceConfig> getBoardConfig(@PathVariable UUID deviceId) {
+        log.debug("Admin fetching board config for device: {}", deviceId);
+        return ResponseEntity.ok(boardService.getBoardConfigOrThrow(deviceId));
     }
 
-    @PutMapping("/configs/{boardLocation}")
-    public ResponseEntity<BoardConfig> saveBoardConfig(
-            @PathVariable BoardLocation boardLocation,
-            @Valid @RequestBody BoardConfig boardConfig,
+    @PutMapping("/configs/{deviceId}")
+    public ResponseEntity<DeviceConfig> saveBoardConfig(
+            @PathVariable UUID deviceId,
+            @Valid @RequestBody DeviceConfig deviceConfig,
             HttpServletRequest request) {
 
-        log.info("Admin saving board config for: {}", boardLocation);
-        boardConfig.setBoardLocation(boardLocation);
-        BoardConfig saved = boardService.saveBoardConfig(boardConfig);
+        log.info("Admin saving board config for device: {}", deviceId);
+        DeviceConfig saved = boardService.saveBoardConfig(deviceId, deviceConfig);
         return ResponseEntity.ok(saved);
     }
 
-    @PatchMapping("/configs/{boardLocation}")
-    public ResponseEntity<BoardConfig> updateBoardConfig(
-            @PathVariable BoardLocation boardLocation,
+    @PatchMapping("/configs/{deviceId}")
+    public ResponseEntity<DeviceConfig> updateBoardConfig(
+            @PathVariable UUID deviceId,
             @Valid @RequestBody UpdateBoardConfigRequest updateRequest,
             HttpServletRequest request) {
 
-        log.info("Admin updating board config for: {}", boardLocation);
-        BoardConfig updated = boardService.updateBoardConfig(boardLocation, updateRequest);
+        log.info("Admin updating board config for device: {}", deviceId);
+        DeviceConfig updated = boardService.updateBoardConfig(deviceId, updateRequest);
         return ResponseEntity.ok(updated);
     }
 
@@ -148,11 +145,10 @@ public class BoardAdminController {
         return ResponseEntity.ok(posterService.getAllPosters());
     }
 
-    @GetMapping("/posters/by-board")
-    public ResponseEntity<List<Poster>> getPostersForBoard(
-            @RequestParam("board") BoardLocation boardLocation) {
-        log.debug("Admin fetching posters for board: {}", boardLocation);
-        return ResponseEntity.ok(posterService.getPostersForBoard(boardLocation));
+    @GetMapping("/posters/by-audience")
+    public ResponseEntity<List<Poster>> getPostersForAudience(@RequestParam Audience audience) {
+        log.debug("Admin fetching posters for audience: {}", audience);
+        return ResponseEntity.ok(posterService.getPostersForAudience(audience));
     }
 
     @GetMapping("/posters/{posterId}")
@@ -165,8 +161,8 @@ public class BoardAdminController {
     public ResponseEntity<Poster> createPoster(
             @RequestParam("title") String title,
             @RequestParam("duration") int duration,
-            @RequestParam("startDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam("endDate")   @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam("startTime") Instant startTime,
+            @RequestParam("endTime") Instant endTime,
             @RequestParam("audience") Audience audience,
             @RequestParam("image") MultipartFile imageFile,
             HttpServletRequest request) {
@@ -176,8 +172,8 @@ public class BoardAdminController {
         CreatePosterRequest createRequest = CreatePosterRequest.builder()
                 .title(title)
                 .duration(duration)
-                .startDate(startDate)
-                .endDate(endDate)
+                .startTime(startTime)
+                .endTime(endTime)
                 .audience(audience)
                 .build();
 
@@ -241,11 +237,10 @@ public class BoardAdminController {
         return ResponseEntity.ok(boardService.getAllEvents());
     }
 
-    @GetMapping("/events/by-board")
-    public ResponseEntity<List<Event>> getEventsForBoard(
-            @RequestParam("board") BoardLocation boardLocation) {
-        log.debug("Admin fetching calendar events for board: {}", boardLocation);
-        return ResponseEntity.ok(boardService.getEventsForBoard(boardLocation));
+    @GetMapping("/events/by-audience")
+    public ResponseEntity<List<Event>> getEventsForAudience(@RequestParam Audience audience) {
+        log.debug("Admin fetching calendar events for audience: {}", audience);
+        return ResponseEntity.ok(boardService.getEventsForAudience(audience));
     }
 
     @GetMapping("/events/{eventId}")

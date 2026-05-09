@@ -2,6 +2,8 @@ package com.ibrasoft.lensbridge.model.board;
 
 import jakarta.persistence.*;
 import lombok.*;
+
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -14,8 +16,8 @@ public class Event {
     private String name;
     private String description;
     private String location;
-    private Long startEpochMs;
-    private Long endEpochMs;
+    private Instant startTime;
+    private Instant endTime;
     private Boolean allDay;
     @Enumerated(EnumType.STRING)
     private Audience audience;

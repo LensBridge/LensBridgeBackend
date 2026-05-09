@@ -7,8 +7,10 @@ import com.ibrasoft.lensbridge.dto.request.WeeklyContentRequest;
 import com.ibrasoft.lensbridge.dto.response.ErrorResponse;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
 import com.ibrasoft.lensbridge.model.board.*;
+import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
 import com.ibrasoft.lensbridge.repository.sql.BoardConfigRepository;
 import com.ibrasoft.lensbridge.repository.sql.BoardEventRepository;
+import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.repository.sql.WeeklyContentRepository;
 import com.ibrasoft.lensbridge.util.Patch;
 import lombok.RequiredArgsConstructor;
@@ -30,43 +32,49 @@ import java.util.UUID;
 public class BoardService {
 
     private final BoardConfigRepository boardConfigRepository;
+    private final DeviceRepository deviceRepository;
     private final BoardEventRepository boardEventRepository;
     private final WeeklyContentRepository weeklyContentRepository;
 
     // ==================== Board Config ====================
 
-    public Optional<BoardConfig> getBoardConfig(BoardLocation boardLocation) {
-        return boardConfigRepository.findById(boardLocation);
+    public Optional<DeviceConfig> getBoardConfig(UUID deviceId) {
+        return boardConfigRepository.findById(deviceId);
     }
 
-    public BoardConfig getBoardConfigOrThrow(BoardLocation boardLocation) {
-        return boardConfigRepository.findById(boardLocation)
+    public DeviceConfig getBoardConfigOrThrow(UUID deviceId) {
+        return boardConfigRepository.findById(deviceId)
                 .orElseThrow(() -> new ApiResponseException(
                         HttpStatus.NOT_FOUND,
-                        ErrorResponse.of("Board configuration not found for location: " + boardLocation)));
+                        ErrorResponse.of("Board configuration not found for device: " + deviceId)));
     }
 
-    public BoardConfig saveBoardConfig(BoardConfig boardConfig) {
-        BoardConfig saved = boardConfigRepository.save(boardConfig);
-        log.info("Saved board config for location: {}", boardConfig.getBoardLocation());
+    public DeviceConfig saveBoardConfig(UUID deviceId, DeviceConfig deviceConfig) {
+        Device device = deviceRepository.findById(deviceId)
+                .orElseThrow(() -> new ApiResponseException(
+                        HttpStatus.NOT_FOUND,
+                        ErrorResponse.of("Device not found: " + deviceId)));
+        deviceConfig.setDevice(device);
+        DeviceConfig saved = boardConfigRepository.save(deviceConfig);
+        log.info("Saved board config for device: {}", deviceId);
         return saved;
     }
 
-    public BoardConfig updateBoardConfig(BoardLocation boardLocation, UpdateBoardConfigRequest request) {
-        BoardConfig existing = getBoardConfigOrThrow(boardLocation);
+    public DeviceConfig updateBoardConfig(UUID deviceId, UpdateBoardConfigRequest request) {
+        DeviceConfig existing = getBoardConfigOrThrow(deviceId);
         Patch.apply(request.getLocation(), existing::setLocation);
         Patch.apply(request.getPosterCycleIntervalMs(), existing::setPosterCycleIntervalMs);
         Patch.apply(request.getRefreshAfterIshaMinutes(), existing::setRefreshAfterIshaMinutes);
         Patch.apply(request.getDarkModeAfterIsha(), existing::setDarkModeAfterIsha);
-        Patch.apply(request.getDarkModeAfterIshaMinutes(), existing::setDarkModeAfterIshaMinutes);
+        Patch.apply(request.getDarkModeAfterIshaMinutes(), existing::setDarkModeAfterMaghribMinutes);
         Patch.apply(request.getEnableScrollingMessage(), existing::setEnableScrollingMessage);
         Patch.apply(request.getScrollingMessages(), existing::setScrollingMessages);
-        BoardConfig saved = boardConfigRepository.save(existing);
-        log.info("Updated board config for location: {}", boardLocation);
+        DeviceConfig saved = boardConfigRepository.save(existing);
+        log.info("Updated board config for device: {}", deviceId);
         return saved;
     }
 
-    public List<BoardConfig> getAllBoardConfigs() {
+    public List<DeviceConfig> getAllBoardConfigs() {
         return boardConfigRepository.findAll();
     }
 
@@ -148,7 +156,7 @@ public class BoardService {
     // ==================== Events ====================
 
     public List<Event> getAllEvents() {
-        return boardEventRepository.findAllByOrderByStartEpochMsAsc();
+        return boardEventRepository.findAllByOrderByStartTimeAsc();
     }
 
     public Event getEventById(UUID eventId) {
@@ -158,17 +166,16 @@ public class BoardService {
                         ErrorResponse.of("Event not found with id: " + eventId)));
     }
 
-    public List<Event> getEventsForBoard(BoardLocation boardLocation) {
-        return boardEventRepository.findByAudienceOrBoth(boardLocation.audience());
+    public List<Event> getEventsForAudience(Audience audience) {
+        return boardEventRepository.findByAudienceOrBoth(audience);
     }
 
-    public List<Event> getUpcomingEventsForBoard(BoardLocation boardLocation) {
-        long now = Instant.now().toEpochMilli();
-        return boardEventRepository.findUpcomingByAudienceOrBoth(boardLocation.audience(), now);
+    public List<Event> getUpcomingEventsForAudience(Audience audience) {
+        return boardEventRepository.findUpcomingByAudienceOrBoth(audience, Instant.now());
     }
 
-    public List<Event> getEventsForBoardInRange(BoardLocation boardLocation, long rangeStart, long rangeEnd) {
-        return boardEventRepository.findOverlappingForAudienceOrBoth(boardLocation.audience(), rangeStart, rangeEnd);
+    public List<Event> getEventsForAudienceInRange(Audience audience, Instant rangeStart, Instant rangeEnd) {
+        return boardEventRepository.findOverlappingForAudienceOrBoth(audience, rangeStart, rangeEnd);
     }
 
     public Event createEvent(CreateCalendarEventRequest request) {
@@ -176,8 +183,8 @@ public class BoardService {
                 .name(request.getName())
                 .description(request.getDescription())
                 .location(request.getLocation())
-                .startEpochMs(request.getStartEpochMs())
-                .endEpochMs(request.getEndEpochMs())
+                .startTime(request.getStartTime())
+                .endTime(request.getEndTime())
                 .allDay(request.getAllDay())
                 .audience(request.getAudience())
                 .build();
@@ -191,8 +198,8 @@ public class BoardService {
         Patch.apply(request.getName(), existing::setName);
         Patch.apply(request.getDescription(), existing::setDescription);
         Patch.apply(request.getLocation(), existing::setLocation);
-        Patch.apply(request.getStartEpochMs(), existing::setStartEpochMs);
-        Patch.apply(request.getEndEpochMs(), existing::setEndEpochMs);
+        Patch.apply(request.getStartTime(), existing::setStartTime);
+        Patch.apply(request.getEndTime(), existing::setEndTime);
         Patch.apply(request.getAllDay(), existing::setAllDay);
         Patch.apply(request.getAudience(), existing::setAudience);
         Event saved = boardEventRepository.save(existing);

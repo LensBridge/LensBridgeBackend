@@ -2,7 +2,7 @@ package com.ibrasoft.lensbridge.model.board;
 
 import jakarta.persistence.*;
 import lombok.*;
-import java.time.LocalDate;
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -15,8 +15,8 @@ public class Poster {
     private String title;
     private String image;
     private int duration;
-    private LocalDate startDate;
-    private LocalDate endDate;
+    private Instant startTime;
+    private Instant endTime;
     @Enumerated(EnumType.STRING)
     private Audience audience;
 }

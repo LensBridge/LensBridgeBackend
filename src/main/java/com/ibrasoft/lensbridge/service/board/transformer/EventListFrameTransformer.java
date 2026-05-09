@@ -49,8 +49,8 @@ public class EventListFrameTransformer implements FrameTransformer<List<Event>> 
                 .name(event.getName())
                 .description(event.getDescription())
                 .location(event.getLocation())
-                .startEpochMs(event.getStartEpochMs())
-                .endEpochMs(event.getEndEpochMs())
+                .startTime(event.getStartTime())
+                .endTime(event.getEndTime())
                 .allDay(event.getAllDay())
                 .build();
     }

@@ -1,6 +1,6 @@
 package com.ibrasoft.lensbridge.dto.response;
 
-import com.ibrasoft.lensbridge.model.board.BoardConfig;
+import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
 import com.ibrasoft.lensbridge.model.board.frames.FrameDefinition;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -14,6 +14,6 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class MusallahBoardPayload {
-    private BoardConfig boardConfig;
+    private DeviceConfig deviceConfig;
     private List<FrameDefinition> frames;
 }

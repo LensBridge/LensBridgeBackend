@@ -1,7 +1,7 @@
 package com.ibrasoft.lensbridge.service.board;
 
-import com.ibrasoft.lensbridge.model.board.BoardConfig;
-import com.ibrasoft.lensbridge.model.board.BoardLocation;
+import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
+import com.ibrasoft.lensbridge.model.board.Device;
 import lombok.Builder;
 import lombok.Value;
 
@@ -15,16 +15,15 @@ import java.time.temporal.TemporalAdjusters;
 @Value
 @Builder
 public class BoardContext {
-    BoardLocation location;
-    BoardConfig config;
+    Device device;
+    DeviceConfig config;
     ZonedDateTime now;
 
     public ZoneId zone() {
-        // Prefer the board's configured timezone; fall back to system default.
         if (config != null && config.getLocation() != null && config.getLocation().getTimezone() != null) {
             try {
                 return ZoneId.of(config.getLocation().getTimezone());
-            } catch (Exception ignored) { /* fallthrough */ }
+            } catch (Exception ignored) {}
         }
         return ZoneId.systemDefault();
     }
@@ -49,14 +48,15 @@ public class BoardContext {
         return now.with(LocalTime.MAX).toInstant();
     }
 
-    public static BoardContext of(BoardLocation location, BoardConfig config) {
+    public static BoardContext of(Device device) {
+        DeviceConfig config = device.getConfig();
         ZoneId zone = ZoneId.systemDefault();
         if (config != null && config.getLocation() != null && config.getLocation().getTimezone() != null) {
             try { zone = ZoneId.of(config.getLocation().getTimezone()); }
-            catch (Exception ignored) { /* keep default */ }
+            catch (Exception ignored) {}
         }
         return BoardContext.builder()
-                .location(location)
+                .device(device)
                 .config(config)
                 .now(ZonedDateTime.now(zone))
                 .build();

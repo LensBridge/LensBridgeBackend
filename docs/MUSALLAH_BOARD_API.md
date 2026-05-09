@@ -117,7 +117,7 @@ Weekly rotating content (verse, hadith, Jummah info):
 Combined payload containing all data needed for the board:
 ```json
 {
-  "boardConfig": { ... },
+  "deviceConfig": { ... },
   "posterFrames": [ ... ],
   "upcomingEvents": [ ... ],
   "weeklyContent": { ... }
@@ -271,7 +271,7 @@ Returns **all data** needed for the board in a single request. This is the **rec
 **Example Response**:
 ```json
 {
-  "boardConfig": {
+  "deviceConfig": {
     "boardLocation": "BROTHERS_MUSALLAH",
     "location": {
       "city": "Toronto",
@@ -334,7 +334,7 @@ Returns **all data** needed for the board in a single request. This is the **rec
 ```
 
 **Note**: Fields may be `null` if no data is configured:
-- `boardConfig`: `null` if no config exists for the board
+- `deviceConfig`: `null` if no config exists for the board
 - `weeklyContent`: `null` if no content is set for the current week
 - `posterFrames`: Empty array `[]` if no active posters
 - `upcomingEvents`: Empty array `[]` if no upcoming events
@@ -351,7 +351,7 @@ const payload = await response.json();
 ```
 
 ### Periodic Refresh
-Use the `refreshAfterIshaaMinutes` from `boardConfig` to determine when to refresh data after Isha prayer. Call `/payload` again to get updated content.
+Use the `refreshAfterIshaaMinutes` from `deviceConfig` to determine when to refresh data after Isha prayer. Call `/payload` again to get updated content.
 
 ### Poster Display Loop
 1. Use `posterFrames` array from the payload
@@ -360,7 +360,7 @@ Use the `refreshAfterIshaaMinutes` from `boardConfig` to determine when to refre
 4. If `posterFrames` is empty, show a default frame
 
 ### Dark Mode
-Use `boardConfig.darkModeAfterIsha` and `boardConfig.darkModeMinutesAfterIsha` along with Isha prayer time to enable dark mode automatically.
+Use `deviceConfig.darkModeAfterIsha` and `deviceConfig.darkModeMinutesAfterIsha` along with Isha prayer time to enable dark mode automatically.
 
 ### Prayer Times
-Use `boardConfig.location` (latitude, longitude, method) with a prayer time calculation library (e.g., Adhan.js) to calculate prayer times locally.
+Use `deviceConfig.location` (latitude, longitude, method) with a prayer time calculation library (e.g., Adhan.js) to calculate prayer times locally.

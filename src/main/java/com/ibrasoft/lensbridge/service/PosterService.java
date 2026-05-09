@@ -4,8 +4,9 @@ import com.ibrasoft.lensbridge.dto.request.CreatePosterRequest;
 import com.ibrasoft.lensbridge.dto.request.UpdatePosterRequest;
 import com.ibrasoft.lensbridge.dto.response.ErrorResponse;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
-import com.ibrasoft.lensbridge.model.board.BoardLocation;
+import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.Poster;
+import java.time.Instant;
 import com.ibrasoft.lensbridge.service.board.BoardContext;
 import com.ibrasoft.lensbridge.service.board.transformer.PosterFrameTransformer;
 import com.ibrasoft.lensbridge.util.Patch;
@@ -18,7 +19,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -39,7 +39,7 @@ public class PosterService {
      * Get all posters, sorted by startDate descending (newest first).
      */
     public List<Poster> getAllPosters() {
-        return posterRepository.findAllByOrderByStartDateDesc();
+        return posterRepository.findAllByOrderByStartTimeDesc();
     }
 
     /**
@@ -57,33 +57,31 @@ public class PosterService {
      * Get all posters for a specific board location.
      * Returns posters that match the board's audience or BOTH.
      */
-    public List<Poster> getPostersForBoard(BoardLocation boardLocation) {
-        return posterRepository.findByAudienceOrBoth(boardLocation.audience());
+    public List<Poster> getPostersForAudience(Audience audience) {
+        return posterRepository.findByAudienceOrBoth(audience);
     }
 
     /**
-     * Get active posters for a specific board location as FrameDefinitions.
+     * Get active posters for a specific audience as FrameDefinitions.
      * Returns posters that are currently active (startDate <= today < endDate)
-     * and match the board's audience or BOTH.
+     * and match the audience or BOTH.
      */
-    public List<Poster> getActivePosterFramesForBoard(BoardLocation boardLocation) {
-        LocalDate today = LocalDate.now();
-        return posterRepository.findActivePostersForAudienceAt(today, boardLocation.audience());
+    public List<Poster> getActivePosterFramesForAudience(Audience audience) {
+        return posterRepository.findActivePostersForAudienceAt(Instant.now(), audience);
     }
 
     /**
      * Get all active posters (currently within their viewing window).
      */
     public List<Poster> getActivePosters() {
-        LocalDate today = LocalDate.now();
-        return posterRepository.findActivePostersAt(today);
+        return posterRepository.findActivePostersAt(Instant.now());
     }
 
     /**
      * Create a new poster with an uploaded image.
      */
     public Poster createPoster(CreatePosterRequest request, MultipartFile imageFile) {
-        validateDates(request.getStartDate(), request.getEndDate());
+        validateDates(request.getStartTime(), request.getEndTime());
         validateImageFile(imageFile);
 
         // Upload the image to R2
@@ -103,8 +101,8 @@ public class PosterService {
                 .title(request.getTitle())
                 .image(publicUrl + "/" + objectKey)
                 .duration(request.getDuration())
-                .startDate(request.getStartDate())
-                .endDate(request.getEndDate())
+                .startTime(request.getStartTime())
+                .endTime(request.getEndTime())
                 .audience(request.getAudience())
                 .build();
 
@@ -126,12 +124,11 @@ public class PosterService {
         // Update only non-null fields
         Patch.apply(request.getTitle(), poster::setTitle);
         Patch.apply(request.getDuration(), poster::setDuration);
-        Patch.apply(request.getStartDate(), poster::setStartDate);
-        Patch.apply(request.getEndDate(), poster::setEndDate);
+        Patch.apply(request.getStartTime(), poster::setStartTime);
+        Patch.apply(request.getEndTime(), poster::setEndTime);
         Patch.apply(request.getAudience(), poster::setAudience);
 
-        // Validate dates after update
-        validateDates(poster.getStartDate(), poster.getEndDate());
+        validateDates(poster.getStartTime(), poster.getEndTime());
 
         poster = posterRepository.save(poster);
         log.info("Updated poster: id={}", posterId);
@@ -210,9 +207,8 @@ public class PosterService {
      * Returns only posters that are currently active and match the board's audience.
      * Sorted by startDate descending (newest first).
      */
-    public List<com.ibrasoft.lensbridge.model.board.frames.FrameDefinition> getActivePosterFrameDefinitions(BoardLocation boardLocation) {
-        LocalDate today = LocalDate.now();
-        return posterRepository.findActivePostersForAudienceAt(today, boardLocation.audience())
+    public List<com.ibrasoft.lensbridge.model.board.frames.FrameDefinition> getActivePosterFrameDefinitions(Audience audience) {
+        return posterRepository.findActivePostersForAudienceAt(Instant.now(), audience)
                 .stream()
                 .map(this::toFrameDefinition)
                 .collect(Collectors.toList());
@@ -236,7 +232,7 @@ public class PosterService {
         return "poster-" + UUID.randomUUID() + extension;
     }
 
-    private void validateDates(LocalDate startDate, LocalDate endDate) {
+    private void validateDates(Instant startDate, Instant endDate) {
         if (startDate != null && endDate != null && !endDate.isAfter(startDate)) {
             throw new ApiResponseException(
                     HttpStatus.BAD_REQUEST,

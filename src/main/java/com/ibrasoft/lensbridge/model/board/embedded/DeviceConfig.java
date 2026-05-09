@@ -1,17 +1,23 @@
-package com.ibrasoft.lensbridge.model.board;
+package com.ibrasoft.lensbridge.model.board.embedded;
 
+import com.ibrasoft.lensbridge.model.board.Device;
+import com.ibrasoft.lensbridge.model.board.Location;
 import jakarta.persistence.*;
 import lombok.*;
 import java.util.List;
+import java.util.UUID;
 
 @Entity
 @Table(name = "board_configs")
 @Data @Builder @NoArgsConstructor @AllArgsConstructor
-public class BoardConfig {
+public class DeviceConfig {
     @Id
-    @Enumerated(EnumType.STRING)
-    @Column(name = "board_location", length = 50)
-    private BoardLocation boardLocation;
+    private UUID id;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @MapsId
+    @JoinColumn(name = "device_id")
+    private Device device;
 
     @Embedded
     private Location location;
@@ -19,12 +25,12 @@ public class BoardConfig {
     private int posterCycleIntervalMs;
     private int refreshAfterIshaMinutes;
     private boolean darkModeAfterIsha;
-    private int darkModeAfterIshaMinutes;
+    private int darkModeAfterMaghribMinutes;
     private boolean enableScrollingMessage;
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "board_config_messages",
-        joinColumns = @JoinColumn(name = "board_location"))
+        joinColumns = @JoinColumn(name = "device_id"))
     @Column(name = "message")
     private List<String> scrollingMessages;
 }
