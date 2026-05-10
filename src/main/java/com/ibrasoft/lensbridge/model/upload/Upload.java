@@ -6,7 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import org.springframework.data.annotation.Id;
+import jakarta.persistence.Id;
 
 import com.ibrasoft.lensbridge.model.auth.User;
 
@@ -25,7 +25,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "devices")
+@Table(name = "uploads")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -64,7 +64,7 @@ public class Upload {
     @Enumerated(EnumType.STRING)
     private UploadType contentType;
 
-    @Column(nullable = false)
+    @Column(nullable = true)
     /**
      * hehe we don't delete things anymore
      * DB is append-only, we just mark things as deleted and filter them out in queries
