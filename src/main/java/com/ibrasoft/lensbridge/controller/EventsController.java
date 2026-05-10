@@ -1,7 +1,7 @@
 package com.ibrasoft.lensbridge.controller;
 
-import com.ibrasoft.lensbridge.model.event.Event;
-import com.ibrasoft.lensbridge.model.event.EventStatus;
+import com.ibrasoft.lensbridge.model.upload.Event;
+import com.ibrasoft.lensbridge.model.upload.EventStatus;
 import com.ibrasoft.lensbridge.service.EventsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;

@@ -1,7 +1,7 @@
 package com.ibrasoft.lensbridge.service;
 
-import com.ibrasoft.lensbridge.model.media.Upload;
-import com.ibrasoft.lensbridge.repository.media.UploadRepository;
+import com.ibrasoft.lensbridge.model.upload.Upload;
+import com.ibrasoft.lensbridge.repository.upload.UploadRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

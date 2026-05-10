@@ -4,7 +4,7 @@ import com.ibrasoft.lensbridge.config.UploadProperties;
 import com.ibrasoft.lensbridge.dto.response.*;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
 import com.ibrasoft.lensbridge.model.auth.Role;
-import com.ibrasoft.lensbridge.model.media.Upload;
+import com.ibrasoft.lensbridge.model.upload.Upload;
 import com.ibrasoft.lensbridge.security.services.UserDetailsImpl;
 import com.ibrasoft.lensbridge.service.DirectUploadService;
 import com.ibrasoft.lensbridge.service.UploadService;

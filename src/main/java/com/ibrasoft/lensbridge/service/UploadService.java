@@ -5,10 +5,10 @@ import com.ibrasoft.lensbridge.dto.response.UserStatsResponse;
 import com.ibrasoft.lensbridge.dto.response.GalleryItemDto;
 import com.ibrasoft.lensbridge.exception.FileProcessingException;
 import com.ibrasoft.lensbridge.model.auth.User;
-import com.ibrasoft.lensbridge.model.event.Event;
-import com.ibrasoft.lensbridge.model.media.Upload;
-import com.ibrasoft.lensbridge.model.media.UploadType;
-import com.ibrasoft.lensbridge.repository.media.UploadRepository;
+import com.ibrasoft.lensbridge.model.upload.Event;
+import com.ibrasoft.lensbridge.model.upload.Upload;
+import com.ibrasoft.lensbridge.model.upload.UploadType;
+import com.ibrasoft.lensbridge.repository.upload.UploadRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

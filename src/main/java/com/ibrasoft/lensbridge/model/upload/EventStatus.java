@@ -1,4 +1,4 @@
-package com.ibrasoft.lensbridge.model.event;
+package com.ibrasoft.lensbridge.model.upload;
 
 public enum EventStatus {
     UPCOMING("Upcoming"),

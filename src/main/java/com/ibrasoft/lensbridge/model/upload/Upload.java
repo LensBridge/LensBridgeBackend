@@ -1,15 +1,24 @@
-package com.ibrasoft.lensbridge.model.media;
+package com.ibrasoft.lensbridge.model.upload;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
+
 import org.springframework.data.annotation.Id;
 
+import com.ibrasoft.lensbridge.model.auth.User;
+
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
@@ -17,7 +26,8 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "devices")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 /**
@@ -29,16 +39,22 @@ public class Upload {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID uuid;
 
-    private String fileName;
+    private String fileName; 
     private String fileUrl;
     private String thumbnailUrl;
 
     private String uploadDescription;
 
     private String instagramHandle;
-    private UUID uploadedBy;
+    
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "uploaded_by", nullable = false)
+    private User uploadedBy;
 
-    private UUID eventId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "event_id")
+    private Event event;
+
     private Instant createdDate;
 
     private boolean approved;
@@ -47,4 +63,14 @@ public class Upload {
 
     @Enumerated(EnumType.STRING)
     private UploadType contentType;
+
+    @Column(nullable = false)
+    /**
+     * hehe we don't delete things anymore
+     * DB is append-only, we just mark things as deleted and filter them out in queries
+     * deletedAt = null => not deleted 
+    */
+    private Instant deletedAt;
+    @ManyToOne(fetch = FetchType.LAZY)
+    private User deletedBy;    
 }

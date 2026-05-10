@@ -1,4 +1,4 @@
-package com.ibrasoft.lensbridge.model.media;
+package com.ibrasoft.lensbridge.model.upload;
 
 public enum UploadType {
     IMAGE("image"),
