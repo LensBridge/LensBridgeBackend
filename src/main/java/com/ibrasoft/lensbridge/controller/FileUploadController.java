@@ -4,10 +4,11 @@ import com.ibrasoft.lensbridge.config.UploadProperties;
 import com.ibrasoft.lensbridge.dto.upload.response.*;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
 import com.ibrasoft.lensbridge.model.auth.Role;
+import com.ibrasoft.lensbridge.model.auth.User;
 import com.ibrasoft.lensbridge.model.upload.Upload;
-import com.ibrasoft.lensbridge.security.services.UserDetailsImpl;
 import com.ibrasoft.lensbridge.service.DirectUploadService;
 import com.ibrasoft.lensbridge.service.UploadService;
+import com.ibrasoft.lensbridge.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -31,6 +32,7 @@ public class FileUploadController {
     private final UploadService uploadService;
     private final DirectUploadService directUploadService;
     private final UploadProperties uploadProperties;
+    private final UserService userService;
 
     @GetMapping("/{uploadId}")
     @PreAuthorize("hasRole('" + Role.VERIFIED + "')")
@@ -67,7 +69,11 @@ public class FileUploadController {
             @RequestParam String expectedSha256,
             Authentication authentication) {
         try {
-            UserDetailsImpl user = (UserDetailsImpl) authentication.getPrincipal();
+            User user = getCurrentUser(authentication);
+            if (user == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(ErrorResponse.of("Authentication required"));
+            }
             String highestRole = getHighestRole(authentication);
 
             PresignedUploadResponse response = directUploadService.createPresignedUpload(
@@ -107,7 +113,11 @@ public class FileUploadController {
             @RequestParam String expectedSha256,
             Authentication authentication) {
         try {
-            UserDetailsImpl user = (UserDetailsImpl) authentication.getPrincipal();
+            User user = getCurrentUser(authentication);
+            if (user == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(ErrorResponse.of("Authentication required"));
+            }
 
             UploadCompletionResponse response = directUploadService.completeDirectUpload(
                     eventId,
@@ -138,7 +148,11 @@ public class FileUploadController {
     @PreAuthorize("hasRole('" + Role.VERIFIED + "')")
     public ResponseEntity<?> getUploadLimits(Authentication authentication) {
         try {
-            UserDetailsImpl user = (UserDetailsImpl) authentication.getPrincipal();
+            User user = getCurrentUser(authentication);
+            if (user == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(ErrorResponse.of("Authentication required"));
+            }
             String highestRole = getHighestRole(authentication);
             DataSize maxSize = uploadProperties.getMaxSizeForRole(highestRole);
             int dailyLimit = uploadProperties.getDailyLimitForRole(highestRole);
@@ -187,6 +201,13 @@ public class FileUploadController {
         }
         
         return "verified"; // Default to verified
+    }
+
+    private User getCurrentUser(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return null;
+        }
+        return userService.findByEmail(authentication.getName()).orElse(null);
     }
 
 }

@@ -5,6 +5,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 
 import org.slf4j.Logger;
@@ -14,6 +15,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,25 +25,26 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.ibrasoft.lensbridge.model.auth.*;
-
-import com.ibrasoft.lensbridge.dto.auth.request.*;
-import com.ibrasoft.lensbridge.dto.auth.response.*;
-
-import com.ibrasoft.lensbridge.security.jwt.JwtUtils;
-import com.ibrasoft.lensbridge.security.services.UserDetailsImpl;
-import com.ibrasoft.lensbridge.security.LoginAttemptService;
-import com.ibrasoft.lensbridge.service.UserService;
-import com.ibrasoft.lensbridge.service.RefreshTokenService;
+import com.ibrasoft.lensbridge.dto.auth.request.ChangePasswordRequest;
+import com.ibrasoft.lensbridge.dto.auth.request.LoginRequest;
+import com.ibrasoft.lensbridge.dto.auth.request.SignupRequest;
+import com.ibrasoft.lensbridge.dto.auth.request.TokenRefreshRequest;
+import com.ibrasoft.lensbridge.dto.auth.response.JwtResponse;
+import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
+import com.ibrasoft.lensbridge.dto.auth.response.TokenRefreshResponse;
+import com.ibrasoft.lensbridge.dto.auth.response.TokenValidationResponse;
 import com.ibrasoft.lensbridge.model.auth.RefreshToken;
-
-import jakarta.servlet.http.HttpServletRequest;
+import com.ibrasoft.lensbridge.model.auth.User;
+import com.ibrasoft.lensbridge.security.LoginAttemptService;
+import com.ibrasoft.lensbridge.security.jwt.JwtUtils;
+import com.ibrasoft.lensbridge.service.RefreshTokenService;
+import com.ibrasoft.lensbridge.service.UserService;
 
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
     private static final Logger log = LoggerFactory.getLogger(AuthController.class);
-    
+
     @Autowired
     AuthenticationManager authenticationManager;
 
@@ -73,11 +77,13 @@ public class AuthController {
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
-            // Check if user's email is verified
-            UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-            User user = userService.findByEmail(userDetails.getUsername()).orElse(null);
+            User user = userService.findByEmail(authentication.getName()).orElse(null);
+            if (user == null) {
+                return ResponseEntity.status(401)
+                        .body(new MessageResponse("User not found."));
+            }
 
-            if (user != null && !user.isVerified()) {
+            if (!user.isVerified()) {
                 return ResponseEntity.badRequest()
                         .body(new MessageResponse("Please verify your email before logging in."));
             }
@@ -86,25 +92,25 @@ public class AuthController {
             loginAttemptService.recordSuccessfulAttempt(clientKey);
 
             String jwt = jwtUtils.generateJwtToken(authentication);
-            
+
             // Create refresh token
             String deviceInfo = request.getHeader("User-Agent");
             String ipAddress = getClientIpAddress(request);
             RefreshToken refreshToken = refreshTokenService.createRefreshToken(
-                userDetails.getId(), deviceInfo, ipAddress);
-            
-            log.debug("Created refresh token for user {}: {}", userDetails.getId(), refreshToken.getTokenHash());
-            
-            List<String> roles = userDetails.getAuthorities().stream()
-                    .map(item -> item.getAuthority())
+                user.getId(), deviceInfo, ipAddress);
+
+            log.debug("Created refresh token for user {}: {}", user.getId(), refreshToken.getTokenHash());
+
+            List<String> roles = authentication.getAuthorities().stream()
+                    .map(GrantedAuthority::getAuthority)
                     .collect(Collectors.toList());
 
             return ResponseEntity.ok(new JwtResponse(jwt,
                     refreshToken.getTokenHash(),
-                    userDetails.getFirstName(),
-                    userDetails.getLastName(),
-                    userDetails.getId(),
-                    userDetails.getEmail(),
+                    user.getFirstName(),
+                    user.getLastName(),
+                    user.getId(),
+                    user.getEmail(),
                     roles));
         } catch (Exception e) {
             // Record failed login attempt
@@ -183,8 +189,7 @@ public class AuthController {
             return ResponseEntity.badRequest().body(new MessageResponse("You must be logged in to change your password."));
         }
 
-        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-        User user = userService.findByEmail(userDetails.getUsername()).orElse(null);
+        User user = userService.findByEmail(authentication.getName()).orElse(null);
 
         if (user == null) {
             return ResponseEntity.badRequest().body(new MessageResponse("User not found."));
@@ -203,39 +208,41 @@ public class AuthController {
     @PostMapping("/refresh-token")
     public ResponseEntity<?> refreshToken(@Valid @RequestBody TokenRefreshRequest request) {
         String requestRefreshToken = request.getRefreshToken();
-        
+
         log.debug("Attempting to refresh token: {}", requestRefreshToken);
 
         try {
             Optional<RefreshToken> refreshTokenOpt = refreshTokenService.findByToken(requestRefreshToken);
-            
+
             if (refreshTokenOpt.isEmpty()) {
                 log.warn("Refresh token not found in database: {}", requestRefreshToken);
                 return ResponseEntity.status(401)
                     .body(new MessageResponse("Refresh token is not in database. Please login again."));
             }
-            
+
             RefreshToken refreshToken = refreshTokenOpt.get();
-            log.debug("Found refresh token for user: {}", refreshToken.getUserId());
-            
+            log.debug("Found refresh token for user: {}", refreshToken.getUser().getId());
+
             // Verify token is not expired or revoked
             RefreshToken verifiedToken = refreshTokenService.verifyExpiration(refreshToken);
-            
+
             UUID userId = verifiedToken.getUserId();
             User user = userService.findById(userId).orElse(null);
-            
+
             if (user == null) {
                 log.warn("User not found for refresh token: {}", userId);
                 return ResponseEntity.status(401)
                     .body(new MessageResponse("User not found. Please login again."));
             }
-            
+
             // Create new access token
-            UserDetailsImpl userDetails = UserDetailsImpl.build(user);
+            List<GrantedAuthority> authorities = user.getRoles().stream()
+                    .map(SimpleGrantedAuthority::new)
+                    .collect(Collectors.toList());
             Authentication auth = new UsernamePasswordAuthenticationToken(
-                userDetails, null, userDetails.getAuthorities());
+                user.getEmail(), null, authorities);
             String newAccessToken = jwtUtils.generateJwtToken(auth);
-            
+
             // Rotate refresh token (recommended for security)
             refreshTokenService.revokeRefreshToken(requestRefreshToken);
             RefreshToken newRefreshToken = refreshTokenService.createRefreshToken(
@@ -245,7 +252,7 @@ public class AuthController {
 
             return ResponseEntity.ok(new TokenRefreshResponse(
                 newAccessToken, newRefreshToken.getToken()));
-                
+
         } catch (RuntimeException e) {
             // Handle expired or revoked tokens
             if (e.getMessage().contains("expired") || e.getMessage().contains("revoked")) {
@@ -253,7 +260,7 @@ public class AuthController {
                 return ResponseEntity.status(401)
                     .body(new MessageResponse("Refresh token expired or revoked. Please login again."));
             }
-            
+
             // Log unexpected errors
             log.error("Error refreshing token: {}", e.getMessage(), e);
             return ResponseEntity.status(500)
@@ -262,21 +269,20 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<?> logout(@RequestBody(required = false) TokenRefreshRequest request, 
+    public ResponseEntity<?> logout(@RequestBody(required = false) TokenRefreshRequest request,
                                    Authentication authentication) {
         try {
             // Revoke refresh token if provided
             if (request != null && request.getRefreshToken() != null) {
                 refreshTokenService.revokeRefreshToken(request.getRefreshToken());
             }
-            
+
             // If user is authenticated, we could also revoke all their tokens
             if (authentication != null && authentication.isAuthenticated()) {
                 // Optionally revoke all user tokens here if needed
-                // UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-                // refreshTokenService.revokeAllUserTokens(userDetails.getId());
+                // refreshTokenService.revokeAllUserTokens(user.getId());
             }
-            
+
             return ResponseEntity.ok(new MessageResponse("Logged out successfully"));
         } catch (Exception e) {
             return ResponseEntity.ok(new MessageResponse("Logged out successfully")); // Always return success for logout
@@ -289,9 +295,14 @@ public class AuthController {
             return ResponseEntity.badRequest().body(new MessageResponse("You must be logged in."));
         }
 
-        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-        refreshTokenService.revokeAllUserTokens(userDetails.getId());
-        
+        User user = userService.findByEmail(authentication.getName()).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(401)
+                .body(new MessageResponse("User not found"));
+        }
+
+        refreshTokenService.revokeAllUserTokens(user.getId());
+
         return ResponseEntity.ok(new MessageResponse("Logged out from all devices successfully"));
     }
 
@@ -303,27 +314,24 @@ public class AuthController {
         }
 
         try {
-            UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-            User user = userService.findById(userDetails.getId()).orElse(null);
-            
+            User user = userService.findByEmail(authentication.getName()).orElse(null);
+
             if (user == null) {
                 return ResponseEntity.status(401)
                     .body(new MessageResponse("User not found"));
             }
-            
+
             // Return user information if token is valid
             return ResponseEntity.ok(new TokenValidationResponse(
                 true,
-                userDetails.getId(),
-                userDetails.getFirstName(),
-                userDetails.getLastName(),
-                userDetails.getEmail(),
-                userDetails.isVerified(),
-                userDetails.getAuthorities().stream()
-                    .map(authority -> authority.getAuthority())
-                    .collect(Collectors.toList())
+                user.getId(),
+                user.getFirstName(),
+                user.getLastName(),
+                user.getEmail(),
+                user.isVerified(),
+                user.getRoles().stream().collect(Collectors.toList())
             ));
-            
+
         } catch (Exception e) {
             log.error("Error validating token: {}", e.getMessage(), e);
             return ResponseEntity.status(401)

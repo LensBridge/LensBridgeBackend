@@ -10,7 +10,6 @@ import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.model.auth.User;
 import com.ibrasoft.lensbridge.model.upload.Event;
 import com.ibrasoft.lensbridge.model.upload.EventStatus;
-import com.ibrasoft.lensbridge.security.services.UserDetailsImpl;
 import com.ibrasoft.lensbridge.service.EventsService;
 import com.ibrasoft.lensbridge.service.UploadService;
 import com.ibrasoft.lensbridge.service.UserService;
@@ -23,6 +22,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
@@ -47,15 +47,13 @@ public class AdminController {
 
     private ResponseEntity<?> executeUploadAction(UUID uploadId, HttpServletRequest request, Consumer<UUID> serviceAction, AuditAction auditAction, String successMessage) {
         serviceAction.accept(uploadId);
-        UserDetailsImpl curr = (UserDetailsImpl) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        this.auditService.logAuditEvent(curr.getEmail(), auditAction, "Upload", uploadId, request.getRemoteAddr());
+        this.auditService.logAuditEvent(getCurrentUserEmail(), auditAction, "Upload", uploadId, request.getRemoteAddr());
         return ResponseEntity.ok(new MessageResponse(successMessage));
     }
 
     private ResponseEntity<?> executeUserAction(UUID userId, HttpServletRequest request, Consumer<UUID> serviceAction, AuditAction auditAction, String successMessage) {
         serviceAction.accept(userId);
-        UserDetailsImpl curr = (UserDetailsImpl) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        this.auditService.logAuditEvent(curr.getEmail(), auditAction, "User", userId, request.getRemoteAddr());
+        this.auditService.logAuditEvent(getCurrentUserEmail(), auditAction, "User", userId, request.getRemoteAddr());
         return ResponseEntity.ok(new MessageResponse(successMessage));
     }
 
@@ -64,10 +62,9 @@ public class AdminController {
                                                            String entityType, Function<R, UUID> idExtractor,
                                                            String successMessage) {
         R createdEntity = serviceAction.apply(input);
-        UserDetailsImpl curr = (UserDetailsImpl) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         UUID entityId = idExtractor.apply(createdEntity);
 
-        this.auditService.logAuditEvent(curr.getEmail(), auditAction, entityType, entityId, request.getRemoteAddr());
+        this.auditService.logAuditEvent(getCurrentUserEmail(), auditAction, entityType, entityId, request.getRemoteAddr());
         return ResponseEntity.ok(new MessageResponse(successMessage));
     }
 
@@ -257,6 +254,11 @@ public class AdminController {
             log.error("Error retrieving failed operations: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new MessageResponse("Failed to retrieve failed operations: " + e.getMessage()));
         }
+    }
+
+    private String getCurrentUserEmail() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null ? authentication.getName() : "unknown";
     }
 
     @GetMapping("/audit/upload/{uploadId}")

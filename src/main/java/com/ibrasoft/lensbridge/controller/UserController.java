@@ -27,7 +27,6 @@ import com.ibrasoft.lensbridge.dto.auth.response.UserInfoResponse;
 import com.ibrasoft.lensbridge.dto.auth.response.UserStatsResponse;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.model.auth.User;
-import com.ibrasoft.lensbridge.security.services.UserDetailsImpl;
 import com.ibrasoft.lensbridge.service.UploadService;
 import com.ibrasoft.lensbridge.service.UserService;
 
@@ -51,8 +50,7 @@ public class UserController {
         }
 
         try {
-            UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-            User user = userService.findById(userDetails.getId()).orElse(null);
+            User user = userService.findByEmail(authentication.getName()).orElse(null);
             
             if (user == null) {
                 return ResponseEntity.status(404)
@@ -87,8 +85,13 @@ public class UserController {
         }
 
         try {
-            UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-            User updatedUser = userService.updateProfile(userDetails.getId(), updateRequest);
+            User currentUser = userService.findByEmail(authentication.getName()).orElse(null);
+            if (currentUser == null) {
+                return ResponseEntity.status(404)
+                    .body(new MessageResponse("User not found"));
+            }
+
+            User updatedUser = userService.updateProfile(currentUser.getId(), updateRequest);
             
             UserInfoResponse response = new UserInfoResponse(
                 updatedUser.getId(),
@@ -120,8 +123,13 @@ public class UserController {
         }
 
         try {
-            UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-            UserStatsResponse stats = uploadService.getUserStats(userDetails.getId());
+            User user = userService.findByEmail(authentication.getName()).orElse(null);
+            if (user == null) {
+                return ResponseEntity.status(404)
+                    .body(new MessageResponse("User not found"));
+            }
+
+            UserStatsResponse stats = uploadService.getUserStats(user.getId());
             
             return ResponseEntity.ok(stats);
             
@@ -141,8 +149,13 @@ public class UserController {
         }
 
         try {
-            UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-            Page<GalleryItemDto> uploads = uploadService.getUserUploadsAsGalleryItems(userDetails.getId(), pageable);
+            User user = userService.findByEmail(authentication.getName()).orElse(null);
+            if (user == null) {
+                return ResponseEntity.status(404)
+                    .body(new MessageResponse("User not found"));
+            }
+
+            Page<GalleryItemDto> uploads = uploadService.getUserUploadsAsGalleryItems(user.getId(), pageable);
             
             return ResponseEntity.ok(uploads);
             
@@ -162,8 +175,13 @@ public class UserController {
         }
 
         try {
-            UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-            uploadService.deleteUserUpload(uploadId, userDetails.getId());
+            User user = userService.findByEmail(authentication.getName()).orElse(null);
+            if (user == null) {
+                return ResponseEntity.status(404)
+                    .body(new MessageResponse("User not found"));
+            }
+
+            uploadService.deleteUserUpload(uploadId, user.getId());
             
             return ResponseEntity.ok(new MessageResponse("Upload deleted successfully"));
             

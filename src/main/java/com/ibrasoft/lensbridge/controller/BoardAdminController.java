@@ -15,7 +15,6 @@ import com.ibrasoft.lensbridge.model.board.Event;
 import com.ibrasoft.lensbridge.model.board.Poster;
 import com.ibrasoft.lensbridge.model.board.WeeklyContent;
 import com.ibrasoft.lensbridge.model.auth.Role;
-import com.ibrasoft.lensbridge.security.services.UserDetailsImpl;
 import com.ibrasoft.lensbridge.service.AdminAuditService;
 import com.ibrasoft.lensbridge.service.BoardService;
 import com.ibrasoft.lensbridge.service.PosterService;
@@ -30,6 +29,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -179,8 +179,7 @@ public class BoardAdminController {
 
         Poster response = posterService.createPoster(createRequest, imageFile);
 
-        UserDetailsImpl user = getCurrentUser();
-        auditService.logAuditEvent(user.getEmail(), AuditAction.CREATE_POSTER, "Poster", response.getId(), request.getRemoteAddr());
+        auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.CREATE_POSTER, "Poster", response.getId(), request.getRemoteAddr());
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -194,8 +193,7 @@ public class BoardAdminController {
         log.info("Admin updating poster: {}", posterId);
         Poster response = posterService.updatePoster(posterId, updateRequest);
 
-        UserDetailsImpl user = getCurrentUser();
-        auditService.logAuditEvent(user.getEmail(), AuditAction.UPDATE_POSTER, "Poster", posterId, request.getRemoteAddr());
+        auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.UPDATE_POSTER, "Poster", posterId, request.getRemoteAddr());
 
         return ResponseEntity.ok(response);
     }
@@ -209,8 +207,7 @@ public class BoardAdminController {
         log.info("Admin updating poster image: {}", posterId);
         Poster response = posterService.updatePosterImage(posterId, imageFile);
 
-        UserDetailsImpl user = getCurrentUser();
-        auditService.logAuditEvent(user.getEmail(), AuditAction.UPDATE_POSTER, "Poster", posterId, request.getRemoteAddr());
+        auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.UPDATE_POSTER, "Poster", posterId, request.getRemoteAddr());
 
         return ResponseEntity.ok(response);
     }
@@ -223,8 +220,7 @@ public class BoardAdminController {
         log.info("Admin deleting poster: {}", posterId);
         posterService.deletePoster(posterId);
 
-        UserDetailsImpl user = getCurrentUser();
-        auditService.logAuditEvent(user.getEmail(), AuditAction.DELETE_POSTER, "Poster", posterId, request.getRemoteAddr());
+        auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.DELETE_POSTER, "Poster", posterId, request.getRemoteAddr());
 
         return ResponseEntity.ok(new MessageResponse("Poster deleted successfully"));
     }
@@ -257,8 +253,7 @@ public class BoardAdminController {
         log.info("Admin creating new calendar event: name={}", createRequest.getName());
         Event created = boardService.createEvent(createRequest);
 
-        UserDetailsImpl user = getCurrentUser();
-        auditService.logAuditEvent(user.getEmail(), AuditAction.CREATE_CALENDAR_EVENT, "CalendarEvent", created.getId(), request.getRemoteAddr());
+        auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.CREATE_CALENDAR_EVENT, "CalendarEvent", created.getId(), request.getRemoteAddr());
 
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
@@ -272,8 +267,7 @@ public class BoardAdminController {
         log.info("Admin updating calendar event: {}", eventId);
         Event updated = boardService.updateEvent(eventId, updateRequest);
 
-        UserDetailsImpl user = getCurrentUser();
-        auditService.logAuditEvent(user.getEmail(), AuditAction.UPDATE_CALENDAR_EVENT, "CalendarEvent", eventId, request.getRemoteAddr());
+        auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.UPDATE_CALENDAR_EVENT, "CalendarEvent", eventId, request.getRemoteAddr());
 
         return ResponseEntity.ok(updated);
     }
@@ -286,8 +280,7 @@ public class BoardAdminController {
         log.info("Admin deleting calendar event: {}", eventId);
         boardService.deleteEvent(eventId);
 
-        UserDetailsImpl user = getCurrentUser();
-        auditService.logAuditEvent(user.getEmail(), AuditAction.DELETE_CALENDAR_EVENT, "CalendarEvent", eventId, request.getRemoteAddr());
+        auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.DELETE_CALENDAR_EVENT, "CalendarEvent", eventId, request.getRemoteAddr());
 
         return ResponseEntity.ok(new MessageResponse("Calendar event deleted successfully"));
     }
@@ -300,7 +293,8 @@ public class BoardAdminController {
 
     // ==================== Helper Methods ====================
 
-    private UserDetailsImpl getCurrentUser() {
-        return (UserDetailsImpl) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+    private String getCurrentUserEmail() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null ? authentication.getName() : "unknown";
     }
 }
