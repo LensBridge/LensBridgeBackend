@@ -64,7 +64,6 @@ public class DeviceEnrollmentService {
         EnrollmentToken token = consumed.get();
 
         Device device = Device.builder()
-                .id(provisionalDeviceId)
                 .displayName(hostname != null && !hostname.isBlank()
                         ? token.getDisplayName() + " (" + hostname + ")"
                         : token.getDisplayName())
@@ -77,6 +76,9 @@ public class DeviceEnrollmentService {
                 .build();
 
         Device saved = deviceRepository.save(device);
+
+        token.setConsumedByDeviceId(saved.getId());
+
         log.info("Enrolled device {} from token {} (issued by {})",
                 saved.getId(), token.getId(), token.getCreatedBy());
         return new Outcome.Ok(saved);

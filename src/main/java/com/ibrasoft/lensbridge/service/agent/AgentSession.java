@@ -77,20 +77,26 @@ public class AgentSession {
         return builder.seq(outgoingSeq.incrementAndGet()).sessionId(sessionId).build();
     }
 
-    public void send(OutgoingAgentFrame frame) {
+    public boolean send(OutgoingAgentFrame frame) {
         try {
             String json = objectMapper.writeValueAsString(frame);
             synchronized (transport) {
                 if (transport.isOpen()) {
                     transport.sendMessage(new TextMessage(json));
+                    return true;
                 }
             }
+            log.warn("session={} transport is closed; frame {} was not sent", sessionId, frame.getType());
+            markClosed();
+            return false;
         } catch (JsonProcessingException e) {
             log.error("session={} failed to serialize frame {}", sessionId, frame.getType(), e);
             close(CloseStatus.SERVER_ERROR);
+            return false;
         } catch (IOException e) {
             log.warn("session={} transport send failed: {}", sessionId, e.getMessage());
             close(CloseStatus.SESSION_NOT_RELIABLE);
+            return false;
         }
     }
 

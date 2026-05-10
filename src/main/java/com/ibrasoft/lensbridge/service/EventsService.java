@@ -2,7 +2,7 @@ package com.ibrasoft.lensbridge.service;
 
 import com.ibrasoft.lensbridge.model.event.Event;
 import com.ibrasoft.lensbridge.model.event.EventStatus;
-import com.ibrasoft.lensbridge.repository.EventsRepository;
+import com.ibrasoft.lensbridge.repository.mongo.EventsRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;

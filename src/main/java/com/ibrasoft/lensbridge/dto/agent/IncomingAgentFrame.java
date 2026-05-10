@@ -16,8 +16,11 @@ import java.util.UUID;
         visible = true
 )
 @JsonSubTypes({
-        @JsonSubTypes.Type(value = AuthFrame.class,      name = "auth"),
-        @JsonSubTypes.Type(value = HeartbeatFrame.class, name = "heartbeat")
+        @JsonSubTypes.Type(value = AuthFrame.class,             name = "auth"),
+        @JsonSubTypes.Type(value = HeartbeatFrame.class,        name = "heartbeat"),
+        @JsonSubTypes.Type(value = CommandAckFrame.class,       name = "command_ack"),
+        @JsonSubTypes.Type(value = CommandProgressFrame.class,  name = "command_progress"),
+        @JsonSubTypes.Type(value = CommandResultFrame.class,    name = "command_result")
 })
 public abstract class IncomingAgentFrame {
 

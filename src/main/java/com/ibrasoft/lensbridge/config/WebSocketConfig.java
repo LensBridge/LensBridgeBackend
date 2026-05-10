@@ -9,6 +9,8 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 
 import com.ibrasoft.lensbridge.handler.AgentWebSocketHandler;
 import com.ibrasoft.lensbridge.handler.SignboardHandler;
+import org.springframework.web.socket.config.annotation.WebSocketTransportRegistration;
+import org.springframework.web.socket.server.standard.ServletServerContainerFactoryBean;
 
 @Configuration
 @EnableWebSocket
@@ -37,5 +39,16 @@ public class WebSocketConfig implements WebSocketConfigurer {
         // Agents authenticate per-frame inside the channel; the WS upgrade itself is open.
         registry.addHandler(agentWebSocketHandler, "/api/agent/ws")
                 .setAllowedOrigins("*");
+    }
+
+    @Bean
+    public ServletServerContainerFactoryBean webSocketContainer() {
+        ServletServerContainerFactoryBean container =
+                new ServletServerContainerFactoryBean();
+
+        container.setMaxTextMessageBufferSize(10 * 1024 * 1024); // 10 MB
+        container.setMaxBinaryMessageBufferSize(10 * 1024 * 1024);
+
+        return container;
     }
 }

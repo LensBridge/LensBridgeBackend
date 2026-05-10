@@ -6,8 +6,10 @@ import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.service.agent.AgentSessionRegistry;
+import com.ibrasoft.lensbridge.service.agent.CommandDispatcher;
 import com.ibrasoft.lensbridge.service.agent.Ed25519TestUtil;
 import com.ibrasoft.lensbridge.service.agent.HeartbeatService;
+import com.ibrasoft.lensbridge.service.agent.events.DeviceEventPublisher;
 import com.ibrasoft.lensbridge.service.agent.handshake.AuthSignaturePayload;
 import com.ibrasoft.lensbridge.service.agent.handshake.Ed25519Verifier;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,6 +38,8 @@ class AgentWebSocketHandlerTest {
     private DeviceRepository deviceRepo;
     private AgentSessionRegistry registry;
     private HeartbeatService heartbeatService;
+    private CommandDispatcher commandDispatcher;
+    private DeviceEventPublisher events;
     private AgentWebSocketHandler handler;
 
     @BeforeEach
@@ -44,7 +48,11 @@ class AgentWebSocketHandlerTest {
         deviceRepo = mock(DeviceRepository.class);
         registry = new AgentSessionRegistry();
         heartbeatService = mock(HeartbeatService.class);
-        handler = new AgentWebSocketHandler(mapper, new Ed25519Verifier(), deviceRepo, registry, heartbeatService);
+        commandDispatcher = mock(CommandDispatcher.class);
+        events = mock(DeviceEventPublisher.class);
+        handler = new AgentWebSocketHandler(
+                mapper, new Ed25519Verifier(), deviceRepo, registry,
+                heartbeatService, commandDispatcher, events);
     }
 
     @Test

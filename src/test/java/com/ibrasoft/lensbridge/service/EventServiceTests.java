@@ -2,7 +2,7 @@ package com.ibrasoft.lensbridge.service;
 
 import com.ibrasoft.lensbridge.model.event.Event;
 import com.ibrasoft.lensbridge.model.event.EventStatus;
-import com.ibrasoft.lensbridge.repository.EventsRepository;
+import com.ibrasoft.lensbridge.repository.mongo.EventsRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;

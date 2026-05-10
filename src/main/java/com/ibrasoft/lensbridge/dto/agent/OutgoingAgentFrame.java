@@ -28,6 +28,14 @@ public class OutgoingAgentFrame {
     private UUID deviceId;
     private Integer heartbeatIntervalMs;
 
+    // ── command ──────────────────────────────────────────────────────────
+    private UUID commandId;
+    private String kind;
+    private String issuedBy;
+    private Integer deadlineMs;
+    /** Serialized command payload (typically a {@link com.fasterxml.jackson.databind.JsonNode}). */
+    private Object payload;
+
     // ── error ────────────────────────────────────────────────────────────
     private String error;
     private String reason;

@@ -31,7 +31,7 @@ public class AgentEnrollmentController {
 
     private final DeviceEnrollmentService enrollmentService;
 
-    @Value("${musallahboard.agent.websocketUrl:}")
+    @Value("${musallahboard.agent.websocketUrl:ws://10.0.0.75/api/agent/ws}")
     private String websocketUrl;
 
     @PostMapping("/enroll")

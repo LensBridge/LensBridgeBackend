@@ -39,6 +39,14 @@ public class AgentSessionRegistry {
         byDevice.remove(deviceId, session);
     }
 
+    public void closeIfPresent(UUID deviceId, CloseStatus status) {
+        AgentSession session = byDevice.remove(deviceId);
+        if (session != null) {
+            log.info("Closing session {} for device {}", session.getSessionId(), deviceId);
+            session.close(status);
+        }
+    }
+
     public int size() {
         return byDevice.size();
     }

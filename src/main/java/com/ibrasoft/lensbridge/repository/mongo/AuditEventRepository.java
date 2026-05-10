@@ -1,4 +1,4 @@
-package com.ibrasoft.lensbridge.repository;
+package com.ibrasoft.lensbridge.repository.mongo;
 
 import com.ibrasoft.lensbridge.model.audit.AdminAction;
 import com.ibrasoft.lensbridge.model.audit.AuditEvent;

@@ -8,7 +8,7 @@ import com.ibrasoft.lensbridge.model.auth.User;
 import com.ibrasoft.lensbridge.model.event.Event;
 import com.ibrasoft.lensbridge.model.upload.Upload;
 import com.ibrasoft.lensbridge.model.upload.UploadType;
-import com.ibrasoft.lensbridge.repository.UploadRepository;
+import com.ibrasoft.lensbridge.repository.mongo.UploadRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;

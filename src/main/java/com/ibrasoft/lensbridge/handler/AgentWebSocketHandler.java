@@ -2,6 +2,9 @@ package com.ibrasoft.lensbridge.handler;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ibrasoft.lensbridge.dto.agent.AuthFrame;
+import com.ibrasoft.lensbridge.dto.agent.CommandAckFrame;
+import com.ibrasoft.lensbridge.dto.agent.CommandProgressFrame;
+import com.ibrasoft.lensbridge.dto.agent.CommandResultFrame;
 import com.ibrasoft.lensbridge.dto.agent.HeartbeatFrame;
 import com.ibrasoft.lensbridge.dto.agent.IncomingAgentFrame;
 import com.ibrasoft.lensbridge.dto.agent.OutgoingAgentFrame;
@@ -9,7 +12,9 @@ import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.service.agent.AgentSession;
 import com.ibrasoft.lensbridge.service.agent.AgentSessionRegistry;
+import com.ibrasoft.lensbridge.service.agent.CommandDispatcher;
 import com.ibrasoft.lensbridge.service.agent.HeartbeatService;
+import com.ibrasoft.lensbridge.service.agent.events.DeviceEventPublisher;
 import com.ibrasoft.lensbridge.service.agent.handshake.AuthSignaturePayload;
 import com.ibrasoft.lensbridge.service.agent.handshake.Ed25519Verifier;
 import lombok.RequiredArgsConstructor;
@@ -56,6 +61,8 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
     private final DeviceRepository deviceRepository;
     private final AgentSessionRegistry registry;
     private final HeartbeatService heartbeatService;
+    private final CommandDispatcher commandDispatcher;
+    private final DeviceEventPublisher events;
     private final SecureRandom random = new SecureRandom();
 
     @Override
@@ -110,6 +117,12 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
             case AUTHED -> {
                 if (frame instanceof HeartbeatFrame hb) {
                     handleHeartbeat(session, hb);
+                } else if (frame instanceof CommandAckFrame ack) {
+                    commandDispatcher.onAck(ack, session);
+                } else if (frame instanceof CommandProgressFrame progress) {
+                    commandDispatcher.onProgress(progress, session);
+                } else if (frame instanceof CommandResultFrame result) {
+                    commandDispatcher.onResult(result, session);
                 } else if (frame instanceof AuthFrame) {
                     log.warn("session={} duplicate auth after auth_ok", session.getSessionId());
                     session.close(CLOSE_BAD_STATE);
@@ -181,6 +194,14 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
                 .serverTime(now)
                 .heartbeatIntervalMs(HEARTBEAT_INTERVAL_MS));
         session.send(ok);
+
+        events.deviceOnline(device.getId());
+        try {
+            commandDispatcher.flushPending(device.getId(), session);
+        } catch (Exception e) {
+            log.error("session={} failed to flush pending commands for device {}",
+                    session.getSessionId(), device.getId(), e);
+        }
     }
 
     private void handleHeartbeat(AgentSession session, HeartbeatFrame frame) {
@@ -201,6 +222,7 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
             session.markClosed();
             if (session.getDeviceId() != null) {
                 registry.unregister(session.getDeviceId(), session);
+                events.deviceOffline(session.getDeviceId());
             }
             log.debug("session={} closed status={}", session.getSessionId(), status);
         }

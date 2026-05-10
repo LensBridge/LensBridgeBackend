@@ -5,6 +5,7 @@ import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.model.board.DeviceTelemetry;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.repository.sql.DeviceTelemetryRepository;
+import com.ibrasoft.lensbridge.service.agent.events.DeviceEventPublisher;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +25,7 @@ public class HeartbeatService {
 
     private final DeviceRepository deviceRepository;
     private final DeviceTelemetryRepository telemetryRepository;
+    private final DeviceEventPublisher events;
 
     @Transactional
     public void record(UUID deviceId, HeartbeatFrame frame, String remoteIp) {
@@ -55,5 +57,7 @@ public class HeartbeatService {
                 .displayedFrameId(t.getDisplayedFrameId())
                 .build();
         telemetryRepository.save(row);
+
+        events.heartbeat(deviceId, frame);
     }
 }

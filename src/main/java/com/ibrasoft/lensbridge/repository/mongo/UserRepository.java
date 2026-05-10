@@ -1,4 +1,4 @@
-package com.ibrasoft.lensbridge.repository;
+package com.ibrasoft.lensbridge.repository.mongo;
 
 import java.util.Optional;
 import java.util.UUID;

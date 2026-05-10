@@ -89,6 +89,7 @@ public class WebSecurityConfig {
             .requestMatchers("/api/refresh-musallahboard").permitAll()
             .requestMatchers("/api/agent/enroll").permitAll()
             .requestMatchers("/api/agent/ws").permitAll()
+            .requestMatchers("/api/dashboard/ws/**").permitAll()
             .anyRequest().authenticated());
 
     http.authenticationProvider(authenticationProvider());

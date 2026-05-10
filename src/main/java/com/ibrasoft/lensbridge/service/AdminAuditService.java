@@ -2,7 +2,7 @@ package com.ibrasoft.lensbridge.service;
 
 import com.ibrasoft.lensbridge.model.audit.AdminAction;
 import com.ibrasoft.lensbridge.model.audit.AuditEvent;
-import com.ibrasoft.lensbridge.repository.AuditEventRepository;
+import com.ibrasoft.lensbridge.repository.mongo.AuditEventRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;

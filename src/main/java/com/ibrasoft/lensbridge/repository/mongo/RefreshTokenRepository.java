@@ -1,4 +1,4 @@
-package com.ibrasoft.lensbridge.repository;
+package com.ibrasoft.lensbridge.repository.mongo;
 
 import com.ibrasoft.lensbridge.model.auth.RefreshToken;
 import org.springframework.data.mongodb.repository.MongoRepository;

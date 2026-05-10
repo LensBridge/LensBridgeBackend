@@ -1,7 +1,7 @@
 package com.ibrasoft.lensbridge.service;
 
 import com.ibrasoft.lensbridge.model.upload.Upload;
-import com.ibrasoft.lensbridge.repository.UploadRepository;
+import com.ibrasoft.lensbridge.repository.mongo.UploadRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.coobird.thumbnailator.Thumbnails;
