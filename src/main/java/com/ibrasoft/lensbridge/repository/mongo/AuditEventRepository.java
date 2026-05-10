@@ -1,6 +1,6 @@
 package com.ibrasoft.lensbridge.repository.mongo;
 
-import com.ibrasoft.lensbridge.model.audit.AdminAction;
+import com.ibrasoft.lensbridge.model.audit.AuditAction;
 import com.ibrasoft.lensbridge.model.audit.AuditEvent;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -19,7 +19,7 @@ public interface AuditEventRepository extends MongoRepository<AuditEvent, String
 
     List<AuditEvent> findByEntityTypeAndEntityIdOrderByTimestampDesc(String entityType, UUID entityId);
 
-    Page<AuditEvent> findByActionOrderByTimestampDesc(AdminAction action, Pageable pageable);
+    Page<AuditEvent> findByActionOrderByTimestampDesc(AuditAction action, Pageable pageable);
 
     @Query("{'timestamp': {'$gte': ?0, '$lte': ?1}}")
     Page<AuditEvent> findByTimestampBetweenOrderByTimestampDesc(Instant start, Instant end, Pageable pageable);
@@ -31,5 +31,5 @@ public interface AuditEventRepository extends MongoRepository<AuditEvent, String
 
     long countByAdminId(UUID adminId);
 
-    long countByAction(AdminAction action);
+    long countByAction(AuditAction action);
 }

@@ -32,7 +32,7 @@ public class RefreshToken {
     
     @NotBlank
     @Column(nullable = false, unique = true)
-    private String token;
+    private String tokenHash;
 
     @ManyToOne
     @JoinColumn(name = "user_id", nullable = false)

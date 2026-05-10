@@ -7,12 +7,14 @@ import java.util.UUID;
 import org.springframework.data.annotation.Id;
 
 import jakarta.persistence.CollectionTable;
+import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
+import jakarta.persistence.Index;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.Email;
@@ -27,7 +29,9 @@ import lombok.Data;
 @AllArgsConstructor
 @Data
 @Entity
-@Table(name = "users")
+@Table(name = "users", indexes = {
+    @Index(name = "idx_users_email", columnList = "email")
+})
 public class User {
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
@@ -41,11 +45,13 @@ public class User {
 
   @NotBlank
   @Size(max = 10)
+  @Column(unique = true, nullable = false)
   private String studentNumber;
 
   @NotBlank
   @Size(max = 254)
   @Email
+  @Column(nullable = false, unique = true)
   private String email;
 
   @NotBlank
@@ -56,11 +62,6 @@ public class User {
   @Enumerated(EnumType.STRING)
   @CollectionTable(name = "user_roles")
   private Set<Role> roles;
-  
 
   private boolean verified;
-
-  @ManyToOne
-  private User user;
-
 }

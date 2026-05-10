@@ -7,7 +7,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import com.ibrasoft.lensbridge.model.auth.User;
-import com.ibrasoft.lensbridge.repository.mongo.UserRepository;
+import com.ibrasoft.lensbridge.repository.auth.UserRepository;
 
 @Service
 public class UserDetailsServiceImpl implements UserDetailsService {
