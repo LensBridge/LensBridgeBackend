@@ -1,6 +1,6 @@
 package com.ibrasoft.lensbridge.controller;
 
-import com.ibrasoft.lensbridge.model.upload.Event;
+import com.ibrasoft.lensbridge.model.upload.MediaEvent;
 import com.ibrasoft.lensbridge.model.upload.EventStatus;
 import com.ibrasoft.lensbridge.service.EventsService;
 import lombok.RequiredArgsConstructor;
@@ -20,20 +20,20 @@ public class EventsController {
     private final EventsService eventsService;
 
     @GetMapping
-    public ResponseEntity<List<Event>> getAllEvents() {
+    public ResponseEntity<List<MediaEvent>> getAllEvents() {
         eventsService.cleanUpOldEvents();
-        List<Event> events = eventsService.getAllEvents().stream()
+        List<MediaEvent> mediaEvents = eventsService.getAllEvents().stream()
                 .filter(event -> event.getStatus() == EventStatus.ONGOING ||
                         (event.getStatus() == EventStatus.PAST &&
                                 event.getDate().isAfter(LocalDateTime.now().minusDays(7))))
                 .toList();
-        return ResponseEntity.ok(events);
+        return ResponseEntity.ok(mediaEvents);
     }
 
 
     @GetMapping("/{id}")
-    public ResponseEntity<Event> getEventById(@PathVariable UUID id) {
-        Optional<Event> event = eventsService.getEventById(id);
+    public ResponseEntity<MediaEvent> getEventById(@PathVariable UUID id) {
+        Optional<MediaEvent> event = eventsService.getEventById(id);
         return event.map(ResponseEntity::ok)
                    .orElse(ResponseEntity.notFound().build());
     }

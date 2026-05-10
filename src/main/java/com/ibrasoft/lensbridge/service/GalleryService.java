@@ -2,7 +2,7 @@ package com.ibrasoft.lensbridge.service;
 
 import com.ibrasoft.lensbridge.dto.upload.response.GalleryItemDto;
 import com.ibrasoft.lensbridge.model.auth.User;
-import com.ibrasoft.lensbridge.model.upload.Event;
+import com.ibrasoft.lensbridge.model.upload.MediaEvent;
 import com.ibrasoft.lensbridge.model.upload.Upload;
 import com.ibrasoft.lensbridge.repository.upload.EventsRepository;
 import com.ibrasoft.lensbridge.repository.upload.UploadRepository;
@@ -153,7 +153,7 @@ public class GalleryService {
         if (eventId == null) return "General";
         
         return eventsRepository.findEventById(eventId)
-                .map(Event::getName)
+                .map(MediaEvent::getName)
                 .orElse("General");
     }
 

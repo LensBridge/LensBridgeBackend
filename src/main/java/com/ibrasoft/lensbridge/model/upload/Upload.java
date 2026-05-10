@@ -1,7 +1,6 @@
 package com.ibrasoft.lensbridge.model.upload;
 
 import lombok.AllArgsConstructor;
-import lombok.Data;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -53,7 +52,7 @@ public class Upload {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "event_id")
-    private Event event;
+    private MediaEvent mediaEvent;
 
     private Instant createdDate;
 

@@ -22,7 +22,7 @@ import java.util.UUID;
 @Builder
 @Entity
 @Table(name = "events")
-public class Event {
+public class MediaEvent {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;

@@ -8,7 +8,7 @@ import com.ibrasoft.lensbridge.dto.upload.response.AdminUploadDto;
 import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.model.auth.User;
-import com.ibrasoft.lensbridge.model.upload.Event;
+import com.ibrasoft.lensbridge.model.upload.MediaEvent;
 import com.ibrasoft.lensbridge.model.upload.EventStatus;
 import com.ibrasoft.lensbridge.service.EventsService;
 import com.ibrasoft.lensbridge.service.UploadService;
@@ -78,7 +78,7 @@ public class AdminController {
                 (ignored) -> eventsService.createEvent(eventName, eventDate),
                 AuditAction.CREATE_EVENT,
                 "Event",
-                Event::getId,
+                MediaEvent::getId,
                 "Event created successfully");
     }
 

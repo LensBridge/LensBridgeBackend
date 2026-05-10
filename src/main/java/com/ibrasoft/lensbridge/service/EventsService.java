@@ -1,7 +1,7 @@
 package com.ibrasoft.lensbridge.service;
 
 import com.ibrasoft.lensbridge.dto.upload.request.CreateEventDto;
-import com.ibrasoft.lensbridge.model.upload.Event;
+import com.ibrasoft.lensbridge.model.upload.MediaEvent;
 import com.ibrasoft.lensbridge.model.upload.EventStatus;
 import com.ibrasoft.lensbridge.repository.upload.EventsRepository;
 
@@ -21,25 +21,25 @@ public class EventsService {
 
     private final EventsRepository eventsRepository;
 
-    public Event createEvent(CreateEventDto event) {
-        Event newEvent = Event.builder()
+    public MediaEvent createEvent(CreateEventDto event) {
+        MediaEvent newMediaEvent = MediaEvent.builder()
                 .name(event.getName())
                 .date(event.getDate())
                 .build();
         
-        return eventsRepository.save(newEvent);
+        return eventsRepository.save(newMediaEvent);
     }
 
-    public List<Event> getAllEvents() {
+    public List<MediaEvent> getAllEvents() {
         return eventsRepository.findAll();
     }
 
-    public Optional<Event> getEventById(UUID id) {
+    public Optional<MediaEvent> getEventById(UUID id) {
         return eventsRepository.findById(id);
     }
 
-    public Event updateEvent(Event event) {
-        return eventsRepository.save(event);
+    public MediaEvent updateEvent(MediaEvent mediaEvent) {
+        return eventsRepository.save(mediaEvent);
     }
 
     public void deleteEvent(UUID id) {
@@ -52,27 +52,27 @@ public class EventsService {
     }
 
     public boolean isEventAcceptingUploads(UUID eventId) {
-        Optional<Event> eventOpt = eventsRepository.findById(eventId);
+        Optional<MediaEvent> eventOpt = eventsRepository.findById(eventId);
         if (eventOpt.isEmpty()) {
             return false;
         }
-        Event event = eventOpt.get();
+        MediaEvent mediaEvent = eventOpt.get();
 
-        return event.getStatus() == EventStatus.ONGOING ||
-                (event.getStatus() == EventStatus.PAST &&
-                        event.getDate().isAfter(LocalDateTime.now().minusDays(7)));
+        return mediaEvent.getStatus() == EventStatus.ONGOING ||
+                (mediaEvent.getStatus() == EventStatus.PAST &&
+                        mediaEvent.getDate().isAfter(LocalDateTime.now().minusDays(7)));
 
     }
 
     public void cleanUpOldEvents(LocalDateTime now) {
         LocalDate today = now.toLocalDate();
-        List<Event> allEvents = eventsRepository.findAll();
+        List<MediaEvent> allMediaEvents = eventsRepository.findAll();
 
-        for (Event event : allEvents) {
-            if (event.getDate() == null)
+        for (MediaEvent mediaEvent : allMediaEvents) {
+            if (mediaEvent.getDate() == null)
                 continue;
 
-            LocalDate eventDate = event.getDate().toLocalDate();
+            LocalDate eventDate = mediaEvent.getDate().toLocalDate();
             EventStatus newStatus;
 
             if (eventDate.isBefore(today)) {
@@ -80,15 +80,15 @@ public class EventsService {
             } else if (eventDate.isAfter(today)) {
                 newStatus = EventStatus.UPCOMING;
             } else {
-                if (!now.isBefore(event.getDate())) {
+                if (!now.isBefore(mediaEvent.getDate())) {
                     newStatus = EventStatus.ONGOING;
                 } else {
                     newStatus = EventStatus.UPCOMING;
                 }
             }
 
-            event.setStatus(newStatus);
-            eventsRepository.save(event);
+            mediaEvent.setStatus(newStatus);
+            eventsRepository.save(mediaEvent);
         }
     }
 

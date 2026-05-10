@@ -9,7 +9,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "board_events")
 @Data @Builder @NoArgsConstructor @AllArgsConstructor
-public class Event {
+public class BoardEvent {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;

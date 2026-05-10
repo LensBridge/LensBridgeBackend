@@ -22,10 +22,12 @@ public class Device {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    // TODO: If you ever add multi-tenancy, actually use this
+    // If you ever add multi-tenancy, remove the default and make this required
     // Hardcoded for now because we only have one organization
+    @Builder.Default 
     private String organizationId = "utmmsa";
-    @NotBlank
+    
+    @Column(nullable = false)
     private String displayName;
 
     private Instant enrolledAt;
@@ -34,6 +36,7 @@ public class Device {
     @OneToOne(mappedBy = "device", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private DeviceConfig config;
 
+    @Enumerated(EnumType.STRING)
     private Audience audience;
 
     /** Ed25519 public key (32 bytes). Set during enrollment; null before. */

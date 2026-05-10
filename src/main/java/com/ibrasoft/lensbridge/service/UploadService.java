@@ -5,7 +5,7 @@ import com.ibrasoft.lensbridge.dto.auth.response.UserStatsResponse;
 import com.ibrasoft.lensbridge.dto.upload.response.GalleryItemDto;
 import com.ibrasoft.lensbridge.exception.FileProcessingException;
 import com.ibrasoft.lensbridge.model.auth.User;
-import com.ibrasoft.lensbridge.model.upload.Event;
+import com.ibrasoft.lensbridge.model.upload.MediaEvent;
 import com.ibrasoft.lensbridge.model.upload.Upload;
 import com.ibrasoft.lensbridge.model.upload.UploadType;
 import com.ibrasoft.lensbridge.repository.upload.UploadRepository;
@@ -338,8 +338,8 @@ public class UploadService {
 
         // Event information
         if (upload.getEventId() != null) {
-            Optional<Event> eventOpt = eventsService.getEventById(upload.getEventId());
-            item.setEvent(eventOpt.map(Event::getName).orElse("General"));
+            Optional<MediaEvent> eventOpt = eventsService.getEventById(upload.getEventId());
+            item.setEvent(eventOpt.map(MediaEvent::getName).orElse("General"));
         } else {
             item.setEvent("General");
         }
@@ -411,7 +411,7 @@ public class UploadService {
 
         // Fetch and populate event information
         if (upload.getEventId() != null) {
-            Optional<Event> eventOpt = eventsService.getEventById(upload.getEventId());
+            Optional<MediaEvent> eventOpt = eventsService.getEventById(upload.getEventId());
             eventOpt.ifPresent(event -> dto.setEventName(event.getName()));
         }
 

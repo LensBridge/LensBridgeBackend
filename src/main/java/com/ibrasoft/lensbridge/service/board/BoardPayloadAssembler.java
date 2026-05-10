@@ -4,7 +4,7 @@ import com.ibrasoft.lensbridge.dto.upload.response.ErrorResponse;
 import com.ibrasoft.lensbridge.dto.board.response.MusallahBoardPayload;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
 import com.ibrasoft.lensbridge.model.board.Device;
-import com.ibrasoft.lensbridge.model.board.Event;
+import com.ibrasoft.lensbridge.model.board.BoardEvent;
 import com.ibrasoft.lensbridge.model.board.Poster;
 import com.ibrasoft.lensbridge.model.board.WeeklyContent;
 import com.ibrasoft.lensbridge.model.board.frames.FrameDefinition;
@@ -62,10 +62,10 @@ public class BoardPayloadAssembler {
     }
 
     private List<FrameDefinition> eventFrames(BoardContext ctx) {
-        List<Event> events = boardService.getEventsForAudienceInRange(
+        List<BoardEvent> boardEvents = boardService.getEventsForAudienceInRange(
                 ctx.getDevice().getAudience(), ctx.currentWeekStart(), ctx.currentWeekEnd());
-        if (events.isEmpty()) return List.of();
-        return List.of(eventListTransformer.transform(events, ctx));
+        if (boardEvents.isEmpty()) return List.of();
+        return List.of(eventListTransformer.transform(boardEvents, ctx));
     }
 
     private List<FrameDefinition> weeklyContentFrames(BoardContext ctx) {

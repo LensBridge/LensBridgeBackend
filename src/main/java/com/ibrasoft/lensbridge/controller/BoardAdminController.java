@@ -10,8 +10,8 @@ import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
 import com.ibrasoft.lensbridge.handler.SignboardHandler;
 import com.ibrasoft.lensbridge.model.audit.AuditAction;
 import com.ibrasoft.lensbridge.model.board.Audience;
+import com.ibrasoft.lensbridge.model.board.BoardEvent;
 import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
-import com.ibrasoft.lensbridge.model.board.Event;
 import com.ibrasoft.lensbridge.model.board.Poster;
 import com.ibrasoft.lensbridge.model.board.WeeklyContent;
 import com.ibrasoft.lensbridge.model.auth.Role;
@@ -24,7 +24,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -228,30 +227,30 @@ public class BoardAdminController {
     // ==================== Calendar Event Endpoints ====================
 
     @GetMapping("/events")
-    public ResponseEntity<List<Event>> getAllEvents() {
+    public ResponseEntity<List<BoardEvent>> getAllEvents() {
         log.debug("Admin fetching all calendar events");
         return ResponseEntity.ok(boardService.getAllEvents());
     }
 
     @GetMapping("/events/by-audience")
-    public ResponseEntity<List<Event>> getEventsForAudience(@RequestParam Audience audience) {
+    public ResponseEntity<List<BoardEvent>> getEventsForAudience(@RequestParam Audience audience) {
         log.debug("Admin fetching calendar events for audience: {}", audience);
         return ResponseEntity.ok(boardService.getEventsForAudience(audience));
     }
 
     @GetMapping("/events/{eventId}")
-    public ResponseEntity<Event> getEventById(@PathVariable UUID eventId) {
+    public ResponseEntity<BoardEvent> getEventById(@PathVariable UUID eventId) {
         log.debug("Admin fetching calendar event: {}", eventId);
         return ResponseEntity.ok(boardService.getEventById(eventId));
     }
 
     @PostMapping("/events")
-    public ResponseEntity<Event> createEvent(
+    public ResponseEntity<BoardEvent> createEvent(
             @Valid @RequestBody CreateCalendarEventRequest createRequest,
             HttpServletRequest request) {
 
         log.info("Admin creating new calendar event: name={}", createRequest.getName());
-        Event created = boardService.createEvent(createRequest);
+        BoardEvent created = boardService.createEvent(createRequest);
 
         auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.CREATE_CALENDAR_EVENT, "CalendarEvent", created.getId(), request.getRemoteAddr());
 
@@ -259,13 +258,13 @@ public class BoardAdminController {
     }
 
     @PatchMapping("/events/{eventId}")
-    public ResponseEntity<Event> updateEvent(
+    public ResponseEntity<BoardEvent> updateEvent(
             @PathVariable UUID eventId,
             @Valid @RequestBody UpdateCalendarEventRequest updateRequest,
             HttpServletRequest request) {
 
         log.info("Admin updating calendar event: {}", eventId);
-        Event updated = boardService.updateEvent(eventId, updateRequest);
+        BoardEvent updated = boardService.updateEvent(eventId, updateRequest);
 
         auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.UPDATE_CALENDAR_EVENT, "CalendarEvent", eventId, request.getRemoteAddr());
 

@@ -2,8 +2,8 @@ package com.ibrasoft.lensbridge.controller;
 
 import com.ibrasoft.lensbridge.dto.board.response.MusallahBoardPayload;
 import com.ibrasoft.lensbridge.model.board.Audience;
+import com.ibrasoft.lensbridge.model.board.BoardEvent;
 import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
-import com.ibrasoft.lensbridge.model.board.Event;
 import com.ibrasoft.lensbridge.model.board.WeeklyContent;
 import com.ibrasoft.lensbridge.model.board.frames.FrameDefinition;
 import com.ibrasoft.lensbridge.service.BoardService;
@@ -70,20 +70,20 @@ public class MusallahBoardController {
     // ==================== Calendar Events ====================
 
     @GetMapping("/events")
-    public ResponseEntity<List<Event>> getUpcomingEvents(@RequestParam Audience audience) {
+    public ResponseEntity<List<BoardEvent>> getUpcomingEvents(@RequestParam Audience audience) {
         log.debug("Musallah board fetching upcoming events for audience: {}", audience);
-        List<Event> events = boardService.getUpcomingEventsForAudience(audience);
-        return ResponseEntity.ok(events);
+        List<BoardEvent> boardEvents = boardService.getUpcomingEventsForAudience(audience);
+        return ResponseEntity.ok(boardEvents);
     }
 
     @GetMapping("/events/range")
-    public ResponseEntity<List<Event>> getEventsInRange(
+    public ResponseEntity<List<BoardEvent>> getEventsInRange(
             @RequestParam Audience audience,
             @RequestParam("start") Instant rangeStart,
             @RequestParam("end") Instant rangeEnd) {
         log.debug("Musallah board fetching events for {} in range {} - {}", audience, rangeStart, rangeEnd);
-        List<Event> events = boardService.getEventsForAudienceInRange(audience, rangeStart, rangeEnd);
-        return ResponseEntity.ok(events);
+        List<BoardEvent> boardEvents = boardService.getEventsForAudienceInRange(audience, rangeStart, rangeEnd);
+        return ResponseEntity.ok(boardEvents);
     }
 
     // ==================== Combined Payload ====================
