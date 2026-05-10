@@ -25,7 +25,7 @@ public class AdminAuditService {
         try {
             event.setTimestamp(Instant.now());
             AuditEvent savedEvent = auditEventRepository.save(event);
-            log.debug("Audit event saved: {} by {} on {}", event.getAction(), event.getAdminEmail(), event.getEntityType());
+            log.debug("Audit event saved: {} by {} on {}", event.getAction(), event.getAdmin().getEmail(), event.getTargetEntityType());
             return savedEvent;
         } catch (Exception e) {
             log.error("Failed to save audit event: {}", e.getMessage(), e);

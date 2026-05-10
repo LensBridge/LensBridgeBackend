@@ -1,6 +1,6 @@
 package com.ibrasoft.lensbridge.controller;
 
-import com.ibrasoft.lensbridge.dto.response.MusallahBoardPayload;
+import com.ibrasoft.lensbridge.dto.board.response.MusallahBoardPayload;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
 import com.ibrasoft.lensbridge.model.board.Event;

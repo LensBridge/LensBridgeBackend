@@ -1,11 +1,11 @@
 package com.ibrasoft.lensbridge.service;
 
 import com.ibrasoft.lensbridge.config.UploadProperties;
-import com.ibrasoft.lensbridge.dto.response.DailyLimitErrorResponse;
-import com.ibrasoft.lensbridge.dto.response.ErrorResponse;
-import com.ibrasoft.lensbridge.dto.response.FileSizeErrorResponse;
-import com.ibrasoft.lensbridge.dto.response.PresignedUploadResponse;
-import com.ibrasoft.lensbridge.dto.response.UploadCompletionResponse;
+import com.ibrasoft.lensbridge.dto.upload.response.DailyLimitErrorResponse;
+import com.ibrasoft.lensbridge.dto.upload.response.ErrorResponse;
+import com.ibrasoft.lensbridge.dto.upload.response.FileSizeErrorResponse;
+import com.ibrasoft.lensbridge.dto.upload.response.PresignedUploadResponse;
+import com.ibrasoft.lensbridge.dto.upload.response.UploadCompletionResponse;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
 import com.ibrasoft.lensbridge.model.upload.Upload;
 

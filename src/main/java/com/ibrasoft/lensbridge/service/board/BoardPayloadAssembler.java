@@ -1,7 +1,7 @@
 package com.ibrasoft.lensbridge.service.board;
 
-import com.ibrasoft.lensbridge.dto.response.ErrorResponse;
-import com.ibrasoft.lensbridge.dto.response.MusallahBoardPayload;
+import com.ibrasoft.lensbridge.dto.upload.response.ErrorResponse;
+import com.ibrasoft.lensbridge.dto.board.response.MusallahBoardPayload;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
 import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.model.board.Event;

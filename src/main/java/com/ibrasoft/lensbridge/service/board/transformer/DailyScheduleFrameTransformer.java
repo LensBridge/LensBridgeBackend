@@ -1,6 +1,6 @@
 package com.ibrasoft.lensbridge.service.board.transformer;
 
-import com.ibrasoft.lensbridge.dto.response.frames.EventView;
+import com.ibrasoft.lensbridge.dto.board.response.frames.EventView;
 import com.ibrasoft.lensbridge.model.board.Event;
 import com.ibrasoft.lensbridge.model.board.frames.DailyScheduleFrameConfig;
 import com.ibrasoft.lensbridge.model.board.frames.FrameDefinition;

@@ -10,9 +10,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import com.ibrasoft.lensbridge.dto.request.ChangePasswordRequest;
-import com.ibrasoft.lensbridge.dto.request.SignupRequest;
-import com.ibrasoft.lensbridge.dto.request.UpdateProfileRequest;
+import com.ibrasoft.lensbridge.dto.auth.request.ChangePasswordRequest;
+import com.ibrasoft.lensbridge.dto.auth.request.SignupRequest;
+import com.ibrasoft.lensbridge.dto.auth.request.UpdateProfileRequest;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.model.auth.User;
 import com.ibrasoft.lensbridge.repository.auth.UserRepository;

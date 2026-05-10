@@ -1,6 +1,6 @@
 package com.ibrasoft.lensbridge.service;
 
-import com.ibrasoft.lensbridge.dto.response.GalleryItemDto;
+import com.ibrasoft.lensbridge.dto.upload.response.GalleryItemDto;
 import com.ibrasoft.lensbridge.model.auth.User;
 import com.ibrasoft.lensbridge.model.upload.Event;
 import com.ibrasoft.lensbridge.model.upload.Upload;

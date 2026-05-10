@@ -24,8 +24,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.ibrasoft.lensbridge.model.auth.*;
 
-import com.ibrasoft.lensbridge.dto.request.*;
-import com.ibrasoft.lensbridge.dto.response.*;
+import com.ibrasoft.lensbridge.dto.auth.request.*;
+import com.ibrasoft.lensbridge.dto.auth.response.*;
 
 import com.ibrasoft.lensbridge.security.jwt.JwtUtils;
 import com.ibrasoft.lensbridge.security.services.UserDetailsImpl;

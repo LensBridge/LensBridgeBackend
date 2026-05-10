@@ -1,6 +1,6 @@
 package com.ibrasoft.lensbridge.controller;
 
-import com.ibrasoft.lensbridge.dto.response.GalleryItemDto;
+import com.ibrasoft.lensbridge.dto.upload.response.GalleryItemDto;
 import com.ibrasoft.lensbridge.service.GalleryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;

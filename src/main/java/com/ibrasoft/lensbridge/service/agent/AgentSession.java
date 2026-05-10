@@ -2,7 +2,7 @@ package com.ibrasoft.lensbridge.service.agent;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ibrasoft.lensbridge.dto.agent.OutgoingAgentFrame;
+import com.ibrasoft.lensbridge.dto.board.agent.OutgoingAgentFrame;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.socket.CloseStatus;

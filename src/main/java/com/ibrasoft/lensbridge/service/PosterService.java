@@ -1,8 +1,8 @@
 package com.ibrasoft.lensbridge.service;
 
-import com.ibrasoft.lensbridge.dto.request.CreatePosterRequest;
-import com.ibrasoft.lensbridge.dto.request.UpdatePosterRequest;
-import com.ibrasoft.lensbridge.dto.response.ErrorResponse;
+import com.ibrasoft.lensbridge.dto.board.request.CreatePosterRequest;
+import com.ibrasoft.lensbridge.dto.board.request.UpdatePosterRequest;
+import com.ibrasoft.lensbridge.dto.upload.response.ErrorResponse;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.Poster;

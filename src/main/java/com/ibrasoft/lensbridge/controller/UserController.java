@@ -20,11 +20,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.ibrasoft.lensbridge.dto.request.UpdateProfileRequest;
-import com.ibrasoft.lensbridge.dto.response.GalleryItemDto;
-import com.ibrasoft.lensbridge.dto.response.MessageResponse;
-import com.ibrasoft.lensbridge.dto.response.UserInfoResponse;
-import com.ibrasoft.lensbridge.dto.response.UserStatsResponse;
+import com.ibrasoft.lensbridge.dto.auth.request.UpdateProfileRequest;
+import com.ibrasoft.lensbridge.dto.upload.response.GalleryItemDto;
+import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
+import com.ibrasoft.lensbridge.dto.auth.response.UserInfoResponse;
+import com.ibrasoft.lensbridge.dto.auth.response.UserStatsResponse;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.model.auth.User;
 import com.ibrasoft.lensbridge.security.services.UserDetailsImpl;

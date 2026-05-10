@@ -1,10 +1,10 @@
 package com.ibrasoft.lensbridge.service;
 
-import com.ibrasoft.lensbridge.dto.request.CreateCalendarEventRequest;
-import com.ibrasoft.lensbridge.dto.request.UpdateBoardConfigRequest;
-import com.ibrasoft.lensbridge.dto.request.UpdateCalendarEventRequest;
-import com.ibrasoft.lensbridge.dto.request.WeeklyContentRequest;
-import com.ibrasoft.lensbridge.dto.response.ErrorResponse;
+import com.ibrasoft.lensbridge.dto.board.request.CreateCalendarEventRequest;
+import com.ibrasoft.lensbridge.dto.board.request.UpdateBoardConfigRequest;
+import com.ibrasoft.lensbridge.dto.board.request.UpdateCalendarEventRequest;
+import com.ibrasoft.lensbridge.dto.board.request.WeeklyContentRequest;
+import com.ibrasoft.lensbridge.dto.upload.response.ErrorResponse;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
 import com.ibrasoft.lensbridge.model.board.*;
 import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;

@@ -1,6 +1,6 @@
 package com.ibrasoft.lensbridge.exception;
 
-import com.ibrasoft.lensbridge.dto.response.MessageResponse;
+import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

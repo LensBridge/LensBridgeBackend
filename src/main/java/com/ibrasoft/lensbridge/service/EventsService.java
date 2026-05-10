@@ -1,5 +1,6 @@
 package com.ibrasoft.lensbridge.service;
 
+import com.ibrasoft.lensbridge.dto.upload.request.CreateEventDto;
 import com.ibrasoft.lensbridge.model.upload.Event;
 import com.ibrasoft.lensbridge.model.upload.EventStatus;
 import com.ibrasoft.lensbridge.repository.upload.EventsRepository;
@@ -20,18 +21,13 @@ public class EventsService {
 
     private final EventsRepository eventsRepository;
 
-    public Event createEvent(Event event) {
-        if (event.getId() == null) {
-            event.setId(UUID.randomUUID());
-        }
-        Event saved = eventsRepository.save(event);
-        this.cleanUpOldEvents();
-        return saved;
-    }
-
-    public Event createEvent(String name, LocalDateTime date) {
-        Event event = Event.builder().id(UUID.randomUUID()).name(name).date(date).status(EventStatus.UPCOMING).build();
-        return createEvent(event);
+    public Event createEvent(CreateEventDto event) {
+        Event newEvent = Event.builder()
+                .name(event.getName())
+                .date(event.getDate())
+                .build();
+        
+        return eventsRepository.save(newEvent);
     }
 
     public List<Event> getAllEvents() {

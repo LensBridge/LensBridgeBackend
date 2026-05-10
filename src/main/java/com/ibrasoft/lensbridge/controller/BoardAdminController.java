@@ -1,12 +1,12 @@
 package com.ibrasoft.lensbridge.controller;
 
-import com.ibrasoft.lensbridge.dto.request.CreateCalendarEventRequest;
-import com.ibrasoft.lensbridge.dto.request.CreatePosterRequest;
-import com.ibrasoft.lensbridge.dto.request.UpdateBoardConfigRequest;
-import com.ibrasoft.lensbridge.dto.request.UpdateCalendarEventRequest;
-import com.ibrasoft.lensbridge.dto.request.UpdatePosterRequest;
-import com.ibrasoft.lensbridge.dto.request.WeeklyContentRequest;
-import com.ibrasoft.lensbridge.dto.response.MessageResponse;
+import com.ibrasoft.lensbridge.dto.board.request.CreateCalendarEventRequest;
+import com.ibrasoft.lensbridge.dto.board.request.CreatePosterRequest;
+import com.ibrasoft.lensbridge.dto.board.request.UpdateBoardConfigRequest;
+import com.ibrasoft.lensbridge.dto.board.request.UpdateCalendarEventRequest;
+import com.ibrasoft.lensbridge.dto.board.request.UpdatePosterRequest;
+import com.ibrasoft.lensbridge.dto.board.request.WeeklyContentRequest;
+import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
 import com.ibrasoft.lensbridge.handler.SignboardHandler;
 import com.ibrasoft.lensbridge.model.audit.AuditAction;
 import com.ibrasoft.lensbridge.model.board.Audience;

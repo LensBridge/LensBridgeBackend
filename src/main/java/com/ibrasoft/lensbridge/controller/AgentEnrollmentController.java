@@ -1,8 +1,8 @@
 package com.ibrasoft.lensbridge.controller;
 
-import com.ibrasoft.lensbridge.dto.request.AgentEnrollRequest;
-import com.ibrasoft.lensbridge.dto.response.AgentEnrollResponse;
-import com.ibrasoft.lensbridge.dto.response.MessageResponse;
+import com.ibrasoft.lensbridge.dto.board.request.AgentEnrollRequest;
+import com.ibrasoft.lensbridge.dto.board.response.AgentEnrollResponse;
+import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
 import com.ibrasoft.lensbridge.service.agent.DeviceEnrollmentService;
 import com.ibrasoft.lensbridge.service.agent.DeviceEnrollmentService.Outcome;
 import jakarta.servlet.http.HttpServletRequest;

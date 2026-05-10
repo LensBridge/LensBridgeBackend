@@ -1,13 +1,13 @@
 package com.ibrasoft.lensbridge.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ibrasoft.lensbridge.dto.request.IssueCommandRequest;
-import com.ibrasoft.lensbridge.dto.request.IssueEnrollmentTokenRequest;
-import com.ibrasoft.lensbridge.dto.response.CommandIssuedResponse;
-import com.ibrasoft.lensbridge.dto.response.CommandView;
-import com.ibrasoft.lensbridge.dto.response.DeviceSummary;
-import com.ibrasoft.lensbridge.dto.response.IssueEnrollmentTokenResponse;
-import com.ibrasoft.lensbridge.dto.response.MessageResponse;
+import com.ibrasoft.lensbridge.dto.board.request.IssueCommandRequest;
+import com.ibrasoft.lensbridge.dto.board.request.IssueEnrollmentTokenRequest;
+import com.ibrasoft.lensbridge.dto.board.response.CommandIssuedResponse;
+import com.ibrasoft.lensbridge.dto.board.response.CommandView;
+import com.ibrasoft.lensbridge.dto.board.response.DeviceSummary;
+import com.ibrasoft.lensbridge.dto.board.response.IssueEnrollmentTokenResponse;
+import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.repository.sql.DeviceCommandRepository;

@@ -1,7 +1,7 @@
 package com.ibrasoft.lensbridge.controller;
 
 import com.ibrasoft.lensbridge.config.UploadProperties;
-import com.ibrasoft.lensbridge.dto.response.*;
+import com.ibrasoft.lensbridge.dto.upload.response.*;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.model.upload.Upload;
