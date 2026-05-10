@@ -93,14 +93,14 @@ public class AuthController {
             RefreshToken refreshToken = refreshTokenService.createRefreshToken(
                 userDetails.getId(), deviceInfo, ipAddress);
             
-            log.debug("Created refresh token for user {}: {}", userDetails.getId(), refreshToken.getToken());
+            log.debug("Created refresh token for user {}: {}", userDetails.getId(), refreshToken.getTokenHash());
             
             List<String> roles = userDetails.getAuthorities().stream()
                     .map(item -> item.getAuthority())
                     .collect(Collectors.toList());
 
             return ResponseEntity.ok(new JwtResponse(jwt,
-                    refreshToken.getToken(),
+                    refreshToken.getTokenHash(),
                     userDetails.getFirstName(),
                     userDetails.getLastName(),
                     userDetails.getId(),
