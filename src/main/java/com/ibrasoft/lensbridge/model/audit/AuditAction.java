@@ -3,7 +3,7 @@ package com.ibrasoft.lensbridge.model.audit;
 import lombok.Getter;
 
 @Getter
-public enum AdminAction {
+public enum AuditAction {
     // Upload Management Actions
     APPROVE_UPLOAD("Approve Upload"),
     UNAPPROVE_UPLOAD("Remove Upload Approval"),
@@ -52,7 +52,7 @@ public enum AdminAction {
     
     private final String description;
     
-    AdminAction(String description) {
+    AuditAction(String description) {
         this.description = description;
     }
 

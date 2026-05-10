@@ -8,7 +8,7 @@ import com.ibrasoft.lensbridge.dto.request.UpdatePosterRequest;
 import com.ibrasoft.lensbridge.dto.request.WeeklyContentRequest;
 import com.ibrasoft.lensbridge.dto.response.MessageResponse;
 import com.ibrasoft.lensbridge.handler.SignboardHandler;
-import com.ibrasoft.lensbridge.model.audit.AdminAction;
+import com.ibrasoft.lensbridge.model.audit.AuditAction;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
 import com.ibrasoft.lensbridge.model.board.Event;
@@ -180,7 +180,7 @@ public class BoardAdminController {
         Poster response = posterService.createPoster(createRequest, imageFile);
 
         UserDetailsImpl user = getCurrentUser();
-        auditService.logAuditEvent(user.getEmail(), AdminAction.CREATE_POSTER, "Poster", response.getId(), request.getRemoteAddr());
+        auditService.logAuditEvent(user.getEmail(), AuditAction.CREATE_POSTER, "Poster", response.getId(), request.getRemoteAddr());
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -195,7 +195,7 @@ public class BoardAdminController {
         Poster response = posterService.updatePoster(posterId, updateRequest);
 
         UserDetailsImpl user = getCurrentUser();
-        auditService.logAuditEvent(user.getEmail(), AdminAction.UPDATE_POSTER, "Poster", posterId, request.getRemoteAddr());
+        auditService.logAuditEvent(user.getEmail(), AuditAction.UPDATE_POSTER, "Poster", posterId, request.getRemoteAddr());
 
         return ResponseEntity.ok(response);
     }
@@ -210,7 +210,7 @@ public class BoardAdminController {
         Poster response = posterService.updatePosterImage(posterId, imageFile);
 
         UserDetailsImpl user = getCurrentUser();
-        auditService.logAuditEvent(user.getEmail(), AdminAction.UPDATE_POSTER, "Poster", posterId, request.getRemoteAddr());
+        auditService.logAuditEvent(user.getEmail(), AuditAction.UPDATE_POSTER, "Poster", posterId, request.getRemoteAddr());
 
         return ResponseEntity.ok(response);
     }
@@ -224,7 +224,7 @@ public class BoardAdminController {
         posterService.deletePoster(posterId);
 
         UserDetailsImpl user = getCurrentUser();
-        auditService.logAuditEvent(user.getEmail(), AdminAction.DELETE_POSTER, "Poster", posterId, request.getRemoteAddr());
+        auditService.logAuditEvent(user.getEmail(), AuditAction.DELETE_POSTER, "Poster", posterId, request.getRemoteAddr());
 
         return ResponseEntity.ok(new MessageResponse("Poster deleted successfully"));
     }
@@ -258,7 +258,7 @@ public class BoardAdminController {
         Event created = boardService.createEvent(createRequest);
 
         UserDetailsImpl user = getCurrentUser();
-        auditService.logAuditEvent(user.getEmail(), AdminAction.CREATE_CALENDAR_EVENT, "CalendarEvent", created.getId(), request.getRemoteAddr());
+        auditService.logAuditEvent(user.getEmail(), AuditAction.CREATE_CALENDAR_EVENT, "CalendarEvent", created.getId(), request.getRemoteAddr());
 
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
@@ -273,7 +273,7 @@ public class BoardAdminController {
         Event updated = boardService.updateEvent(eventId, updateRequest);
 
         UserDetailsImpl user = getCurrentUser();
-        auditService.logAuditEvent(user.getEmail(), AdminAction.UPDATE_CALENDAR_EVENT, "CalendarEvent", eventId, request.getRemoteAddr());
+        auditService.logAuditEvent(user.getEmail(), AuditAction.UPDATE_CALENDAR_EVENT, "CalendarEvent", eventId, request.getRemoteAddr());
 
         return ResponseEntity.ok(updated);
     }
@@ -287,7 +287,7 @@ public class BoardAdminController {
         boardService.deleteEvent(eventId);
 
         UserDetailsImpl user = getCurrentUser();
-        auditService.logAuditEvent(user.getEmail(), AdminAction.DELETE_CALENDAR_EVENT, "CalendarEvent", eventId, request.getRemoteAddr());
+        auditService.logAuditEvent(user.getEmail(), AuditAction.DELETE_CALENDAR_EVENT, "CalendarEvent", eventId, request.getRemoteAddr());
 
         return ResponseEntity.ok(new MessageResponse("Calendar event deleted successfully"));
     }

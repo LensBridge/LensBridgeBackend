@@ -1,6 +1,6 @@
 package com.ibrasoft.lensbridge.controller;
 
-import com.ibrasoft.lensbridge.model.audit.AdminAction;
+import com.ibrasoft.lensbridge.model.audit.AuditAction;
 import com.ibrasoft.lensbridge.service.AdminAuditService;
 import com.ibrasoft.lensbridge.model.audit.AuditEvent;
 import com.ibrasoft.lensbridge.dto.request.SignupRequest;
@@ -45,14 +45,14 @@ public class AdminController {
     private final AdminAuditService auditService;
     private final UserService userService;
 
-    private ResponseEntity<?> executeUploadAction(UUID uploadId, HttpServletRequest request, Consumer<UUID> serviceAction, AdminAction auditAction, String successMessage) {
+    private ResponseEntity<?> executeUploadAction(UUID uploadId, HttpServletRequest request, Consumer<UUID> serviceAction, AuditAction auditAction, String successMessage) {
         serviceAction.accept(uploadId);
         UserDetailsImpl curr = (UserDetailsImpl) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         this.auditService.logAuditEvent(curr.getEmail(), auditAction, "Upload", uploadId, request.getRemoteAddr());
         return ResponseEntity.ok(new MessageResponse(successMessage));
     }
 
-    private ResponseEntity<?> executeUserAction(UUID userId, HttpServletRequest request, Consumer<UUID> serviceAction, AdminAction auditAction, String successMessage) {
+    private ResponseEntity<?> executeUserAction(UUID userId, HttpServletRequest request, Consumer<UUID> serviceAction, AuditAction auditAction, String successMessage) {
         serviceAction.accept(userId);
         UserDetailsImpl curr = (UserDetailsImpl) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         this.auditService.logAuditEvent(curr.getEmail(), auditAction, "User", userId, request.getRemoteAddr());
@@ -60,7 +60,7 @@ public class AdminController {
     }
 
     private <T, R> ResponseEntity<?> executeCreationAction(T input, HttpServletRequest request,
-                                                           Function<T, R> serviceAction, AdminAction auditAction,
+                                                           Function<T, R> serviceAction, AuditAction auditAction,
                                                            String entityType, Function<R, UUID> idExtractor,
                                                            String successMessage) {
         R createdEntity = serviceAction.apply(input);
@@ -79,7 +79,7 @@ public class AdminController {
 
         return executeCreationAction(null, request,
                 (ignored) -> eventsService.createEvent(eventName, eventDate),
-                AdminAction.CREATE_EVENT,
+                AuditAction.CREATE_EVENT,
                 "Event",
                 Event::getId,
                 "Event created successfully");
@@ -88,27 +88,27 @@ public class AdminController {
     // Upload Management Operations
     @PostMapping("/upload/{uploadId}")
     public ResponseEntity<?> approveUpload(@PathVariable UUID uploadId, HttpServletRequest request) {
-        return executeUploadAction(uploadId, request, uploadService::approveUpload, AdminAction.APPROVE_UPLOAD, "Upload approved successfully");
+        return executeUploadAction(uploadId, request, uploadService::approveUpload, AuditAction.APPROVE_UPLOAD, "Upload approved successfully");
     }
 
     @DeleteMapping("/upload/{uploadId}")
     public ResponseEntity<?> deleteUpload(@PathVariable UUID uploadId, HttpServletRequest request) {
-        return executeUploadAction(uploadId, request, uploadService::deleteUpload, AdminAction.DELETE_UPLOAD, "Upload deleted successfully");
+        return executeUploadAction(uploadId, request, uploadService::deleteUpload, AuditAction.DELETE_UPLOAD, "Upload deleted successfully");
     }
 
     @PostMapping("/feature-upload/{uploadId}")
     public ResponseEntity<?> featureUpload(@PathVariable UUID uploadId, HttpServletRequest request) {
-        return executeUploadAction(uploadId, request, uploadService::featureUpload, AdminAction.FEATURE_UPLOAD, "Upload featured successfully");
+        return executeUploadAction(uploadId, request, uploadService::featureUpload, AuditAction.FEATURE_UPLOAD, "Upload featured successfully");
     }
 
     @DeleteMapping("/upload/{uploadId}/approval")
     public ResponseEntity<?> unapproveUpload(@PathVariable UUID uploadId, HttpServletRequest request) {
-        return executeUploadAction(uploadId, request, uploadService::unapproveUpload, AdminAction.UNAPPROVE_UPLOAD, "Upload unapproved successfully");
+        return executeUploadAction(uploadId, request, uploadService::unapproveUpload, AuditAction.UNAPPROVE_UPLOAD, "Upload unapproved successfully");
     }
 
     @DeleteMapping("/upload/{uploadId}/featured")
     public ResponseEntity<?> unfeatureUpload(@PathVariable UUID uploadId, HttpServletRequest request) {
-        return executeUploadAction(uploadId, request, uploadService::unfeatureUpload, AdminAction.UNFEATURE_UPLOAD, "Upload unfeatured successfully");
+        return executeUploadAction(uploadId, request, uploadService::unfeatureUpload, AuditAction.UNFEATURE_UPLOAD, "Upload unfeatured successfully");
     }
 
     // Data Retrieval Operations
@@ -181,7 +181,7 @@ public class AdminController {
                     log.debug("Admin adding role {} to user: {}", role, id);
                     userService.addRole(id, role);
                 },
-                AdminAction.ADD_USER_ROLE,
+                AuditAction.ADD_USER_ROLE,
                 "Role added successfully to user: " + userId);
     }
 
@@ -193,7 +193,7 @@ public class AdminController {
                     log.debug("Admin removing role {} from user: {}", role, id);
                     userService.removeRole(id, role);
                 },
-                AdminAction.REMOVE_USER_ROLE,
+                AuditAction.REMOVE_USER_ROLE,
                 "Role removed successfully from user: " + userId);
     }
 
@@ -201,7 +201,7 @@ public class AdminController {
     @PreAuthorize("hasRole('" + Role.ROOT + "')")
     public ResponseEntity<?> verifyUser(@RequestBody Map<String, UUID> payload, HttpServletRequest request) {
         return executeUserAction(payload.get("userId"), request,
-                userService::verifyDirectly, AdminAction.VERIFY_USER,
+                userService::verifyDirectly, AuditAction.VERIFY_USER,
                 "User verified successfully");
     }
 
@@ -216,7 +216,7 @@ public class AdminController {
                     userService.requestPasswordReset(newUser.getEmail());
                     return newUser;
                 },
-                AdminAction.ADD_USER,
+                AuditAction.ADD_USER,
                 "User",
                 User::getId,
                 "User created successfully: " + signUpRequest.getEmail());
@@ -271,7 +271,7 @@ public class AdminController {
     }
 
     @GetMapping("/audit/action/{action}")
-    public ResponseEntity<?> getAuditEventsByAction(@PathVariable AdminAction action, Pageable pageable) {
+    public ResponseEntity<?> getAuditEventsByAction(@PathVariable AuditAction action, Pageable pageable) {
         try {
             log.debug("Admin retrieving audit events for action: {}", action);
             Page<AuditEvent> events = auditService.getAuditEventsByAction(action, pageable);
@@ -298,7 +298,7 @@ public class AdminController {
     public ResponseEntity<?> getAvailableActions() {
         try {
             log.debug("Admin retrieving available audit actions");
-            return ResponseEntity.ok(AdminAction.values());
+            return ResponseEntity.ok(AuditAction.values());
         } catch (Exception e) {
             log.error("Error retrieving available actions: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new MessageResponse("Failed to retrieve available actions: " + e.getMessage()));
