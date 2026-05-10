@@ -2,10 +2,11 @@ package com.ibrasoft.lensbridge.service;
 
 import com.ibrasoft.lensbridge.dto.response.GalleryItemDto;
 import com.ibrasoft.lensbridge.model.auth.User;
-import com.ibrasoft.lensbridge.model.upload.Upload;
 import com.ibrasoft.lensbridge.model.event.Event;
+import com.ibrasoft.lensbridge.model.media.Upload;
+import com.ibrasoft.lensbridge.repository.media.UploadRepository;
 import com.ibrasoft.lensbridge.repository.mongo.EventsRepository;
-import com.ibrasoft.lensbridge.repository.mongo.UploadRepository;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;

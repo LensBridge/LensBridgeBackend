@@ -1,10 +1,11 @@
-package com.ibrasoft.lensbridge.repository.mongo;
+package com.ibrasoft.lensbridge.repository.media;
 
-import com.ibrasoft.lensbridge.model.upload.Upload;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
+
+import com.ibrasoft.lensbridge.model.media.Upload;
 
 import java.time.LocalDateTime;
 import java.util.List;

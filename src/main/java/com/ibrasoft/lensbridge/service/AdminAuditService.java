@@ -1,6 +1,6 @@
 package com.ibrasoft.lensbridge.service;
 
-import com.ibrasoft.lensbridge.model.audit.AdminAction;
+import com.ibrasoft.lensbridge.model.audit.AuditAction;
 import com.ibrasoft.lensbridge.model.audit.AuditEvent;
 import com.ibrasoft.lensbridge.repository.mongo.AuditEventRepository;
 import lombok.RequiredArgsConstructor;
@@ -32,7 +32,7 @@ public class AdminAuditService {
         }
     }
 
-    public AuditEvent logAuditEvent(String adminEmail, AdminAction action, String entityType, UUID entityId, String IPAddress) {
+    public AuditEvent logAuditEvent(String adminEmail, AuditAction action, String entityType, UUID entityId, String IPAddress) {
         AuditEvent event = AuditEvent.builder().adminEmail(adminEmail).action(action).entityType(entityType).entityId(entityId).timestamp(Instant.now()).ipAddress(IPAddress).build();
         return logAuditEvent(event);
     }
@@ -49,7 +49,7 @@ public class AdminAuditService {
         return auditEventRepository.findByEntityTypeAndEntityIdOrderByTimestampDesc(entityType, entityId);
     }
 
-    public Page<AuditEvent> getAuditEventsByAction(AdminAction action, Pageable pageable) {
+    public Page<AuditEvent> getAuditEventsByAction(AuditAction action, Pageable pageable) {
         return auditEventRepository.findByActionOrderByTimestampDesc(action, pageable);
     }
 
@@ -66,7 +66,7 @@ public class AdminAuditService {
         return auditEventRepository.countByAdminId(adminId);
     }
 
-    public long getOperationCountByAction(AdminAction action) {
+    public long getOperationCountByAction(AuditAction action) {
         return auditEventRepository.countByAction(action);
     }
 }

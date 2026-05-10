@@ -15,7 +15,7 @@ import com.ibrasoft.lensbridge.dto.request.SignupRequest;
 import com.ibrasoft.lensbridge.dto.request.UpdateProfileRequest;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.model.auth.User;
-import com.ibrasoft.lensbridge.repository.mongo.UserRepository;
+import com.ibrasoft.lensbridge.repository.auth.UserRepository;
 import com.ibrasoft.lensbridge.security.services.EmailService;
 
 import lombok.RequiredArgsConstructor;

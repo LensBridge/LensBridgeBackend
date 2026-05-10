@@ -1,7 +1,8 @@
 package com.ibrasoft.lensbridge.service;
 
 import com.ibrasoft.lensbridge.model.auth.RefreshToken;
-import com.ibrasoft.lensbridge.repository.mongo.RefreshTokenRepository;
+import com.ibrasoft.lensbridge.repository.auth.RefreshTokenRepository;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;

@@ -1,12 +1,13 @@
 package com.ibrasoft.lensbridge.dto.response;
 
-import com.ibrasoft.lensbridge.model.upload.UploadType;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
+
+import com.ibrasoft.lensbridge.model.media.UploadType;
 
 @Data
 @NoArgsConstructor

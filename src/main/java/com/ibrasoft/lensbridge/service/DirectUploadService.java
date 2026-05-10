@@ -7,7 +7,8 @@ import com.ibrasoft.lensbridge.dto.response.FileSizeErrorResponse;
 import com.ibrasoft.lensbridge.dto.response.PresignedUploadResponse;
 import com.ibrasoft.lensbridge.dto.response.UploadCompletionResponse;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
-import com.ibrasoft.lensbridge.model.upload.Upload;
+import com.ibrasoft.lensbridge.model.media.Upload;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
