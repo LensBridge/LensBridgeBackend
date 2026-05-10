@@ -1,5 +1,6 @@
 package com.ibrasoft.lensbridge.model.auth;
 
+import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
@@ -23,8 +24,10 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @AllArgsConstructor
+@NoArgsConstructor
 @Data
 @Entity
 @Table(name = "users", indexes = {
@@ -54,12 +57,44 @@ public class User {
 
   @NotBlank
   @JsonIgnore
+  @Column(nullable = false)
   private String passwordHash;
 
   @ElementCollection(targetClass = Role.class)
   @Enumerated(EnumType.STRING)
   @CollectionTable(name = "user_roles")
-  private Set<Role> roles;
+  @Column(name = "role", nullable = false)
+  private Set<Role> roles = new HashSet<>();
 
   private boolean verified;
+
+  // Transitional field kept while auth services are rewritten to VerificationToken.
+  @JsonIgnore
+  private String verificationToken;
+
+  public User(String firstName, String lastName, String studentNumber, String email, String passwordHash) {
+    this.firstName = firstName;
+    this.lastName = lastName;
+    this.studentNumber = studentNumber;
+    this.email = email;
+    this.passwordHash = passwordHash;
+    this.roles = new HashSet<>();
+  }
+
+  public String getPassword() {
+    return passwordHash;
+  }
+
+  public void setPassword(String passwordHash) {
+    this.passwordHash = passwordHash;
+  }
+
+  public void addRole(Role role) {
+    if (roles == null) roles = new HashSet<>();
+    roles.add(role);
+  }
+
+  public boolean hasRole(Role role) {
+    return roles != null && roles.contains(role);
+  }
 }

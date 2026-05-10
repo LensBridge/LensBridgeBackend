@@ -1,11 +1,10 @@
 package com.ibrasoft.lensbridge.model.auth;
 
-import org.springframework.data.annotation.Id;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -49,4 +48,16 @@ public class RefreshToken {
     
     @Column(nullable = false)
     private boolean revoked;
+
+    public String getToken() {
+        return tokenHash;
+    }
+
+    public UUID getUserId() {
+        return user != null ? user.getId() : null;
+    }
+
+    public boolean isExpired() {
+        return expiryDate != null && expiryDate.isBefore(Instant.now());
+    }
 }

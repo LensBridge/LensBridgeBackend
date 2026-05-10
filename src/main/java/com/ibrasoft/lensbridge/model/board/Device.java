@@ -2,7 +2,6 @@ package com.ibrasoft.lensbridge.model.board;
 
 import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -24,7 +23,8 @@ public class Device {
 
     // If you ever add multi-tenancy, remove the default and make this required
     // Hardcoded for now because we only have one organization
-    @Builder.Default 
+    @Builder.Default
+    @Column(nullable = false)
     private String organizationId = "utmmsa";
     
     @Column(nullable = false)
@@ -37,6 +37,7 @@ public class Device {
     private DeviceConfig config;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private Audience audience;
 
     /** Ed25519 public key (32 bytes). Set during enrollment; null before. */
@@ -52,7 +53,8 @@ public class Device {
 
     @PrePersist
     private void prePersist() {
-        enrolledAt = Instant.now();
+        if (enrolledAt == null) enrolledAt = Instant.now();
+        if (organizationId == null) organizationId = "utmmsa";
     }
 
 }

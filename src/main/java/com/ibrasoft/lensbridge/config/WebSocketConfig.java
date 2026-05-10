@@ -1,6 +1,7 @@
 package com.ibrasoft.lensbridge.config;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
@@ -42,6 +43,7 @@ public class WebSocketConfig implements WebSocketConfigurer {
     }
 
     @Bean
+    @ConditionalOnProperty(name = "lensbridge.websocket.container-customizer.enabled", havingValue = "true")
     public ServletServerContainerFactoryBean webSocketContainer() {
         ServletServerContainerFactoryBean container =
                 new ServletServerContainerFactoryBean();

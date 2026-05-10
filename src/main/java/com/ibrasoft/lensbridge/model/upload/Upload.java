@@ -65,7 +65,7 @@ public class Upload {
 
     @Column(nullable = true)
     /**
-     * hehe we don't delete things anymore
+     * We do not delete things anymore
      * DB is append-only, we just mark things as deleted and filter them out in queries
      * deletedAt = null => not deleted 
     */

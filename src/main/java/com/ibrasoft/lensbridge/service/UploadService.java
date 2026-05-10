@@ -16,8 +16,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -94,11 +95,13 @@ public class UploadService {
      */
     public long countUploadsToday(UUID userId) {
         LocalDate today = LocalDate.now();
-        LocalDateTime startOfDay = today.atStartOfDay();
-        LocalDateTime endOfDay = today.atTime(23, 59, 59);
+        Instant startOfDay = today.atStartOfDay(ZoneId.systemDefault()).toInstant();
+        Instant endOfDay = today.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
+        User user = userService.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
-        return uploadRepository.countByUploadedByAndCreatedDateBetween(
-                userId,
+        return uploadRepository.countByUploadedByAndCreatedDateBetweenAndDeletedAtIsNull(
+                user,
                 startOfDay,
                 endOfDay);
     }
@@ -128,25 +131,27 @@ public class UploadService {
                 uploadType = UploadType.IMAGE; // Default fallback
             }
 
-            // Create Upload entity
-            UUID uuid = UUID.randomUUID();
-            Upload upload = new Upload(
-                    uuid,
-                    fileName,
-                    objectKey,
-                    null, // thumbnailUrl - will be set async by ThumbnailService
-                    description,
-                    instagramHandle,
-                    uploadedBy,
-                    eventId,
-                    LocalDateTime.now(),
-                    defaultApproved,
-                    defaultFeatured,
-                    anon,
-                    uploadType);
+            User user = userService.findById(uploadedBy)
+                    .orElseThrow(() -> new IllegalArgumentException("User not found"));
+            MediaEvent mediaEvent = eventsService.getEventById(eventId)
+                    .orElseThrow(() -> new IllegalArgumentException("Event not found"));
+
+            Upload upload = new Upload();
+            upload.setFileName(fileName);
+            upload.setFileUrl(objectKey);
+            upload.setThumbnailUrl(null);
+            upload.setUploadDescription(description);
+            upload.setInstagramHandle(instagramHandle);
+            upload.setUploadedBy(user);
+            upload.setMediaEvent(mediaEvent);
+            upload.setCreatedDate(Instant.now());
+            upload.setApproved(defaultApproved);
+            upload.setFeatured(defaultFeatured);
+            upload.setAnon(anon);
+            upload.setContentType(uploadType);
 
             uploadRepository.save(upload);
-            log.info("Created direct upload record: {} for object: {}", uuid, objectKey);
+            log.info("Created direct upload record: {} for object: {}", upload.getUuid(), objectKey);
             return upload;
 
         } catch (Exception e) {
@@ -156,11 +161,13 @@ public class UploadService {
     }
 
     public Page<Upload> getAllUploads(Pageable pageable) {
-        return uploadRepository.findAll(pageable);
+        return uploadRepository.findByDeletedAtIsNull(pageable);
     }
 
     public Page<Upload> getUploadsByEvent(UUID eventId, Pageable pageable) {
-        return uploadRepository.findByEventId(eventId, pageable);
+        MediaEvent mediaEvent = eventsService.getEventById(eventId)
+                .orElseThrow(() -> new IllegalArgumentException("Event not found"));
+        return uploadRepository.findByMediaEventAndDeletedAtIsNull(mediaEvent, pageable);
     }
 
     public Optional<Upload> getUploadById(UUID id) {
@@ -191,7 +198,10 @@ public class UploadService {
                 // Continue with database deletion even if R2 deletion fails
             }
         }
-        uploadRepository.deleteById(id);
+        uploadOpt.ifPresent(upload -> {
+            upload.setDeletedAt(Instant.now());
+            uploadRepository.save(upload);
+        });
     }
 
     /**
@@ -208,7 +218,7 @@ public class UploadService {
         Upload upload = uploadOpt.get();
 
         // Verify ownership
-        if (!upload.getUploadedBy().equals(userId)) {
+        if (upload.getUploadedBy() == null || !upload.getUploadedBy().getId().equals(userId)) {
             throw new SecurityException("You can only delete your own uploads");
         }
 
@@ -228,8 +238,9 @@ public class UploadService {
             // Continue with database deletion even if R2 deletion fails
         }
 
-        // Delete the upload from database
-        uploadRepository.deleteById(uploadId);
+        upload.setDeletedAt(Instant.now());
+        userService.findById(userId).ifPresent(upload::setDeletedBy);
+        uploadRepository.save(upload);
         log.info("Upload {} deleted successfully by user {}", uploadId, userId);
     }
 
@@ -238,7 +249,7 @@ public class UploadService {
      * This method fetches uploads and includes the uploader's name and details.
      */
     public Page<AdminUploadDto> getAllUploadsForAdmin(Pageable pageable) {
-        Page<Upload> uploads = uploadRepository.findAll(pageable);
+        Page<Upload> uploads = uploadRepository.findByDeletedAtIsNull(pageable);
         return uploads.map(this::convertToAdminUploadDto);
     }
 
@@ -246,7 +257,7 @@ public class UploadService {
      * Get uploads by approval status with user information for admin interface.
      */
     public Page<AdminUploadDto> getUploadsByApprovalStatus(boolean approved, Pageable pageable) {
-        Page<Upload> uploads = uploadRepository.findByApproved(approved, pageable);
+        Page<Upload> uploads = uploadRepository.findByApprovedAndDeletedAtIsNull(approved, pageable);
         return uploads.map(this::convertToAdminUploadDto);
     }
 
@@ -254,21 +265,25 @@ public class UploadService {
      * Get uploads by featured status with user information for admin interface.
      */
     public Page<AdminUploadDto> getUploadsByFeaturedStatus(boolean featured, Pageable pageable) {
-        Page<Upload> uploads = uploadRepository.findByFeatured(featured, pageable);
+        Page<Upload> uploads = uploadRepository.findByFeaturedAndDeletedAtIsNull(featured, pageable);
         return uploads.map(this::convertToAdminUploadDto);
     }
 
     public Page<Upload> getUploadsByUploadedBy(UUID userId, Pageable pageable) {
-        return uploadRepository.findByUploadedBy(userId, pageable);
+        User user = userService.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        return uploadRepository.findByUploadedByAndDeletedAtIsNull(user, pageable);
     }
 
     /**
      * Get user upload statistics
      */
     public UserStatsResponse getUserStats(UUID userId) {
-        long totalUploads = uploadRepository.countByUploadedBy(userId);
-        long approvedUploads = uploadRepository.countByUploadedByAndApproved(userId, true);
-        long featuredUploads = uploadRepository.countByUploadedByAndFeatured(userId, true);
+        User user = userService.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        long totalUploads = uploadRepository.countByUploadedByAndDeletedAtIsNull(user);
+        long approvedUploads = uploadRepository.countByUploadedByAndApprovedAndDeletedAtIsNull(user, true);
+        long featuredUploads = uploadRepository.countByUploadedByAndFeaturedAndDeletedAtIsNull(user, true);
         long pendingUploads = totalUploads - approvedUploads;
 
         return new UserStatsResponse(
@@ -283,7 +298,9 @@ public class UploadService {
      * regardless of approval status)
      */
     public Page<GalleryItemDto> getUserUploadsAsGalleryItems(UUID userId, Pageable pageable) {
-        Page<Upload> uploads = uploadRepository.findByUploadedBy(userId, pageable);
+        User user = userService.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        Page<Upload> uploads = uploadRepository.findByUploadedByAndDeletedAtIsNull(user, pageable);
         return uploads.map(upload -> convertToUserGalleryItem(upload, userId));
     }
 
@@ -293,7 +310,7 @@ public class UploadService {
      */
     private GalleryItemDto convertToUserGalleryItem(Upload upload, UUID userId) {
         // Verify the user owns this upload
-        if (!upload.getUploadedBy().equals(userId)) {
+        if (upload.getUploadedBy() == null || !upload.getUploadedBy().getId().equals(userId)) {
             throw new SecurityException("User can only access their own uploads");
         }
 
@@ -346,7 +363,9 @@ public class UploadService {
 
         // Format date
         if (upload.getCreatedDate() != null) {
-            item.setDate(upload.getCreatedDate().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE));
+            item.setDate(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE
+                    .withZone(ZoneId.systemDefault())
+                    .format(upload.getCreatedDate()));
         } else {
             item.setDate("Unknown");
         }
@@ -368,7 +387,7 @@ public class UploadService {
         dto.setFileUrl(upload.getFileUrl()); // Keep original URL for internal reference
         dto.setUploadDescription(upload.getUploadDescription());
         dto.setInstagramHandle(upload.getInstagramHandle());
-        dto.setUploadedBy(upload.getUploadedBy());
+        dto.setUploadedBy(upload.getUploadedBy() != null ? upload.getUploadedBy().getId() : null);
         dto.setEventId(upload.getEventId());
         dto.setCreatedDate(upload.getCreatedDate());
         dto.setApproved(upload.isApproved());
@@ -400,7 +419,7 @@ public class UploadService {
             dto.setThumbnailUrl(null);
         }
 
-        Optional<User> userOpt = userService.findById(upload.getUploadedBy());
+        Optional<User> userOpt = Optional.ofNullable(upload.getUploadedBy());
         if (userOpt.isPresent()) {
             User user = userOpt.get();
             dto.setUploaderFirstName(user.getFirstName());

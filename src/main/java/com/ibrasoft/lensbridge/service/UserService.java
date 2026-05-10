@@ -1,6 +1,6 @@
 package com.ibrasoft.lensbridge.service;
 
-import java.util.List;
+import java.util.HashSet;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -107,7 +107,7 @@ public class UserService {
             (signUpRequest.getPassword() == null) ? null : passwordEncoder.encode(signUpRequest.getPassword())
         );
         
-        user.setRoles(List.of());
+        user.setRoles(new HashSet<>());
         user.setVerified(false);
         
         // Generate verification token and send email
@@ -200,7 +200,7 @@ public class UserService {
             throw new IllegalArgumentException("User does not have this role: " + role.getAuthority());
         }
         
-        user.getRoles().remove(role.getAuthority());
+        user.getRoles().remove(role);
         User savedUser = saveUser(user);
         
         log.info("Role {} removed successfully from user: {}", role.getAuthority(), user.getEmail());

@@ -4,7 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 import com.ibrasoft.lensbridge.model.upload.UploadType;
@@ -32,7 +32,7 @@ public class AdminUploadDto {
     private UUID eventId;
     private String eventName;
     
-    private LocalDateTime createdDate;
+    private Instant createdDate;
     private boolean approved;
     private boolean featured;
     private boolean isAnon;

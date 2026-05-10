@@ -14,6 +14,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.time.format.DateTimeFormatter;
+import java.time.ZoneId;
 import java.util.UUID;
 
 @Service
@@ -31,7 +32,7 @@ public class GalleryService {
      * Only approved content is returned with time-limited signed URLs.
      */
     public Page<GalleryItemDto> getAllApprovedGalleryItems(Pageable pageable) {
-        Page<Upload> uploads = uploadRepository.findByApprovedTrue(pageable);
+        Page<Upload> uploads = uploadRepository.findByApprovedTrueAndDeletedAtIsNull(pageable);
         return uploads.map(this::convertToPublicGalleryItem); // Use secure URLs for public
     }
 
@@ -40,7 +41,7 @@ public class GalleryService {
      * This method should only be called by admin users.
      */
     public Page<GalleryItemDto> getAllGalleryItems(Pageable pageable) {
-        Page<Upload> uploads = uploadRepository.findAll(pageable);
+        Page<Upload> uploads = uploadRepository.findByDeletedAtIsNull(pageable);
         return uploads.map(this::convertToAdminGalleryItem); // Admin can see all with secure URLs
     }
 
@@ -49,7 +50,9 @@ public class GalleryService {
      */
     public Page<GalleryItemDto> getGalleryItemsByEvent(UUID eventId, Pageable pageable) {
         // For public event galleries, only return approved content
-        Page<Upload> uploads = uploadRepository.findByEventId(eventId, pageable);
+        MediaEvent mediaEvent = eventsRepository.findById(eventId)
+                .orElseThrow(() -> new IllegalArgumentException("Event not found"));
+        Page<Upload> uploads = uploadRepository.findByMediaEventAndApprovedTrueAndDeletedAtIsNull(mediaEvent, pageable);
         return uploads.map(this::convertToPublicGalleryItem);
     }
 
@@ -78,8 +81,7 @@ public class GalleryService {
      */
     private GalleryItemDto convertToGalleryItem(Upload upload, boolean isAdmin) {
         GalleryItemDto item = new GalleryItemDto();
-        User uploader = userService.findById(upload.getUploadedBy())
-                .orElse(null);
+        User uploader = upload.getUploadedBy();
         
         // Basic info
         item.setId(upload.getUuid().toString());
@@ -159,7 +161,7 @@ public class GalleryService {
 
     private String formatDate(Upload upload) {
         if (upload.getCreatedDate() != null) {
-            return upload.getCreatedDate().format(DateTimeFormatter.ISO_LOCAL_DATE);
+            return DateTimeFormatter.ISO_LOCAL_DATE.withZone(ZoneId.systemDefault()).format(upload.getCreatedDate());
         }
         return "Unknown";
     }

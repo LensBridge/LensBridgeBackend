@@ -14,6 +14,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = AdminController.class)
@@ -44,9 +45,9 @@ class AdminControllerIntegrationTest {
     }
 
     @Test
-    @WithMockUser(roles = {Role.ADMIN})
+    @WithMockUser(roles = {Role.USER})
     void accessDeniedForUserRole() throws Exception {
-        mockMvc.perform(get(adminBaseURL + "/create-event"))
+        mockMvc.perform(post(adminBaseURL + "/create-event").with(csrf()))
                 .andExpect(status().isForbidden());
     }
 
@@ -55,9 +56,10 @@ class AdminControllerIntegrationTest {
             authorities = {"ROLE_ADMIN"})
     void accessGrantedForAdminRole() throws Exception {
         mockMvc.perform(post(adminBaseURL + "/create-event")
+                        .with(csrf())
                         .param("eventName", "Test Event")
                         .param("eventDate", "2024-12-01T10:00:00")
-                        .param("status", "ACTIVE"))
+                        .param("status", "UPCOMING"))
                 .andExpect(status().isOk());
     }
 }

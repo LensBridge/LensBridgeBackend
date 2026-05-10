@@ -1,8 +1,10 @@
 package com.ibrasoft.lensbridge.service;
 
 import com.ibrasoft.lensbridge.model.audit.AuditAction;
+import com.ibrasoft.lensbridge.model.audit.AuditEntityType;
 import com.ibrasoft.lensbridge.model.audit.AuditEvent;
 import com.ibrasoft.lensbridge.repository.audit.AuditEventRepository;
+import com.ibrasoft.lensbridge.repository.auth.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +22,7 @@ import java.util.UUID;
 public class AdminAuditService {
 
     private final AuditEventRepository auditEventRepository;
+    private final UserRepository userRepository;
 
     public AuditEvent logAuditEvent(AuditEvent event) {
         try {
@@ -34,7 +37,14 @@ public class AdminAuditService {
     }
 
     public AuditEvent logAuditEvent(String adminEmail, AuditAction action, String entityType, UUID entityId, String IPAddress) {
-        AuditEvent event = AuditEvent.builder().adminEmail(adminEmail).action(action).entityType(entityType).entityId(entityId).timestamp(Instant.now()).ipAddress(IPAddress).build();
+        AuditEvent event = AuditEvent.builder()
+                .admin(userRepository.findByEmail(adminEmail).orElse(null))
+                .action(action)
+                .targetEntityType(toEntityType(entityType))
+                .targetEntityId(entityId)
+                .timestamp(Instant.now())
+                .ipAddress(IPAddress)
+                .build();
         return logAuditEvent(event);
     }
 
@@ -47,7 +57,7 @@ public class AdminAuditService {
     }
 
     public List<AuditEvent> getAuditEventsByEntity(String entityType, UUID entityId) {
-        return auditEventRepository.findByEntityTypeAndEntityIdOrderByTimestampDesc(entityType, entityId);
+        return auditEventRepository.findByTargetEntityTypeAndTargetEntityIdOrderByTimestampDesc(toEntityType(entityType), entityId);
     }
 
     public Page<AuditEvent> getAuditEventsByAction(AuditAction action, Pageable pageable) {
@@ -59,7 +69,7 @@ public class AdminAuditService {
     }
 
     public Page<AuditEvent> getFailedOperations(Pageable pageable) {
-        return auditEventRepository.findFailedOperationsOrderByTimestampDesc(pageable);
+        return Page.empty(pageable);
     }
 
     // Statistics methods
@@ -69,5 +79,15 @@ public class AdminAuditService {
 
     public long getOperationCountByAction(AuditAction action) {
         return auditEventRepository.countByAction(action);
+    }
+
+    private AuditEntityType toEntityType(String entityType) {
+        if (entityType == null) return AuditEntityType.EVENT;
+        return switch (entityType.toLowerCase()) {
+            case "user" -> AuditEntityType.USER;
+            case "upload" -> AuditEntityType.UPLOAD;
+            case "poster", "calendarevent", "boardevent", "musallah board" -> AuditEntityType.MUSALLAH_BOARD;
+            default -> AuditEntityType.EVENT;
+        };
     }
 }

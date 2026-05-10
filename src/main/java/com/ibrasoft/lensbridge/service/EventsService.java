@@ -9,8 +9,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -34,6 +35,10 @@ public class EventsService {
         return eventsRepository.findAll();
     }
 
+    public MediaEvent createEvent(String eventName, Instant eventDate) {
+        return createEvent(CreateEventDto.builder().name(eventName).date(eventDate).build());
+    }
+
     public Optional<MediaEvent> getEventById(UUID id) {
         return eventsRepository.findById(id);
     }
@@ -48,7 +53,7 @@ public class EventsService {
 
     @Scheduled(cron = "0 0 0 * * ?") // Runs daily at midnight
     public void cleanUpOldEvents() {
-        this.cleanUpOldEvents(LocalDateTime.now());
+        this.cleanUpOldEvents(Instant.now());
     }
 
     public boolean isEventAcceptingUploads(UUID eventId) {
@@ -60,19 +65,20 @@ public class EventsService {
 
         return mediaEvent.getStatus() == EventStatus.ONGOING ||
                 (mediaEvent.getStatus() == EventStatus.PAST &&
-                        mediaEvent.getDate().isAfter(LocalDateTime.now().minusDays(7)));
+                        mediaEvent.getDate().isAfter(Instant.now().minus(java.time.Duration.ofDays(7))));
 
     }
 
-    public void cleanUpOldEvents(LocalDateTime now) {
-        LocalDate today = now.toLocalDate();
+    public void cleanUpOldEvents(Instant now) {
+        ZoneId zone = ZoneId.systemDefault();
+        LocalDate today = LocalDate.ofInstant(now, zone);
         List<MediaEvent> allMediaEvents = eventsRepository.findAll();
 
         for (MediaEvent mediaEvent : allMediaEvents) {
             if (mediaEvent.getDate() == null)
                 continue;
 
-            LocalDate eventDate = mediaEvent.getDate().toLocalDate();
+            LocalDate eventDate = LocalDate.ofInstant(mediaEvent.getDate(), zone);
             EventStatus newStatus;
 
             if (eventDate.isBefore(today)) {
