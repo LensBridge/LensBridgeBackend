@@ -1,5 +1,6 @@
 package com.ibrasoft.lensbridge.model.auth;
 
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -66,11 +67,7 @@ public class User {
   @Column(name = "role", nullable = false)
   private Set<Role> roles = new HashSet<>();
 
-  private boolean verified;
-
-  // Transitional field kept while auth services are rewritten to VerificationToken.
-  @JsonIgnore
-  private String verificationToken;
+  private Instant verifiedAt;
 
   public User(String firstName, String lastName, String studentNumber, String email, String passwordHash) {
     this.firstName = firstName;
@@ -96,5 +93,9 @@ public class User {
 
   public boolean hasRole(Role role) {
     return roles != null && roles.contains(role);
+  }
+
+  public boolean isVerified() {
+    return verifiedAt != null;
   }
 }
