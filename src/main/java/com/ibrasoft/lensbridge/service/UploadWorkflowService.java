@@ -50,11 +50,8 @@ public class UploadWorkflowService {
                 .eventId(eventId)
                 .method("PUT")
                 .contentType(contentType)
-                .expiresInMinutes(15);
-
-        if (expectedSha256 != null) {
-            builder.expectedSha256(expectedSha256);
-        }
+                .expiresInMinutes(15)
+                .expectedSha256(expectedSha256);
 
         log.info("Presigned upload initiated for event {}, role {}, file: {}, size: {}MB",
                 eventId, role, filename, fileSize / 1024 / 1024);
@@ -81,7 +78,12 @@ public class UploadWorkflowService {
                     "File not found in storage");
         }
 
-        verifyIntegrity(objectKey, fileSize, expectedSha256);
+        try {
+            verifyIntegrity(objectKey, fileSize, expectedSha256);
+        } catch (ApiResponseException e) {
+            r2StorageService.deleteObject(objectKey);
+            throw e;
+        }
 
         Upload upload = uploadService.createUpload(
                 objectKey, filename, eventId, description, instagramHandle, anon, userId);
@@ -109,15 +111,14 @@ public class UploadWorkflowService {
                         "File size mismatch");
             }
 
-            if (expectedSha256 != null) {
-                String actualHash = r2StorageService.calculateSha256Hash(objectKey);
-                if (!actualHash.equalsIgnoreCase(expectedSha256)) {
-                    throw new ApiResponseException(
-                            HttpStatus.BAD_REQUEST,
-                            ErrorResponse.of("File integrity check failed"),
-                            "SHA-256 mismatch");
-                }
+            String actualHash = r2StorageService.calculateSha256Hash(objectKey);
+            if (!actualHash.equalsIgnoreCase(expectedSha256)) {
+                throw new ApiResponseException(
+                        HttpStatus.BAD_REQUEST,
+                        ErrorResponse.of("File integrity check failed"),
+                        "SHA-256 mismatch");
             }
+
         } catch (ApiResponseException e) {
             throw e;
         } catch (Exception e) {

@@ -40,7 +40,7 @@ public class AuditEvent {
     @Column(nullable = false)
     private Instant timestamp;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "admin_id", nullable = false)
     private User admin;
 

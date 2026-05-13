@@ -82,6 +82,7 @@ public class User {
     this.roles = new HashSet<>();
   }
 
+  @JsonIgnore
   public String getPassword() {
     return passwordHash;
   }

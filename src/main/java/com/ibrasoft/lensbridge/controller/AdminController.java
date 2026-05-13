@@ -1,9 +1,10 @@
 package com.ibrasoft.lensbridge.controller;
 
+import com.ibrasoft.lensbridge.dto.audit.AuditEventDto;
 import com.ibrasoft.lensbridge.model.audit.AuditAction;
 import com.ibrasoft.lensbridge.service.AdminAuditService;
-import com.ibrasoft.lensbridge.model.audit.AuditEvent;
 import com.ibrasoft.lensbridge.dto.auth.request.SignupRequest;
+import com.ibrasoft.lensbridge.dto.auth.response.UserInfoResponse;
 import com.ibrasoft.lensbridge.dto.upload.response.AdminUploadDto;
 import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
 import com.ibrasoft.lensbridge.model.auth.Role;
@@ -26,6 +27,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -132,7 +134,7 @@ public class AdminController {
 
     @GetMapping("/users")
     @PreAuthorize("hasRole('" + Role.Authority.ROOT + "')")
-    public ResponseEntity<?> getAllUsers(Pageable pageable) {
+    public ResponseEntity<Page<UserInfoResponse>> getAllUsers(Pageable pageable) {
         return ResponseEntity.ok(userService.getAllUsers(pageable));
     }
 
@@ -186,27 +188,27 @@ public class AdminController {
 
     // Audit Reporting Endpoints
     @GetMapping("/audit")
-    public ResponseEntity<Page<AuditEvent>> getAuditEvents(Pageable pageable) {
+    public ResponseEntity<Page<AuditEventDto>> getAuditEvents(Pageable pageable) {
         return ResponseEntity.ok(auditService.getAllAuditEvents(pageable));
     }
 
     @GetMapping("/audit/failed")
-    public ResponseEntity<Page<AuditEvent>> getFailedOperations(Pageable pageable) {
+    public ResponseEntity<Page<AuditEventDto>> getFailedOperations(Pageable pageable) {
         return ResponseEntity.ok(auditService.getFailedOperations(pageable));
     }
 
     @GetMapping("/audit/upload/{uploadId}")
-    public ResponseEntity<?> getUploadAuditHistory(@PathVariable UUID uploadId) {
+    public ResponseEntity<List<AuditEventDto>> getUploadAuditHistory(@PathVariable UUID uploadId) {
         return ResponseEntity.ok(auditService.getAuditEventsByEntity("Upload", uploadId));
     }
 
     @GetMapping("/audit/action/{action}")
-    public ResponseEntity<Page<AuditEvent>> getAuditEventsByAction(@PathVariable AuditAction action, Pageable pageable) {
+    public ResponseEntity<Page<AuditEventDto>> getAuditEventsByAction(@PathVariable AuditAction action, Pageable pageable) {
         return ResponseEntity.ok(auditService.getAuditEventsByAction(action, pageable));
     }
 
     @GetMapping("/audit/daterange")
-    public ResponseEntity<Page<AuditEvent>> getAuditEventsByDateRange(@RequestParam Instant start, @RequestParam Instant end, Pageable pageable) {
+    public ResponseEntity<Page<AuditEventDto>> getAuditEventsByDateRange(@RequestParam Instant start, @RequestParam Instant end, Pageable pageable) {
         return ResponseEntity.ok(auditService.getAuditEventsByDateRange(start, end, pageable));
     }
 

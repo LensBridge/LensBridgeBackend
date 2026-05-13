@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import com.ibrasoft.lensbridge.dto.auth.request.ChangePasswordRequest;
 import com.ibrasoft.lensbridge.dto.auth.request.SignupRequest;
 import com.ibrasoft.lensbridge.dto.auth.request.UpdateProfileRequest;
+import com.ibrasoft.lensbridge.dto.auth.response.UserInfoResponse;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.model.auth.User;
 import com.ibrasoft.lensbridge.model.auth.VerificationToken;
@@ -37,8 +38,10 @@ public class UserService {
     @Value("${frontend.baseurl}")
     private String frontendBaseUrl;
 
-    public Page<User> getAllUsers(Pageable pageable) {
-        return userRepository.findAll(pageable);
+    public Page<UserInfoResponse> getAllUsers(Pageable pageable) {
+        return userRepository.findAll(pageable).map(u ->
+                new UserInfoResponse(u.getId(), u.getFirstName(), u.getLastName(),
+                        u.getEmail(), u.getStudentNumber(), u.isVerified(), u.getRoles()));
     }
 
     public Optional<User> findById(UUID id) {

@@ -39,7 +39,7 @@ public class UserController {
     public ResponseEntity<UserInfoResponse> getUserProfile(@CurrentUser User user) {
         return ResponseEntity.ok(new UserInfoResponse(
                 user.getId(), user.getFirstName(), user.getLastName(),
-                user.getEmail(), user.isVerified(), user.getRoles()));
+                user.getEmail(), user.getStudentNumber(), user.isVerified(), user.getRoles()));
     }
 
     @PatchMapping("/profile")
@@ -50,7 +50,7 @@ public class UserController {
         User updated = userService.updateProfile(user.getId(), updateRequest);
         return ResponseEntity.ok(new UserInfoResponse(
                 updated.getId(), updated.getFirstName(), updated.getLastName(),
-                updated.getEmail(), updated.isVerified(), updated.getRoles()));
+                updated.getEmail(), updated.getStudentNumber(), updated.isVerified(), updated.getRoles()));
     }
 
     @GetMapping("/stats")

@@ -1,6 +1,7 @@
 package com.ibrasoft.lensbridge.service;
 
 import com.ibrasoft.lensbridge.dto.upload.response.AdminUploadDto;
+import com.ibrasoft.lensbridge.dto.upload.response.UploadDto;
 import com.ibrasoft.lensbridge.dto.auth.response.UserStatsResponse;
 import com.ibrasoft.lensbridge.exception.FileProcessingException;
 import com.ibrasoft.lensbridge.model.auth.User;
@@ -151,6 +152,10 @@ public class UploadService {
         return uploadRepository.findById(id);
     }
 
+    public Optional<UploadDto> getUploadByIdAsDto(UUID id) {
+        return uploadRepository.findById(id).map(this::toUploadDto);
+    }
+
     public Page<Upload> getAllUploads(Pageable pageable) {
         return uploadRepository.findByDeletedAtIsNull(pageable);
     }
@@ -159,6 +164,12 @@ public class UploadService {
         MediaEvent mediaEvent = eventsService.getEventById(eventId)
                 .orElseThrow(() -> new IllegalArgumentException("Event not found"));
         return uploadRepository.findByMediaEventAndDeletedAtIsNull(mediaEvent, pageable);
+    }
+
+    public Page<UploadDto> getUploadsByEventAsDto(UUID eventId, Pageable pageable) {
+        MediaEvent mediaEvent = eventsService.getEventById(eventId)
+                .orElseThrow(() -> new IllegalArgumentException("Event not found"));
+        return uploadRepository.findByMediaEventAndDeletedAtIsNull(mediaEvent, pageable).map(this::toUploadDto);
     }
 
     public Page<Upload> getUploadsByUploadedBy(UUID userId, Pageable pageable) {
@@ -208,6 +219,24 @@ public class UploadService {
     private Upload findRequiredById(UUID id) {
         return uploadRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Upload not found: " + id));
+    }
+
+    private UploadDto toUploadDto(Upload upload) {
+        return new UploadDto(
+                upload.getUuid(),
+                upload.getFileName(),
+                upload.getFileUrl(),
+                upload.getThumbnailUrl(),
+                upload.getUploadDescription(),
+                upload.getInstagramHandle(),
+                upload.getUploadedBy() != null ? upload.getUploadedBy().getId() : null,
+                upload.getMediaEvent() != null ? upload.getMediaEvent().getId() : null,
+                upload.getMediaEvent() != null ? upload.getMediaEvent().getName() : null,
+                upload.getCreatedDate(),
+                upload.isApproved(),
+                upload.isFeatured(),
+                upload.isAnon(),
+                upload.getContentType());
     }
 
     private AdminUploadDto toAdminDto(Upload upload) {

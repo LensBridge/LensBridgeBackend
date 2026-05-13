@@ -2,9 +2,9 @@ package com.ibrasoft.lensbridge.controller;
 
 import com.ibrasoft.lensbridge.dto.upload.response.PresignedUploadResponse;
 import com.ibrasoft.lensbridge.dto.upload.response.UploadCompletionResponse;
+import com.ibrasoft.lensbridge.dto.upload.response.UploadDto;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.model.auth.User;
-import com.ibrasoft.lensbridge.model.upload.Upload;
 import com.ibrasoft.lensbridge.security.CurrentUser;
 import com.ibrasoft.lensbridge.service.UploadLimitsService;
 import com.ibrasoft.lensbridge.service.UploadService;
@@ -32,16 +32,16 @@ public class FileUploadController {
 
     @GetMapping("/{uploadId}")
     @PreAuthorize("hasRole('" + Role.Authority.USER + "')")
-    public ResponseEntity<Upload> getUploadById(@PathVariable UUID uploadId) {
-        return uploadService.getUploadById(uploadId)
+    public ResponseEntity<UploadDto> getUploadById(@PathVariable UUID uploadId) {
+        return uploadService.getUploadByIdAsDto(uploadId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @GetMapping("/event/{eventId}")
     @PreAuthorize("hasRole('" + Role.Authority.USER + "')")
-    public ResponseEntity<Page<Upload>> getUploadsByEvent(@PathVariable UUID eventId, Pageable pageable) {
-        return ResponseEntity.ok(uploadService.getUploadsByEvent(eventId, pageable));
+    public ResponseEntity<Page<UploadDto>> getUploadsByEvent(@PathVariable UUID eventId, Pageable pageable) {
+        return ResponseEntity.ok(uploadService.getUploadsByEventAsDto(eventId, pageable));
     }
 
     @PostMapping("/{eventId}/direct/presign")
