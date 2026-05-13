@@ -13,8 +13,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
-import java.time.format.DateTimeFormatter;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
 @Service
@@ -27,81 +27,59 @@ public class GalleryService {
     private final EventsRepository eventsRepository;
     private final R2StorageService r2StorageService;
 
-    /**
-     * Get all approved gallery items with secure URLs for public access.
-     * Only approved content is returned with time-limited signed URLs.
-     */
     public Page<GalleryItemDto> getAllApprovedGalleryItems(Pageable pageable) {
-        Page<Upload> uploads = uploadRepository.findByApprovedTrueAndDeletedAtIsNull(pageable);
-        return uploads.map(this::convertToPublicGalleryItem); // Use secure URLs for public
+        return uploadRepository.findByApprovedTrueAndDeletedAtIsNull(pageable)
+                .map(u -> toGalleryItem(u, false));
     }
 
-    /**
-     * Get all gallery items (admin only) with secure URLs.
-     * This method should only be called by admin users.
-     */
     public Page<GalleryItemDto> getAllGalleryItems(Pageable pageable) {
-        Page<Upload> uploads = uploadRepository.findByDeletedAtIsNull(pageable);
-        return uploads.map(this::convertToAdminGalleryItem); // Admin can see all with secure URLs
+        return uploadRepository.findByDeletedAtIsNull(pageable)
+                .map(u -> toGalleryItem(u, true));
     }
 
-    /**
-     * Get gallery items by event with secure URLs (public access, approved only).
-     */
     public Page<GalleryItemDto> getGalleryItemsByEvent(UUID eventId, Pageable pageable) {
-        // For public event galleries, only return approved content
         MediaEvent mediaEvent = eventsRepository.findById(eventId)
                 .orElseThrow(() -> new IllegalArgumentException("Event not found"));
-        Page<Upload> uploads = uploadRepository.findByMediaEventAndApprovedTrueAndDeletedAtIsNull(mediaEvent, pageable);
-        return uploads.map(this::convertToPublicGalleryItem);
+        return uploadRepository.findByMediaEventAndApprovedTrueAndDeletedAtIsNull(mediaEvent, pageable)
+                .map(u -> toGalleryItem(u, false));
     }
 
-    /**
-     * Convert upload to gallery item for public access (approved content only).
-     */
-    private GalleryItemDto convertToPublicGalleryItem(Upload upload) {
-        if (!upload.isApproved()) {
-            throw new SecurityException("Cannot generate public gallery item for unapproved content");
-        }
-        return convertToGalleryItem(upload, false); // false = not admin
+    public Page<GalleryItemDto> getUserGallery(UUID userId, Pageable pageable) {
+        User user = userService.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        return uploadRepository.findByUploadedByAndDeletedAtIsNull(user, pageable)
+                .map(upload -> {
+                    if (upload.getUploadedBy() == null || !upload.getUploadedBy().getId().equals(userId)) {
+                        throw new SecurityException("User can only access their own uploads");
+                    }
+                    GalleryItemDto item = toGalleryItem(upload, true);
+                    // always show real name for own uploads regardless of anon flag
+                    item.setAuthor(user.getFirstName() + " " + user.getLastName());
+                    return item;
+                });
     }
 
-    /**
-     * Convert upload to gallery item for admin access (can see all content).
-     */
-    private GalleryItemDto convertToAdminGalleryItem(Upload upload) {
-        return convertToGalleryItem(upload, true); // true = admin
-    }
-
-    /**
-     * Convert upload to gallery item with secure URLs.
-     * @param upload The upload to convert
-     * @param isAdmin Whether the requesting user is an admin
-     * @return GalleryItemDto with secure URLs
-     */
-    private GalleryItemDto convertToGalleryItem(Upload upload, boolean isAdmin) {
+    private GalleryItemDto toGalleryItem(Upload upload, boolean isAdmin) {
         GalleryItemDto item = new GalleryItemDto();
         User uploader = upload.getUploadedBy();
-        
-        // Basic info
+
         item.setId(upload.getUuid().toString());
-        
-        // Generate secure URL instead of using direct R2 URL
-        try {
-            String objectKey = r2StorageService.extractObjectKeyFromUrl(upload.getFileUrl());
-            String secureUrl = r2StorageService.getSecureUrl(objectKey, upload.isApproved(), isAdmin);
-            item.setSrc(secureUrl);
-        } catch (SecurityException e) {
-            log.warn("Access denied for upload {}: {}", upload.getUuid(), e.getMessage());
-            item.setSrc(null); // Don't provide URL if access is denied
-        } catch (Exception e) {
-            log.error("Failed to generate secure URL for upload {}: {}", upload.getUuid(), e.getMessage());
-            item.setSrc(null); // Don't provide URL if generation fails
-        }
-        
         item.setTitle(upload.getUploadDescription() != null ? upload.getUploadDescription() : "Untitled");
         item.setFeatured(upload.isFeatured());
         item.setType(upload.getContentType().toString().toLowerCase());
+
+        try {
+            String key = r2StorageService.extractObjectKey(upload.getFileUrl());
+            item.setSrc(r2StorageService.getSecureUrl(key, upload.isApproved(), isAdmin));
+        } catch (SecurityException e) {
+            log.warn("Access denied for upload {}: {}", upload.getUuid(), e.getMessage());
+            item.setSrc(null);
+        } catch (Exception e) {
+            log.error("Failed to generate URL for upload {}: {}", upload.getUuid(), e.getMessage());
+            item.setSrc(null);
+        }
+
+        item.setThumbnail(resolveSecureThumbnail(upload, isAdmin));
 
         if (upload.isAnon()) {
             item.setAuthor("Anonymous");
@@ -111,58 +89,29 @@ public class GalleryService {
             item.setAuthor("Unknown");
         }
 
-        // Generate secure thumbnail using the stored thumbnail key
-        String thumbnail = generateSecureThumbnail(upload, isAdmin);
-        item.setThumbnail(thumbnail);
-        
-        String eventName = getEventName(upload.getEventId());
-        item.setEvent(eventName);
-        
-        // Format date
-        String date = formatDate(upload);
-        item.setDate(date);
-        
+        item.setEvent(upload.getMediaEvent().getName());
+
+        item.setDate(upload.getCreatedDate() != null
+                ? DateTimeFormatter.ISO_LOCAL_DATE.withZone(ZoneId.systemDefault()).format(upload.getCreatedDate())
+                : "Unknown");
+
         return item;
     }
 
-    /**
-     * Generate secure thumbnail URL with access control.
-     * Uses the stored thumbnail key if available, otherwise falls back to original image.
-     */
-    private String generateSecureThumbnail(Upload upload, boolean isAdmin) {
-        if (upload == null || upload.getFileUrl() == null) return null;
-        
+    private String resolveSecureThumbnail(Upload upload, boolean isAdmin) {
+        if (upload.getFileUrl() == null) return null;
         try {
-            // Use stored thumbnail key if available
-            String thumbnailKey = upload.getThumbnailUrl();
-            if (thumbnailKey != null && !thumbnailKey.isBlank()) {
-                return r2StorageService.getSecureThumbnailUrl(thumbnailKey, upload.isApproved(), isAdmin);
+            String thumbKey = upload.getThumbnailUrl();
+            if (thumbKey != null && !thumbKey.isBlank()) {
+                return r2StorageService.getSecureThumbnailUrl(thumbKey, upload.isApproved(), isAdmin);
             }
-            
-            // Fallback: use original image URL as thumbnail
-            String objectKey = r2StorageService.extractObjectKeyFromUrl(upload.getFileUrl());
-            return r2StorageService.getSecureUrl(objectKey, upload.isApproved(), isAdmin);
+            String key = r2StorageService.extractObjectKey(upload.getFileUrl());
+            return r2StorageService.getSecureUrl(key, upload.isApproved(), isAdmin);
         } catch (SecurityException e) {
-            log.warn("Access denied for thumbnail: {}", e.getMessage());
             return null;
         } catch (Exception e) {
-            log.error("Failed to generate secure thumbnail for upload {}: {}", upload.getUuid(), e.getMessage());
+            log.error("Failed to generate thumbnail URL for upload {}: {}", upload.getUuid(), e.getMessage());
             return null;
         }
-    }
-
-    private String getEventName(UUID eventId) {
-        if (eventId == null) return "General";
-        
-        return eventsRepository.findEventById(eventId)
-                .map(MediaEvent::getName)
-                .orElse("General");
-    }
-
-    private String formatDate(Upload upload) {
-        if (upload.getCreatedDate() != null) {
-            return DateTimeFormatter.ISO_LOCAL_DATE.withZone(ZoneId.systemDefault()).format(upload.getCreatedDate());
-        }
-        return "Unknown";
     }
 }

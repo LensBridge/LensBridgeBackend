@@ -45,7 +45,7 @@ class AdminControllerIntegrationTest {
     }
 
     @Test
-    @WithMockUser(roles = {Role.USER})
+    @WithMockUser(roles = {Role.Authority.USER})
     void accessDeniedForUserRole() throws Exception {
         mockMvc.perform(post(adminBaseURL + "/create-event").with(csrf()))
                 .andExpect(status().isForbidden());

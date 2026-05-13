@@ -88,7 +88,7 @@ public class PosterService {
         String objectKey;
         try {
             String filename = generatePosterFilename(imageFile.getOriginalFilename());
-            objectKey = r2StorageService.uploadImage(imageFile.getBytes(), filename);
+            objectKey = r2StorageService.uploadImage(filename, imageFile);
             log.info("Uploaded poster image to R2: {}", objectKey);
         } catch (IOException e) {
             log.error("Failed to upload poster image", e);
@@ -161,7 +161,7 @@ public class PosterService {
         String objectKey;
         try {
             String filename = generatePosterFilename(imageFile.getOriginalFilename());
-            objectKey = r2StorageService.uploadImage(imageFile.getBytes(), filename);
+            objectKey = r2StorageService.uploadImage(filename, imageFile);
             log.info("Uploaded new poster image to R2: {}", objectKey);
         } catch (IOException e) {
             log.error("Failed to upload poster image", e);

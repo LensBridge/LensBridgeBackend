@@ -13,6 +13,7 @@ import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Index;
@@ -22,6 +23,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -30,6 +32,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 @Data
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 @Entity
 @Table(name = "users", indexes = {
     @Index(name = "idx_users_email", columnList = "email")
@@ -61,12 +64,13 @@ public class User {
   @Column(nullable = false)
   private String passwordHash;
 
-  @ElementCollection(targetClass = Role.class)
+  @ElementCollection(targetClass = Role.class, fetch = FetchType.EAGER)
   @Enumerated(EnumType.STRING)
   @CollectionTable(name = "user_roles")
   @Column(name = "role", nullable = false)
   private Set<Role> roles = new HashSet<>();
 
+  @Column(nullable = true)
   private Instant verifiedAt;
 
   public User(String firstName, String lastName, String studentNumber, String email, String passwordHash) {

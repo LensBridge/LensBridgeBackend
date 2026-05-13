@@ -46,11 +46,11 @@ public class Upload {
 
     private String instagramHandle;
     
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "uploaded_by", nullable = false)
     private User uploadedBy;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "event_id")
     private MediaEvent mediaEvent;
 

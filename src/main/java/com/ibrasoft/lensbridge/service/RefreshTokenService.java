@@ -1,5 +1,6 @@
 package com.ibrasoft.lensbridge.service;
 
+import com.ibrasoft.lensbridge.exception.RefreshTokenException;
 import com.ibrasoft.lensbridge.model.auth.RefreshToken;
 import com.ibrasoft.lensbridge.repository.auth.RefreshTokenRepository;
 import com.ibrasoft.lensbridge.repository.auth.UserRepository;
@@ -7,6 +8,7 @@ import com.ibrasoft.lensbridge.repository.auth.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -88,12 +90,15 @@ public class RefreshTokenService {
      * Verify refresh token is valid and not expired
      */
     public RefreshToken verifyExpiration(RefreshToken token) {
-        if (token.isExpired() || token.isRevoked()) {
+        if (token.isRevoked()) {
             refreshTokenRepository.delete(token);
-            throw new RuntimeException("Refresh token was expired or revoked. Please make a new signin request");
+            throw new RefreshTokenException("Refresh token revoked. Please login again.", HttpStatus.UNAUTHORIZED);
         }
-        
-        // Update last used date
+        if (token.isExpired()) {
+            refreshTokenRepository.delete(token);
+            throw new RefreshTokenException("Refresh token expired. Please login again.", HttpStatus.UNAUTHORIZED);
+        }
+
         token.setLastUsedDate(Instant.now());
         return refreshTokenRepository.save(token);
     }

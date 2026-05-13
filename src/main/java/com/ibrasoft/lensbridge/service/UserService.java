@@ -1,5 +1,6 @@
 package com.ibrasoft.lensbridge.service;
 
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.UUID;
@@ -15,6 +16,7 @@ import com.ibrasoft.lensbridge.dto.auth.request.SignupRequest;
 import com.ibrasoft.lensbridge.dto.auth.request.UpdateProfileRequest;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.model.auth.User;
+import com.ibrasoft.lensbridge.model.auth.VerificationToken;
 import com.ibrasoft.lensbridge.repository.auth.UserRepository;
 import com.ibrasoft.lensbridge.security.services.EmailService;
 
@@ -25,293 +27,163 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Slf4j
 public class UserService {
-    
+
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
-    
+    private final VerificationTokenService verificationTokenService;
+    private final RefreshTokenService refreshTokenService;
+
     @Value("${frontend.baseurl}")
     private String frontendBaseUrl;
 
-    /**
-     * Get all users with pagination
-     */
     public Page<User> getAllUsers(Pageable pageable) {
-        log.info("Fetching all users with pagination: {}", pageable);
         return userRepository.findAll(pageable);
     }
-    
-    /**
-     * Find user by ID
-     */
+
     public Optional<User> findById(UUID id) {
-        log.debug("Finding user by ID: {}", id);
         return userRepository.findById(id);
     }
-    
-    /**
-     * Find user by email
-     */
+
     public Optional<User> findByEmail(String email) {
-        log.debug("Finding user by email: {}", email);
         return userRepository.findByEmail(email);
     }
-    
-    /**
-     * Find user by verification token
-     */
-    public Optional<User> findByVerificationToken(String token) {
-        log.debug("Finding user by verification token");
-        return userRepository.findByVerificationToken(token);
-    }
-    
-    /**
-     * Check if email exists
-     */
+
     public boolean existsByEmail(String email) {
         return userRepository.existsByEmail(email);
     }
-    
-    /**
-     * Check if student number exists
-     */
+
     public boolean existsByStudentNumber(String studentNumber) {
         return userRepository.existsByStudentNumber(studentNumber);
     }
-    
-    /**
-     * Save user
-     */
+
     public User saveUser(User user) {
-        log.debug("Saving user: {}", user.getEmail());
         return userRepository.save(user);
     }
-    
-    /**
-     * Create a new user from signup request
-     */
-    public User createUser(SignupRequest signUpRequest, boolean sendConfirmEmail)  {
-        log.info("Creating new user with email: {}", signUpRequest.getEmail());
-        
-        // Check if user already exists
+
+    public User createUser(SignupRequest signUpRequest, boolean sendConfirmEmail) {
+        log.info("Creating new user: {}", signUpRequest.getEmail());
+
         if (existsByEmail(signUpRequest.getEmail()) || existsByStudentNumber(signUpRequest.getStudentNumber())) {
             throw new IllegalArgumentException("User with this email or student number already exists");
         }
-        
-        // Create new user
+
         User user = new User(
-            signUpRequest.getFirstName(),
-            signUpRequest.getLastName(),
-            signUpRequest.getStudentNumber(),
-            signUpRequest.getEmail(),
-            (signUpRequest.getPassword() == null) ? null : passwordEncoder.encode(signUpRequest.getPassword())
+                signUpRequest.getFirstName(),
+                signUpRequest.getLastName(),
+                signUpRequest.getStudentNumber(),
+                signUpRequest.getEmail(),
+                signUpRequest.getPassword() == null ? null : passwordEncoder.encode(signUpRequest.getPassword())
         );
-        
         user.setRoles(new HashSet<>());
-        user.setVerified(false);
-        
-        // Generate verification token and send email
-        String verificationToken = emailService.generateToken();
-        user.setVerificationToken(verificationToken);
-        
+        user.addRole(Role.USER);
+
         User savedUser = saveUser(user);
-        
-        // Send verification email
-        String verifyUrl = String.format("%s/confirm?token=%s", frontendBaseUrl, verificationToken);
+
         if (sendConfirmEmail) {
-            emailService.sendVerificationEmail(user.getEmail(), user.getFirstName(), verifyUrl);
-        } else {
-            log.info("Skipping email confirmation for user: {}", user.getEmail());
+            String token = verificationTokenService.generateEmailVerificationToken(savedUser);
+            String verificationUrl = frontendBaseUrl + "/verify-email?token=" + token;
+            emailService.sendVerificationEmail(savedUser.getEmail(),
+                    savedUser.getFirstName(), verificationUrl);
         }
-        
-        log.info("User created successfully: {}", user.getEmail());
+
+        log.info("User created: {}", user.getEmail());
         return savedUser;
     }
 
-    public User createUser(SignupRequest signUpRequest)  {
-        return createUser(signUpRequest, true); // Default to sending confirmation email
+    public User createUser(SignupRequest signUpRequest) {
+        return createUser(signUpRequest, true);
     }
-    
-    /**
-     * Verify user email using verification token
-     */
-    public User verifyUserEmail(String verificationToken) {
-        log.info("Verifying user email with token");
-        
-        User user = findByVerificationToken(verificationToken)
-            .orElseThrow(() -> new IllegalArgumentException("Invalid or expired verification token"));
-        
-        user.setVerified(true);
-        user.setVerificationToken(null);
-        user.addRole(Role.ROLE_VERIFIED);
-        
-        User savedUser = saveUser(user);
-        log.info("User email verified successfully: {}", user.getEmail());
-        emailService.sendWelcomeEmail(user.getEmail(), user.getFirstName());
-        return savedUser;
+
+    public User verifyUserEmail(String plaintextToken) {
+        return verificationTokenService.consumeEmailVerification(plaintextToken);
     }
 
     public User verifyDirectly(UUID userId) {
-        log.info("Directly verifying user with ID: {}", userId);
-        
+        log.info("Directly verifying user: {}", userId);
         User user = findById(userId)
-            .orElseThrow(() -> new IllegalArgumentException("User not found"));
-        
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
         if (user.isVerified()) {
             throw new IllegalArgumentException("User is already verified");
         }
-        
-        user.setVerified(true);
-        user.setVerificationToken(null);
-        user.addRole(Role.ROLE_VERIFIED);
-        
-        User savedUser = saveUser(user);
-        log.info("User email verified successfully: {}", user.getEmail());
-        return savedUser;
+
+        user.setVerifiedAt(Instant.now());
+        User saved = saveUser(user);
+        log.info("User directly verified: {}", user.getEmail());
+        return saved;
     }
-    
-    /**
-     * Add admin role to user
-     */
+
     public User addRole(UUID userId, Role role) {
-        log.info("Adding admin role to user: {}", userId);
-        
         User user = findById(userId)
-            .orElseThrow(() -> new IllegalArgumentException("User not found"));
-        
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
         if (user.hasRole(role)) {
-            throw new IllegalArgumentException("User already has this role: " + role.getAuthority());
+            throw new IllegalArgumentException("User already has role: " + role);
         }
-        
         user.addRole(role);
-        User savedUser = saveUser(user);
-        
-        log.info("Role {} added successfully to user: {}", role.getAuthority(), user.getEmail());
-        return savedUser;
+        return saveUser(user);
     }
 
     public User removeRole(UUID userId, Role role) {
-        log.info("Removing role {} from user: {}", role.getAuthority(), userId);
-        
         User user = findById(userId)
-            .orElseThrow(() -> new IllegalArgumentException("User not found"));
-        
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
         if (!user.hasRole(role)) {
-            throw new IllegalArgumentException("User does not have this role: " + role.getAuthority());
+            throw new IllegalArgumentException("User does not have role: " + role);
         }
-        
         user.getRoles().remove(role);
-        User savedUser = saveUser(user);
-        
-        log.info("Role {} removed successfully from user: {}", role.getAuthority(), user.getEmail());
-        return savedUser;
+        return saveUser(user);
     }
-    
-    /**
-     * Request password reset - generates token and sends email
-     */
+
     public void requestPasswordReset(String email) {
-        log.info("Password reset requested for email: {}", email);
-        
-        Optional<User> userOpt = findByEmail(email);
-        if (userOpt.isEmpty()) {
-            // Don't reveal if email exists for security - but still log for monitoring
-            log.warn("Password reset requested for non-existent email: {}", email);
-            return;
-        }
-        
-        User user = userOpt.get();
-        String resetToken = emailService.generateToken();
-        user.setVerificationToken(resetToken);
-        saveUser(user);
-        
-        // Send password reset email
-        String resetUrl = String.format("%s/reset-password?token=%s", frontendBaseUrl, resetToken);
-        emailService.sendPasswordResetEmail(user.getEmail(), user.getFirstName(), resetUrl);
-        
-        log.info("Password reset email sent to: {}", email);
+        userRepository.findByEmail(email).ifPresent(user -> {
+            String token = verificationTokenService.generatePasswordResetToken(user);
+            String resetUrl = frontendBaseUrl + "/reset-password?token=" + token;
+            emailService.sendPasswordResetEmail(user.getEmail(), user.getFirstName(), resetUrl);
+        });
     }
-    
-    /**
-     * Validate reset token
-     */
+
     public boolean validateResetToken(String token) {
-        log.debug("Validating reset token");
-        return findByVerificationToken(token).isPresent();
+        return verificationTokenService.isValidResetToken(token);
     }
-    
-    /**
-     * Reset password using token
-     */
+
     public User resetPassword(String token, String newPassword) {
-        log.info("Resetting password using token");
-        
-        if (newPassword == null || newPassword.length() < 6) {
-            throw new IllegalArgumentException("Password must be at least 6 characters long");
-        }
-        
-        User user = findByVerificationToken(token)
-            .orElseThrow(() -> new IllegalArgumentException("Invalid or expired token"));
-        
+        VerificationToken verificationToken = verificationTokenService.consumePasswordReset(token);
+        User user = verificationToken.getUser();
         user.setPassword(passwordEncoder.encode(newPassword));
-        user.setVerificationToken(null);
-        
-        User savedUser = saveUser(user);
-        log.info("Password reset successfully for user: {}", user.getEmail());
-        return savedUser;
+        User saved = saveUser(user);
+        refreshTokenService.revokeAllUserTokens(user.getId());
+        return saved;
     }
-    
-    /**
-     * Change user password (requires current password verification)
-     */
+
     public User changePassword(User user, ChangePasswordRequest changePasswordRequest) {
-        log.info("Changing password for user: {}", user.getEmail());
-        
-        // Verify current password
         if (!passwordEncoder.matches(changePasswordRequest.getCurrentPassword(), user.getPassword())) {
             throw new IllegalArgumentException("Current password is incorrect");
         }
-        
         if (changePasswordRequest.getNewPassword().length() < 6) {
             throw new IllegalArgumentException("New password must be at least 6 characters long");
         }
-        
         user.setPassword(passwordEncoder.encode(changePasswordRequest.getNewPassword()));
-        User savedUser = saveUser(user);
-        
-        log.info("Password changed successfully for user: {}", user.getEmail());
-        return savedUser;
+        return saveUser(user);
     }
 
-    /**
-     * Update user profile information
-     */
     public User updateProfile(UUID userId, UpdateProfileRequest updateRequest) {
-        log.info("Updating profile for user: {}", userId);
-        
         User user = findById(userId)
-            .orElseThrow(() -> new IllegalArgumentException("User not found"));
-        
-        // Update fields if provided
-        if (updateRequest.getFirstName() != null && !updateRequest.getFirstName().trim().isEmpty()) {
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        if (updateRequest.getFirstName() != null && !updateRequest.getFirstName().isBlank()) {
             user.setFirstName(updateRequest.getFirstName().trim());
         }
-        
-        if (updateRequest.getLastName() != null && !updateRequest.getLastName().trim().isEmpty()) {
+        if (updateRequest.getLastName() != null && !updateRequest.getLastName().isBlank()) {
             user.setLastName(updateRequest.getLastName().trim());
         }
-        
-        if (updateRequest.getStudentNumber() != null && !updateRequest.getStudentNumber().trim().isEmpty()) {
-            // Check if the new student number is already taken by another user
-            String newStudentNumber = updateRequest.getStudentNumber().trim();
-            if (!newStudentNumber.equals(user.getStudentNumber()) && existsByStudentNumber(newStudentNumber)) {
-                throw new IllegalArgumentException("Student number is already taken by another user");
+        if (updateRequest.getStudentNumber() != null && !updateRequest.getStudentNumber().isBlank()) {
+            String newNum = updateRequest.getStudentNumber().trim();
+            if (!newNum.equals(user.getStudentNumber()) && existsByStudentNumber(newNum)) {
+                throw new IllegalArgumentException("Student number is already taken");
             }
-            user.setStudentNumber(newStudentNumber);
+            user.setStudentNumber(newNum);
         }
-        
-        User savedUser = saveUser(user);
-        log.info("Profile updated successfully for user: {}", user.getEmail());
-        return savedUser;
+
+        return saveUser(user);
     }
 }

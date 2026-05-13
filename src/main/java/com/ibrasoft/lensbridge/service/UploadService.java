@@ -2,7 +2,6 @@ package com.ibrasoft.lensbridge.service;
 
 import com.ibrasoft.lensbridge.dto.upload.response.AdminUploadDto;
 import com.ibrasoft.lensbridge.dto.auth.response.UserStatsResponse;
-import com.ibrasoft.lensbridge.dto.upload.response.GalleryItemDto;
 import com.ibrasoft.lensbridge.exception.FileProcessingException;
 import com.ibrasoft.lensbridge.model.auth.User;
 import com.ibrasoft.lensbridge.model.upload.MediaEvent;
@@ -16,6 +15,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -38,99 +38,12 @@ public class UploadService {
     @Value("${uploads.default-featured:false}")
     private boolean defaultFeatured;
 
-    public void approveUpload(UUID uploadId) {
-        Optional<Upload> uploadOpt = uploadRepository.findById(uploadId);
-        if (uploadOpt.isPresent()) {
-            Upload upload = uploadOpt.get();
-            upload.setApproved(true);
-            uploadRepository.save(upload);
-            log.info("Upload {} approved successfully", uploadId);
-        } else {
-            log.warn("Attempted to approve non-existent upload: {}", uploadId);
-            throw new IllegalArgumentException("Upload not found");
-        }
-    }
+    // ── Entity creation ───────────────────────────────────────────────────────
 
-    public void featureUpload(UUID uploadId) {
-        Optional<Upload> uploadOpt = uploadRepository.findById(uploadId);
-        if (uploadOpt.isPresent()) {
-            Upload upload = uploadOpt.get();
-            upload.setFeatured(true);
-            uploadRepository.save(upload);
-            log.info("Upload {} featured successfully", uploadId);
-        } else {
-            log.warn("Attempted to feature non-existent upload: {}", uploadId);
-            throw new IllegalArgumentException("Upload not found");
-        }
-    }
-
-    public void unfeatureUpload(UUID uploadId) {
-        Optional<Upload> uploadOpt = uploadRepository.findById(uploadId);
-        if (uploadOpt.isPresent()) {
-            Upload upload = uploadOpt.get();
-            upload.setFeatured(false);
-            uploadRepository.save(upload);
-            log.info("Upload {} unfeatured successfully", uploadId);
-        } else {
-            log.warn("Attempted to unfeature non-existent upload: {}", uploadId);
-            throw new IllegalArgumentException("Upload not found");
-        }
-    }
-
-    public void unapproveUpload(UUID uploadId) {
-        Optional<Upload> uploadOpt = uploadRepository.findById(uploadId);
-        if (uploadOpt.isPresent()) {
-            Upload upload = uploadOpt.get();
-            upload.setApproved(false);
-            uploadRepository.save(upload);
-            log.info("Upload {} unapproved successfully", uploadId);
-        } else {
-            log.warn("Attempted to unapprove non-existent upload: {}", uploadId);
-            throw new IllegalArgumentException("Upload not found");
-        }
-    }
-
-    /**
-     * Count uploads for a user today
-     */
-    public long countUploadsToday(UUID userId) {
-        LocalDate today = LocalDate.now();
-        Instant startOfDay = today.atStartOfDay(ZoneId.systemDefault()).toInstant();
-        Instant endOfDay = today.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
-        User user = userService.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found"));
-
-        return uploadRepository.countByUploadedByAndCreatedDateBetweenAndDeletedAtIsNull(
-                user,
-                startOfDay,
-                endOfDay);
-    }
-
-    /**
-     * Check if user has reached their daily upload limit
-     */
-    public boolean hasReachedDailyLimit(UUID userId, int dailyLimit) {
-        return countUploadsToday(userId) >= dailyLimit;
-    }
-
-    /**
-     * Create an Upload entity for a file that has been directly uploaded to R2.
-     * This method is used when files are uploaded via presigned URLs.
-     */
-    public Upload createDirectUpload(String objectKey, String fileName, String contentType,
+    public Upload createUpload(String objectKey, String fileName,
             UUID eventId, String description, String instagramHandle,
             boolean anon, UUID uploadedBy) {
         try {
-            // Determine upload type from content type
-            UploadType uploadType;
-            if (contentType != null && contentType.startsWith("image")) {
-                uploadType = UploadType.IMAGE;
-            } else if (contentType != null && contentType.startsWith("video")) {
-                uploadType = UploadType.VIDEO;
-            } else {
-                uploadType = UploadType.IMAGE; // Default fallback
-            }
-
             User user = userService.findById(uploadedBy)
                     .orElseThrow(() -> new IllegalArgumentException("User not found"));
             MediaEvent mediaEvent = eventsService.getEventById(eventId)
@@ -148,16 +61,94 @@ public class UploadService {
             upload.setApproved(defaultApproved);
             upload.setFeatured(defaultFeatured);
             upload.setAnon(anon);
-            upload.setContentType(uploadType);
+            upload.setContentType(UploadType.IMAGE);
 
             uploadRepository.save(upload);
-            log.info("Created direct upload record: {} for object: {}", upload.getUuid(), objectKey);
+            log.info("Created upload record: {} for object: {}", upload.getUuid(), objectKey);
             return upload;
-
         } catch (Exception e) {
-            log.error("Failed to create direct upload record for object: {}", objectKey, e);
-            throw new FileProcessingException("Failed to create upload record for direct upload");
+            log.error("Failed to create upload record for object: {}", objectKey, e);
+            throw new FileProcessingException("Failed to create upload record");
         }
+    }
+
+    // ── Status mutations ──────────────────────────────────────────────────────
+
+    public void approveUpload(UUID uploadId) {
+        Upload upload = findRequiredById(uploadId);
+        upload.setApproved(true);
+        uploadRepository.save(upload);
+        log.info("Upload {} approved", uploadId);
+    }
+
+    public void unapproveUpload(UUID uploadId) {
+        Upload upload = findRequiredById(uploadId);
+        upload.setApproved(false);
+        uploadRepository.save(upload);
+        log.info("Upload {} unapproved", uploadId);
+    }
+
+    public void featureUpload(UUID uploadId) {
+        Upload upload = findRequiredById(uploadId);
+        upload.setFeatured(true);
+        uploadRepository.save(upload);
+        log.info("Upload {} featured", uploadId);
+    }
+
+    public void unfeatureUpload(UUID uploadId) {
+        Upload upload = findRequiredById(uploadId);
+        upload.setFeatured(false);
+        uploadRepository.save(upload);
+        log.info("Upload {} unfeatured", uploadId);
+    }
+
+    // ── Deletion ──────────────────────────────────────────────────────────────
+
+    public void deleteUpload(UUID id) {
+        Optional<Upload> uploadOpt = uploadRepository.findById(id);
+        uploadOpt.ifPresent(upload -> {
+            deleteFromStorage(upload);
+            upload.setDeletedAt(Instant.now());
+            uploadRepository.save(upload);
+        });
+        if (uploadOpt.isEmpty()) {
+            log.warn("Attempted to delete non-existent upload: {}", id);
+            throw new IllegalArgumentException("Upload not found");
+        }
+    }
+
+    public void deleteUserUpload(UUID uploadId, UUID userId) {
+        log.info("User {} deleting upload {}", userId, uploadId);
+
+        Upload upload = uploadRepository.findById(uploadId)
+                .orElseThrow(() -> new IllegalArgumentException("Upload not found"));
+
+        if (upload.getUploadedBy() == null || !upload.getUploadedBy().getId().equals(userId)) {
+            throw new SecurityException("You can only delete your own uploads");
+        }
+
+        deleteFromStorage(upload);
+        upload.setDeletedAt(Instant.now());
+        userService.findById(userId).ifPresent(upload::setDeletedBy);
+        uploadRepository.save(upload);
+        log.info("Upload {} deleted by user {}", uploadId, userId);
+    }
+
+    private void deleteFromStorage(Upload upload) {
+        try {
+            String key = r2StorageService.extractObjectKey(upload.getFileUrl());
+            if (key != null) r2StorageService.deleteObject(key);
+            String thumbKey = upload.getThumbnailUrl();
+            if (thumbKey != null && !thumbKey.isBlank()) r2StorageService.deleteObject(thumbKey);
+        } catch (Exception e) {
+            log.warn("Failed to delete R2 objects for upload {}: {}", upload.getUuid(), e.getMessage());
+        }
+    }
+
+    // ── Queries ───────────────────────────────────────────────────────────────
+
+    public Optional<Upload> getUploadById(UUID id) {
+        return uploadRepository.findById(id);
     }
 
     public Page<Upload> getAllUploads(Pageable pageable) {
@@ -170,268 +161,94 @@ public class UploadService {
         return uploadRepository.findByMediaEventAndDeletedAtIsNull(mediaEvent, pageable);
     }
 
-    public Optional<Upload> getUploadById(UUID id) {
-        return uploadRepository.findById(id);
-    }
-
-    public Upload updateUpload(Upload upload) {
-        return uploadRepository.save(upload);
-    }
-
-    public void deleteUpload(UUID id) {
-        Optional<Upload> uploadOpt = uploadRepository.findById(id);
-        if (uploadOpt.isPresent()) {
-            Upload upload = uploadOpt.get();
-            try {
-                // Delete original file from R2 storage
-                String objectKey = r2StorageService.extractObjectKeyFromUrl(upload.getFileUrl());
-                if (objectKey != null) {
-                    r2StorageService.deleteObject(objectKey);
-                }
-                // Delete thumbnail from R2 storage if exists
-                String thumbnailKey = upload.getThumbnailUrl();
-                if (thumbnailKey != null && !thumbnailKey.isBlank()) {
-                    r2StorageService.deleteObject(thumbnailKey);
-                }
-            } catch (Exception e) {
-                log.warn("Failed to delete file from R2 storage for upload {}: {}", id, e.getMessage());
-                // Continue with database deletion even if R2 deletion fails
-            }
-        }
-        uploadOpt.ifPresent(upload -> {
-            upload.setDeletedAt(Instant.now());
-            uploadRepository.save(upload);
-        });
-    }
-
-    /**
-     * Delete user's own upload with ownership validation
-     */
-    public void deleteUserUpload(UUID uploadId, UUID userId) {
-        log.info("User {} attempting to delete upload {}", userId, uploadId);
-
-        Optional<Upload> uploadOpt = uploadRepository.findById(uploadId);
-        if (uploadOpt.isEmpty()) {
-            throw new IllegalArgumentException("Upload not found");
-        }
-
-        Upload upload = uploadOpt.get();
-
-        // Verify ownership
-        if (upload.getUploadedBy() == null || !upload.getUploadedBy().getId().equals(userId)) {
-            throw new SecurityException("You can only delete your own uploads");
-        }
-
-        try {
-            // Delete original file from R2 storage
-            String objectKey = r2StorageService.extractObjectKeyFromUrl(upload.getFileUrl());
-            if (objectKey != null) {
-                r2StorageService.deleteObject(objectKey);
-            }
-            // Delete thumbnail from R2 storage if exists
-            String thumbnailKey = upload.getThumbnailUrl();
-            if (thumbnailKey != null && !thumbnailKey.isBlank()) {
-                r2StorageService.deleteObject(thumbnailKey);
-            }
-        } catch (Exception e) {
-            log.warn("Failed to delete file from R2 storage for upload {}: {}", uploadId, e.getMessage());
-            // Continue with database deletion even if R2 deletion fails
-        }
-
-        upload.setDeletedAt(Instant.now());
-        userService.findById(userId).ifPresent(upload::setDeletedBy);
-        uploadRepository.save(upload);
-        log.info("Upload {} deleted successfully by user {}", uploadId, userId);
-    }
-
-    /**
-     * Get all uploads with user information populated for admin interface.
-     * This method fetches uploads and includes the uploader's name and details.
-     */
-    public Page<AdminUploadDto> getAllUploadsForAdmin(Pageable pageable) {
-        Page<Upload> uploads = uploadRepository.findByDeletedAtIsNull(pageable);
-        return uploads.map(this::convertToAdminUploadDto);
-    }
-
-    /**
-     * Get uploads by approval status with user information for admin interface.
-     */
-    public Page<AdminUploadDto> getUploadsByApprovalStatus(boolean approved, Pageable pageable) {
-        Page<Upload> uploads = uploadRepository.findByApprovedAndDeletedAtIsNull(approved, pageable);
-        return uploads.map(this::convertToAdminUploadDto);
-    }
-
-    /**
-     * Get uploads by featured status with user information for admin interface.
-     */
-    public Page<AdminUploadDto> getUploadsByFeaturedStatus(boolean featured, Pageable pageable) {
-        Page<Upload> uploads = uploadRepository.findByFeaturedAndDeletedAtIsNull(featured, pageable);
-        return uploads.map(this::convertToAdminUploadDto);
-    }
-
     public Page<Upload> getUploadsByUploadedBy(UUID userId, Pageable pageable) {
         User user = userService.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
         return uploadRepository.findByUploadedByAndDeletedAtIsNull(user, pageable);
     }
 
-    /**
-     * Get user upload statistics
-     */
+    public Page<AdminUploadDto> getAllUploadsForAdmin(Pageable pageable) {
+        return uploadRepository.findByDeletedAtIsNull(pageable).map(this::toAdminDto);
+    }
+
+    public Page<AdminUploadDto> getUploadsByApprovalStatus(boolean approved, Pageable pageable) {
+        return uploadRepository.findByApprovedAndDeletedAtIsNull(approved, pageable).map(this::toAdminDto);
+    }
+
+    public Page<AdminUploadDto> getUploadsByFeaturedStatus(boolean featured, Pageable pageable) {
+        return uploadRepository.findByFeaturedAndDeletedAtIsNull(featured, pageable).map(this::toAdminDto);
+    }
+
+    // ── Stats ─────────────────────────────────────────────────────────────────
+
+    public long countUploadsToday(UUID userId) {
+        LocalDate today = LocalDate.now();
+        Instant startOfDay = today.atStartOfDay(ZoneId.systemDefault()).toInstant();
+        Instant endOfDay = today.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
+        User user = userService.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        return uploadRepository.countByUploadedByAndCreatedDateBetweenAndDeletedAtIsNull(user, startOfDay, endOfDay);
+    }
+
+    public boolean hasReachedDailyLimit(UUID userId, int dailyLimit) {
+        return countUploadsToday(userId) >= dailyLimit;
+    }
+
     public UserStatsResponse getUserStats(UUID userId) {
         User user = userService.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
-        long totalUploads = uploadRepository.countByUploadedByAndDeletedAtIsNull(user);
-        long approvedUploads = uploadRepository.countByUploadedByAndApprovedAndDeletedAtIsNull(user, true);
-        long featuredUploads = uploadRepository.countByUploadedByAndFeaturedAndDeletedAtIsNull(user, true);
-        long pendingUploads = totalUploads - approvedUploads;
-
-        return new UserStatsResponse(
-                (int) totalUploads,
-                (int) approvedUploads,
-                (int) featuredUploads,
-                (int) pendingUploads);
+        long total = uploadRepository.countByUploadedByAndDeletedAtIsNull(user);
+        long approved = uploadRepository.countByUploadedByAndApprovedAndDeletedAtIsNull(user, true);
+        long featured = uploadRepository.countByUploadedByAndFeaturedAndDeletedAtIsNull(user, true);
+        return new UserStatsResponse((int) total, (int) approved, (int) featured, (int) (total - approved));
     }
 
-    /**
-     * Get user uploads as GalleryItemDTOs (user can see their own uploads
-     * regardless of approval status)
-     */
-    public Page<GalleryItemDto> getUserUploadsAsGalleryItems(UUID userId, Pageable pageable) {
-        User user = userService.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found"));
-        Page<Upload> uploads = uploadRepository.findByUploadedByAndDeletedAtIsNull(user, pageable);
-        return uploads.map(upload -> convertToUserGalleryItem(upload, userId));
+    // ── Internal helpers ──────────────────────────────────────────────────────
+
+    private Upload findRequiredById(UUID id) {
+        return uploadRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Upload not found: " + id));
     }
 
-    /**
-     * Convert Upload to GalleryItemDto for user's own uploads (can see all their
-     * own content)
-     */
-    private GalleryItemDto convertToUserGalleryItem(Upload upload, UUID userId) {
-        // Verify the user owns this upload
-        if (upload.getUploadedBy() == null || !upload.getUploadedBy().getId().equals(userId)) {
-            throw new SecurityException("User can only access their own uploads");
-        }
-
-        GalleryItemDto item = new GalleryItemDto();
-
-        // Basic info
-        item.setId(upload.getUuid().toString());
-        item.setTitle(upload.getUploadDescription() != null ? upload.getUploadDescription() : "Untitled");
-        item.setFeatured(upload.isFeatured());
-        item.setType(upload.getContentType().toString().toLowerCase());
-
-        // Generate secure URL (user can see their own content regardless of approval)
-        try {
-            String objectKey = r2StorageService.extractObjectKeyFromUrl(upload.getFileUrl());
-            String secureUrl = r2StorageService.getSecureUrl(objectKey, true, false); // true for approved access, false
-                                                                                      // for not admin
-            item.setSrc(secureUrl);
-        } catch (Exception e) {
-            log.error("Failed to generate secure URL for user upload {}: {}", upload.getUuid(), e.getMessage());
-            item.setSrc(null);
-        }
-
-        // Generate secure thumbnail
-        try {
-            String objectKey = r2StorageService.extractObjectKeyFromUrl(upload.getFileUrl());
-            String thumbnailUrl = r2StorageService.getSecureThumbnailUrl(objectKey, true, false);
-            item.setThumbnail(thumbnailUrl);
-        } catch (Exception e) {
-            log.error("Failed to generate thumbnail for user upload {}: {}", upload.getUuid(), e.getMessage());
-            item.setThumbnail(null);
-        }
-
-        // Set author (always the user's name for their own uploads, even if marked
-        // anonymous)
-        Optional<User> userOpt = userService.findById(userId);
-        if (userOpt.isPresent()) {
-            User user = userOpt.get();
-            item.setAuthor(user.getFirstName() + " " + user.getLastName());
-        } else {
-            item.setAuthor("You");
-        }
-
-        // Event information
-        if (upload.getEventId() != null) {
-            Optional<MediaEvent> eventOpt = eventsService.getEventById(upload.getEventId());
-            item.setEvent(eventOpt.map(MediaEvent::getName).orElse("General"));
-        } else {
-            item.setEvent("General");
-        }
-
-        // Format date
-        if (upload.getCreatedDate() != null) {
-            item.setDate(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE
-                    .withZone(ZoneId.systemDefault())
-                    .format(upload.getCreatedDate()));
-        } else {
-            item.setDate("Unknown");
-        }
-
-        return item;
-    }
-
-    /**
-     * Convert Upload entity to AdminUploadDto with user information and secure URLs
-     * populated.
-     * Generates time-limited signed URLs for admin access.
-     */
-    private AdminUploadDto convertToAdminUploadDto(Upload upload) {
+    private AdminUploadDto toAdminDto(Upload upload) {
         AdminUploadDto dto = new AdminUploadDto();
-
-        // Copy upload fields
         dto.setUuid(upload.getUuid());
         dto.setFileName(upload.getFileName());
-        dto.setFileUrl(upload.getFileUrl()); // Keep original URL for internal reference
+        dto.setFileUrl(upload.getFileUrl());
         dto.setUploadDescription(upload.getUploadDescription());
         dto.setInstagramHandle(upload.getInstagramHandle());
         dto.setUploadedBy(upload.getUploadedBy() != null ? upload.getUploadedBy().getId() : null);
-        dto.setEventId(upload.getEventId());
+        dto.setEventId(upload.getMediaEvent() != null ? upload.getMediaEvent().getId() : null);
         dto.setCreatedDate(upload.getCreatedDate());
         dto.setApproved(upload.isApproved());
         dto.setFeatured(upload.isFeatured());
         dto.setAnon(upload.isAnon());
         dto.setContentType(upload.getContentType());
 
-        // Generate secure URLs for admin access
         try {
-            // Admins can view both approved and unapproved content
-            String objectKey = r2StorageService.extractObjectKeyFromUrl(upload.getFileUrl());
-            String secureUrl = r2StorageService.getSecureUrl(objectKey, upload.isApproved(), true);
-            dto.setSecureUrl(secureUrl);
-
-            // Generate secure thumbnail URL using the stored thumbnail key
-            String thumbnailKey = upload.getThumbnailUrl();
-            if (thumbnailKey != null && !thumbnailKey.isBlank()) {
-                String thumbnailUrl = r2StorageService.getSecureThumbnailUrl(thumbnailKey, upload.isApproved(), true);
-                dto.setThumbnailUrl(thumbnailUrl);
-            } else {
-                // Fallback: use original image URL as thumbnail if no thumbnail generated yet
-                dto.setThumbnailUrl(secureUrl);
-            }
-
+            String key = r2StorageService.extractObjectKey(upload.getFileUrl());
+            dto.setSecureUrl(r2StorageService.getSecureUrl(key, upload.isApproved(), true));
+            String thumbKey = upload.getThumbnailUrl();
+            String thumbUrl = (thumbKey != null && !thumbKey.isBlank())
+                    ? r2StorageService.getSecureThumbnailUrl(thumbKey, upload.isApproved(), true)
+                    : dto.getSecureUrl();
+            dto.setThumbnailUrl(thumbUrl);
         } catch (Exception e) {
-            // If secure URL generation fails, log error but don't break the DTO creation
             log.error("Failed to generate secure URLs for upload {}: {}", upload.getUuid(), e.getMessage());
             dto.setSecureUrl(null);
             dto.setThumbnailUrl(null);
         }
 
-        Optional<User> userOpt = Optional.ofNullable(upload.getUploadedBy());
-        if (userOpt.isPresent()) {
-            User user = userOpt.get();
-            dto.setUploaderFirstName(user.getFirstName());
-            dto.setUploaderLastName(user.getLastName());
-            dto.setUploaderEmail(user.getEmail());
-            dto.setUploaderStudentNumber(user.getStudentNumber());
+        if (upload.getUploadedBy() != null) {
+            User u = upload.getUploadedBy();
+            dto.setUploaderFirstName(u.getFirstName());
+            dto.setUploaderLastName(u.getLastName());
+            dto.setUploaderEmail(u.getEmail());
+            dto.setUploaderStudentNumber(u.getStudentNumber());
         }
 
-        // Fetch and populate event information
-        if (upload.getEventId() != null) {
-            Optional<MediaEvent> eventOpt = eventsService.getEventById(upload.getEventId());
-            eventOpt.ifPresent(event -> dto.setEventName(event.getName()));
+        if (upload.getMediaEvent() != null) {
+            dto.setEventName(upload.getMediaEvent().getName());
         }
 
         return dto;

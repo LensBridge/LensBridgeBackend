@@ -17,6 +17,9 @@ public interface UploadRepository extends JpaRepository<Upload, UUID> {
     /**
      * Recall that deletedAt = null => not deleted. Therefore, this method will only return uploads that are not marked as deleted.
      */
+
+    Upload findByUuidAndDeletedAtIsNull(UUID uuid);
+
     Page<Upload> findByDeletedAtIsNull(Pageable pageable);
 
     Page<Upload> findByApprovedTrueAndDeletedAtIsNull(Pageable pageable);

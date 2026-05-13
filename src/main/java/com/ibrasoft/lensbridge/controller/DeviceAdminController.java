@@ -35,7 +35,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/admin/board/devices")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('" + Role.ROOT + "')")
+@PreAuthorize("hasRole('" + Role.Authority.ROOT + "')")
 @Slf4j
 public class DeviceAdminController {
 
