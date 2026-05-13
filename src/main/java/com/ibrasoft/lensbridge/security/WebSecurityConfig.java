@@ -90,6 +90,7 @@ public class WebSecurityConfig {
             .requestMatchers("/api/agent/enroll").permitAll()
             .requestMatchers("/api/agent/ws").permitAll()
             .requestMatchers("/api/dashboard/ws/**").permitAll()
+            .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
             .anyRequest().authenticated());
 
     http.authenticationProvider(authenticationProvider());

@@ -1,0 +1,102 @@
+# Every property the app reads. Copy/split into application.properties,
+# application-dev.properties, application-prod.properties as you see fit.
+# Generate secrets with: openssl rand -base64 32
+
+server.port=8080
+spring.profiles.active=${SPRING_PROFILES_ACTIVE:dev}
+
+# Datasource (SQLite for dev, Postgres for prod)
+spring.datasource.url=jdbc:sqlite:lensbridge-dev.db
+spring.datasource.driver-class-name=org.sqlite.JDBC
+spring.datasource.username=
+spring.datasource.password=
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.properties.hibernate.dialect=org.hibernate.community.dialect.SQLiteDialect
+spring.jpa.properties.hibernate.connection.foreign_keys=true
+spring.jpa.open-in-view=false
+
+# Allowed CORS origins
+frontend.baseurl=http://localhost:5173
+musallahboard.baseurl=http://localhost:3000
+
+# Cloudflare R2
+cloudflare.r2.endpoint=https://<account-id>.r2.cloudflarestorage.com
+cloudflare.r2.access-key-id=replace-with-r2-access-key
+cloudflare.r2.secret-access-key=replace-with-r2-secret
+cloudflare.r2.bucket-name=lensbridge-media
+cloudflare.r2.public-url=https://media.lensbridge.tech
+cloudflare.r2.url-expiration-minutes=15
+
+# Uploads
+uploads.allowed-file-types=image/jpeg,image/png,image/heic,image/webp,image/gif
+uploads.global-max-size=1GB
+uploads.global-daily-limit=10
+uploads.max-size.user=50MB
+uploads.max-size.admin=2GB
+uploads.max-size.root=5GB
+uploads.daily-limit.user=10
+uploads.daily-limit.admin=500
+uploads.daily-limit.root=1000
+
+# Image processing
+image-processing.thumbnail-width=400
+image-processing.thumbnail-height=400
+image-processing.thumbnail-quality=0.7
+image-processing.thumbnail-folder=thumbnails/
+
+# Rate limiting
+ratelimit.requests=100
+ratelimit.duration.minutes=1
+ratelimit.exempt-roles=ROLE_ROOT,ROLE_ADMIN
+
+# Spring multipart cap
+spring.servlet.multipart.max-file-size=250MB
+spring.servlet.multipart.max-request-size=5000MB
+
+# Logging
+logging.level.com.ibrasoft.lensbridge=INFO
+logging.level.org.springframework.security=INFO
+logging.level.org.springframework.mail=INFO
+
+# Mail (Purelymail SMTP)
+spring.mail.host=smtp.purelymail.com
+spring.mail.port=465
+spring.mail.protocol=smtp
+spring.mail.username=noreply@lensbridge.tech
+spring.mail.password=replace-with-smtp-password
+spring.mail.properties.mail.smtp.auth=true
+spring.mail.properties.mail.smtp.ssl.enable=true
+spring.mail.properties.mail.smtp.ssl.trust=smtp.purelymail.com
+spring.mail.properties.mail.smtp.connectiontimeout=10000
+spring.mail.properties.mail.smtp.timeout=10000
+spring.mail.properties.mail.smtp.writetimeout=10000
+spring.mail.from=noreply@lensbridge.tech
+spring.mail.from.name=LensBridge Mailer Service
+
+# JWT
+lensbridge.app.jwtSecret=replace-with-base64-32-bytes
+lensbridge.app.jwtExpirationMs=900000
+lensbridge.app.refreshTokenExpirationMs=604800000
+lensbridge.app.maxRefreshTokensPerUser=5
+
+# Auth token TTLs
+auth.token.verification-expiration-ms=86400000
+auth.token.password-reset-expiration-ms=3600000
+
+# Onboarding
+lensbridge.onboarding.secret=replace-with-base64-32-bytes
+lensbridge.onboarding.expiration-ms=86400000
+
+# Behind a reverse proxy (nginx): honor X-Forwarded-* headers
+server.forward-headers-strategy=framework
+
+# Actuator (prod): only health, no details leak
+management.endpoints.web.exposure.include=health
+management.endpoint.health.show-details=never
+management.endpoint.health.probes.enabled=true
+
+spring.jackson.serialization.write-dates-as-timestamps=false
+
+# API docs (disable in prod)
+springdoc.api-docs.enabled=true
+springdoc.swagger-ui.enabled=true
