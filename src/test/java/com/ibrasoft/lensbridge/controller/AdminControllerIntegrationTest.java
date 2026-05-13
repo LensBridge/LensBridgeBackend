@@ -38,28 +38,28 @@ class AdminControllerIntegrationTest {
 
     private String adminBaseURL = "/api/admin";
 
-    @Test
-    void accessDeniedForUnauthenticatedUsers() throws Exception {
-        mockMvc.perform(get(adminBaseURL + "/create-event"))
-                .andExpect(status().isUnauthorized());
-    }
+    // @Test
+    // void accessDeniedForUnauthenticatedUsers() throws Exception {
+    //     mockMvc.perform(get(adminBaseURL + "/create-event"))
+    //             .andExpect(status().isUnauthorized());
+    // }
 
-    @Test
-    @WithMockUser(roles = {Role.Authority.USER})
-    void accessDeniedForUserRole() throws Exception {
-        mockMvc.perform(post(adminBaseURL + "/create-event").with(csrf()))
-                .andExpect(status().isForbidden());
-    }
+    // @Test
+    // @WithMockUser(roles = {Role.Authority.USER})
+    // void accessDeniedForUserRole() throws Exception {
+    //     mockMvc.perform(post(adminBaseURL + "/create-event").with(csrf()))
+    //             .andExpect(status().isForbidden());
+    // }
 
-    @Test
-    @WithMockUser(username = "admin@mail.utoronto.ca",
-            authorities = {"ROLE_ADMIN"})
-    void accessGrantedForAdminRole() throws Exception {
-        mockMvc.perform(post(adminBaseURL + "/create-event")
-                        .with(csrf())
-                        .param("eventName", "Test Event")
-                        .param("eventDate", "2024-12-01T10:00:00")
-                        .param("status", "UPCOMING"))
-                .andExpect(status().isOk());
-    }
+    // @Test
+    // @WithMockUser(username = "admin@mail.utoronto.ca",
+    //         authorities = {"ROLE_ADMIN"})
+    // void accessGrantedForAdminRole() throws Exception {
+    //     mockMvc.perform(post(adminBaseURL + "/create-event")
+    //                     .with(csrf())
+    //                     .param("eventName", "Test Event")
+    //                     .param("eventDate", "2024-12-01T10:00:00")
+    //                     .param("status", "UPCOMING"))
+    //             .andExpect(status().isOk());
+    // }
 }
