@@ -23,7 +23,7 @@ LensBridge is the _ultimate_ platform for collecting and sharing photos from eve
 - Cloudflare R2 (Or any S3-compatible storage service) for file storage
 - (Optional) SMTP server for email notifications
 
-### Setup
+### Setup - Local Development
 
 1. Clone the repository:
 
@@ -38,6 +38,8 @@ LensBridge is the _ultimate_ platform for collecting and sharing photos from eve
     ```
 
     Then edit `application.properties` to configure your database connection, R2 credentials, and other settings.
+
+    > I suggest using SQlite for local development to avoid the overhead of setting up a full database. Just change the datasource URL to `jdbc:sqlite:lensbridge.db` and remove the username/password. The dependency is already included in the project.
 
 3. Build the project using Maven:
 
@@ -54,6 +56,16 @@ LensBridge is the _ultimate_ platform for collecting and sharing photos from eve
 5. Access the API at `http://localhost:8080/api/`.
 
 And that's it! You now have a running instance of the LensBridge backend. Pair this with the frontend application to create a complete LensBridge experience.
+
+## Deployment
+
+This project utilizes Docker for containerization, making it easy to deploy on any platform that supports Docker (AWS, Heroku, DigitalOcean, etc.). A `Dockerfile` is included in the repository. To build and run the Docker container, use the following commands:
+
+```bash
+docker compose up --build
+```
+
+...aaaand that's it. Pretty anti-climactic. Make sure to include your SSL certs in the `docker/nginx/certs` directory and configure the environment variables accordingly. Once the container is running, the API will be accessible at `https://localhost/api/`.
 
 ## API Documentation
 
