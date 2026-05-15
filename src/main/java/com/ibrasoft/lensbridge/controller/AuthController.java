@@ -33,6 +33,7 @@ import com.ibrasoft.lensbridge.security.LoginAttemptService;
 import com.ibrasoft.lensbridge.service.UserService;
 import com.ibrasoft.lensbridge.service.RefreshTokenService;
 import com.ibrasoft.lensbridge.model.auth.RefreshToken;
+import com.ibrasoft.lensbridge.util.IpUtils;
 
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -89,7 +90,7 @@ public class AuthController {
             
             // Create refresh token
             String deviceInfo = request.getHeader("User-Agent");
-            String ipAddress = getClientIpAddress(request);
+            String ipAddress = IpUtils.getClientIp(request);
             RefreshToken refreshToken = refreshTokenService.createRefreshToken(
                 userDetails.getId(), deviceInfo, ipAddress);
             
@@ -336,16 +337,4 @@ public class AuthController {
         return validateToken(authentication);
     }
 
-    /**
-     * Helper method to get client IP address
-     */
-    private String getClientIpAddress(HttpServletRequest request) {
-        String xForwardedForHeader = request.getHeader("X-Forwarded-For");
-        if (xForwardedForHeader == null) {
-            return request.getRemoteAddr();
-        } else {
-            // X-Forwarded-For can contain multiple IPs, get the first one
-            return xForwardedForHeader.split(",")[0].trim();
-        }
-    }
 }

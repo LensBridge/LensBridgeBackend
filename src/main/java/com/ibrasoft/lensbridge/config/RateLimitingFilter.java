@@ -3,6 +3,7 @@ package com.ibrasoft.lensbridge.config;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.ibrasoft.lensbridge.model.auth.Role;
+import com.ibrasoft.lensbridge.util.IpUtils;
 
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
@@ -53,7 +54,7 @@ public class RateLimitingFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
             return;
         }
-        String ip = getClientIp(request);
+        String ip = IpUtils.getClientIp(request);
         Bucket bucket = bucketCache.get(ip, k -> newBucket());
         ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
 
@@ -72,14 +73,6 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         return Bucket.builder()
                 .addLimit(limit)
                 .build();
-    }
-
-    private String getClientIp(HttpServletRequest request) {
-        String xfHeader = request.getHeader("X-Forwarded-For");
-        if (xfHeader != null && !xfHeader.isEmpty()) {
-            return xfHeader.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
     }
 
     private boolean isUserExemptFromRateLimit() {
