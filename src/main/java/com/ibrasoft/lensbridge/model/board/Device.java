@@ -33,7 +33,7 @@ public class Device {
     private Instant enrolledAt;
     private Instant lastHeartbeat;
 
-    @OneToOne(mappedBy = "device", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OneToOne(mappedBy = "device", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     private DeviceConfig config;
 
     @Enumerated(EnumType.STRING)

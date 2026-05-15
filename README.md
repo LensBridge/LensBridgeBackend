@@ -77,4 +77,4 @@ http://localhost:8080/swagger-ui.html
 
 Consider disabling this in production. This _is_ an open source project, though; Not sure how effective that would be.
 
-A local copy of the API documentation 
+A local copy of the API documentation will be added sometime in the distant future

@@ -66,7 +66,7 @@ public class BoardService {
         Patch.apply(request.getPosterCycleIntervalMs(), existing::setPosterCycleIntervalMs);
         Patch.apply(request.getRefreshAfterIshaMinutes(), existing::setRefreshAfterIshaMinutes);
         Patch.apply(request.getDarkModeAfterIsha(), existing::setDarkModeAfterIsha);
-        Patch.apply(request.getDarkModeAfterIshaMinutes(), existing::setDarkModeAfterMaghribMinutes);
+        Patch.apply(request.getDarkModeAfterMaghribMinutes(), existing::setDarkModeAfterMaghribMinutes);
         Patch.apply(request.getEnableScrollingMessage(), existing::setEnableScrollingMessage);
         Patch.apply(request.getScrollingMessages(), existing::setScrollingMessages);
         DeviceConfig saved = boardConfigRepository.save(existing);

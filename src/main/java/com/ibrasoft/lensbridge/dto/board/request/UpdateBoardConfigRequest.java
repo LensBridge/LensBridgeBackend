@@ -14,7 +14,7 @@ public class UpdateBoardConfigRequest {
     private Integer refreshAfterIshaMinutes;
     private Boolean darkModeAfterIsha;
     @Min(value = 0)
-    private Integer darkModeAfterIshaMinutes;
+    private Integer darkModeAfterMaghribMinutes;
     private Boolean enableScrollingMessage;
     private List<String> scrollingMessages;
 }
