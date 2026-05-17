@@ -183,8 +183,8 @@ public class BoardService {
                 .name(request.getName())
                 .description(request.getDescription())
                 .location(request.getLocation())
-                .startTime(request.getStartTime())
-                .endTime(request.getEndTime())
+                .startTime(Instant.ofEpochMilli(request.getStartEpochMs()))
+                .endTime(Instant.ofEpochMilli(request.getEndEpochMs()))
                 .allDay(request.getAllDay())
                 .audience(request.getAudience())
                 .build();
