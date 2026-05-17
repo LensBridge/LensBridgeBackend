@@ -1,26 +1,45 @@
 package com.ibrasoft.lensbridge.model.auth;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.time.Instant;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
-import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.index.Indexed;
+import jakarta.persistence.Id;
+
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import org.springframework.data.mongodb.core.mapping.Document;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @AllArgsConstructor
-@Document(collection = "users")
+@NoArgsConstructor
 @Data
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+@Entity
+@Table(name = "users", indexes = {
+    @Index(name = "idx_users_email", columnList = "email")
+})
 public class User {
   @Id
+  @GeneratedValue(strategy = GenerationType.UUID)
   private UUID id;
 
   @NotBlank
@@ -30,84 +49,58 @@ public class User {
   private String lastName;
 
   @NotBlank
-  @Indexed(unique = true)
   @Size(max = 10)
+  @Column(unique = true, nullable = false)
   private String studentNumber;
 
   @NotBlank
-  @Size(max = 50)
+  @Size(max = 254)
   @Email
-  @Indexed(unique = true)
+  @Column(nullable = false, unique = true)
   private String email;
 
   @NotBlank
-  @Size(max = 120)
   @JsonIgnore
-  private String password;
+  @Column(nullable = false)
+  private String passwordHash;
 
-  private List<String> roles;
+  @ElementCollection(targetClass = Role.class, fetch = FetchType.EAGER)
+  @Enumerated(EnumType.STRING)
+  @CollectionTable(name = "user_roles")
+  @Column(name = "role", nullable = false)
+  private Set<Role> roles = new HashSet<>();
 
-  private boolean verified;
-  private String verificationToken;
+  @Column(nullable = true)
+  private Instant verifiedAt;
 
-  public User() {
-    this.id = UUID.randomUUID();
+  public User(String firstName, String lastName, String studentNumber, String email, String passwordHash) {
+    this.firstName = firstName;
+    this.lastName = lastName;
+    this.studentNumber = studentNumber;
+    this.email = email;
+    this.passwordHash = passwordHash;
+    this.roles = new HashSet<>();
   }
 
-  public User(String firstName, String lastName, String studentNumber, String email, String password){
-    this(
-      UUID.randomUUID(),
-      firstName,
-      lastName,
-      studentNumber,
-      email,
-      password,
-      List.of(),
-      false, 
-      null
-    );
+  @JsonIgnore
+  public String getPassword() {
+    return passwordHash;
   }
 
-  public void addRole(String role) {
-    if (this.roles == null) {
-      this.roles = new ArrayList<>();
-    }
-    this.roles.add(role);
+  public void setPassword(String passwordHash) {
+    this.passwordHash = passwordHash;
   }
 
-  /**
-   * Adds a role using the Role enum for type safety.
-   * @param role the role to add
-   */
   public void addRole(Role role) {
-    addRole(role.getAuthority());
+    if (roles == null) roles = new HashSet<>();
+    roles.add(role);
   }
 
-  /**
-   * Checks if the user has a specific role using the Role enum.
-   * @param role the role to check for
-   * @return true if the user has the role, false otherwise
-   */
   public boolean hasRole(Role role) {
-    return this.roles != null && this.roles.contains(role.getAuthority());
+    return roles != null && roles.contains(role);
   }
 
-  /**
-   * Checks if the user has a specific role using a string.
-   * @param role the role string to check for
-   * @return true if the user has the role, false otherwise
-   */
-  public boolean hasRole(String role) {
-    return this.roles != null && this.roles.contains(role);
-  }
-
-  /**
-   * Removes a role using the Role enum.
-   * @param role the role to remove
-   */
-  public void removeRole(Role role) {
-    if (this.roles != null) {
-      this.roles.remove(role.getAuthority());
-    }
+  public boolean isVerified() {
+    return verifiedAt != null;
   }
 }

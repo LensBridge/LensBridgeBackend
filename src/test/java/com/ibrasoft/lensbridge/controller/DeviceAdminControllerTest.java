@@ -5,7 +5,6 @@ import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.repository.sql.DeviceCommandRepository;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
-import com.ibrasoft.lensbridge.security.services.UserDetailsImpl;
 import com.ibrasoft.lensbridge.service.agent.AgentSession;
 import com.ibrasoft.lensbridge.service.agent.AgentSessionRegistry;
 import com.ibrasoft.lensbridge.service.agent.CommandDispatcher;
@@ -76,16 +75,8 @@ class DeviceAdminControllerTest {
     }
 
     private static void setCurrentUser() {
-        UserDetailsImpl user = new UserDetailsImpl(
-                UUID.randomUUID(),
-                "Root",
-                "Admin",
-                "root@example.com",
-                "1000000000",
-                "password",
-                true,
-                List.of(new SimpleGrantedAuthority("ROLE_ROOT")));
+        List<SimpleGrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_ROOT"));
         SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities()));
+                new UsernamePasswordAuthenticationToken("root@example.com", null, authorities));
     }
 }

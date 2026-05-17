@@ -1,13 +1,13 @@
 package com.ibrasoft.lensbridge.handler;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ibrasoft.lensbridge.dto.agent.AuthFrame;
-import com.ibrasoft.lensbridge.dto.agent.CommandAckFrame;
-import com.ibrasoft.lensbridge.dto.agent.CommandProgressFrame;
-import com.ibrasoft.lensbridge.dto.agent.CommandResultFrame;
-import com.ibrasoft.lensbridge.dto.agent.HeartbeatFrame;
-import com.ibrasoft.lensbridge.dto.agent.IncomingAgentFrame;
-import com.ibrasoft.lensbridge.dto.agent.OutgoingAgentFrame;
+import com.ibrasoft.lensbridge.dto.board.agent.AuthFrame;
+import com.ibrasoft.lensbridge.dto.board.agent.CommandAckFrame;
+import com.ibrasoft.lensbridge.dto.board.agent.CommandProgressFrame;
+import com.ibrasoft.lensbridge.dto.board.agent.CommandResultFrame;
+import com.ibrasoft.lensbridge.dto.board.agent.HeartbeatFrame;
+import com.ibrasoft.lensbridge.dto.board.agent.IncomingAgentFrame;
+import com.ibrasoft.lensbridge.dto.board.agent.OutgoingAgentFrame;
 import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.service.agent.AgentSession;

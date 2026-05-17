@@ -34,3 +34,12 @@ build/
 
 ### VS Code ###
 .vscode/
+
+lensbridge-dev.db
+
+# Docker
+.env
+.env.*
+!.env.example
+docker/nginx/certs/*
+!docker/nginx/certs/.gitkeep

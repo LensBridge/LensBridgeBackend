@@ -1,7 +1,7 @@
 package com.ibrasoft.lensbridge.service.board.transformer;
 
-import com.ibrasoft.lensbridge.dto.response.frames.EventView;
-import com.ibrasoft.lensbridge.model.board.Event;
+import com.ibrasoft.lensbridge.dto.board.response.frames.EventView;
+import com.ibrasoft.lensbridge.model.board.BoardEvent;
 import com.ibrasoft.lensbridge.model.board.frames.DailyScheduleFrameConfig;
 import com.ibrasoft.lensbridge.model.board.frames.FrameDefinition;
 import com.ibrasoft.lensbridge.model.board.frames.FrameSlot;
@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
  * representing events for the current day.
  */
 @Component
-public class DailyScheduleFrameTransformer implements FrameTransformer<List<Event>> {
+public class DailyScheduleFrameTransformer implements FrameTransformer<List<BoardEvent>> {
 
     @Override
     public FrameType supports() {
@@ -25,8 +25,8 @@ public class DailyScheduleFrameTransformer implements FrameTransformer<List<Even
     }
 
     @Override
-    public FrameDefinition transform(List<Event> events, BoardContext ctx) {
-        List<EventView> eventViews = events.stream()
+    public FrameDefinition transform(List<BoardEvent> boardEvents, BoardContext ctx) {
+        List<EventView> eventViews = boardEvents.stream()
                 .map(this::toEventView)
                 .collect(Collectors.toList());
 
@@ -44,14 +44,14 @@ public class DailyScheduleFrameTransformer implements FrameTransformer<List<Even
                 .build();
     }
 
-    private EventView toEventView(Event event) {
+    private EventView toEventView(BoardEvent boardEvent) {
         return EventView.builder()
-                .name(event.getName())
-                .description(event.getDescription())
-                .location(event.getLocation())
-                .startTime(event.getStartTime())
-                .endTime(event.getEndTime())
-                .allDay(event.getAllDay())
+                .name(boardEvent.getName())
+                .description(boardEvent.getDescription())
+                .location(boardEvent.getLocation())
+                .startTime(boardEvent.getStartTime())
+                .endTime(boardEvent.getEndTime())
+                .allDay(boardEvent.getAllDay())
                 .build();
     }
 }

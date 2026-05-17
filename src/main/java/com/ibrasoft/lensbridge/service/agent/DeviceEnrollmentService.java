@@ -1,7 +1,11 @@
 package com.ibrasoft.lensbridge.service.agent;
 
+import com.ibrasoft.lensbridge.model.board.CalculationMethod;
 import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.model.board.EnrollmentToken;
+import com.ibrasoft.lensbridge.model.board.Location;
+import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
+import com.ibrasoft.lensbridge.repository.sql.BoardConfigRepository;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -10,6 +14,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.Base64;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -30,6 +35,7 @@ public class DeviceEnrollmentService {
 
     private final EnrollmentTokenService enrollmentTokenService;
     private final DeviceRepository deviceRepository;
+    private final BoardConfigRepository boardConfigRepository;
 
     public record EnrollResult(Device device) {}
 
@@ -78,6 +84,25 @@ public class DeviceEnrollmentService {
         Device saved = deviceRepository.save(device);
 
         token.setConsumedByDeviceId(saved.getId());
+
+        DeviceConfig defaultConfig = DeviceConfig.builder()
+                .device(saved)
+                .location(Location.builder()
+                        .city("Mississauga")
+                        .country("Canada")
+                        .latitude(43.589)
+                        .longitude(-79.6441)
+                        .timezone("America/Toronto")
+                        .method(CalculationMethod.ISNA)
+                        .build())
+                .posterCycleIntervalMs(10000)
+                .refreshAfterIshaMinutes(30)
+                .darkModeAfterIsha(true)
+                .darkModeAfterMaghribMinutes(45)
+                .enableScrollingMessage(true)
+                .scrollingMessages(List.of("Welcome to UTM MSA - Follow us @utmmsa for updates!"))
+                .build();
+        boardConfigRepository.save(defaultConfig);
 
         log.info("Enrolled device {} from token {} (issued by {})",
                 saved.getId(), token.getId(), token.getCreatedBy());

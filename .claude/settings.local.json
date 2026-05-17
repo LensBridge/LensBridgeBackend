@@ -11,7 +11,27 @@
       "Bash(Out-Null)",
       "Bash(Write-Output \"done\")",
       "Bash(./mvnw.cmd compile *)",
-      "Bash(git *)"
+      "Bash(git *)",
+      "Bash(Get-ChildItem *)",
+      "Bash(xargs grep -l \"enroll\\\\|heartbeat\")",
+      "Bash(findstr /C:\"hypersistence\" /C:\"jackson\" /C:\"lombok\" /C:\"java.version\" /C:\"<java>\")",
+      "Bash(./mvnw -q -DskipTests compile)",
+      "Bash(./mvnw -q test \"-Dtest=Ed25519VerifierTest+EnrollmentTokenServiceTest\")",
+      "Bash(./mvnw -q test \"-Dtest=Ed25519VerifierTest,EnrollmentTokenServiceTest\")",
+      "Bash(./mvnw test *)",
+      "Bash(findstr /C:\"Tests run\" /C:\"BUILD\")",
+      "Bash(findstr \"Tests\")",
+      "Bash(findstr /V \"^??\")",
+      "Bash(findstr /V \"^[ ]M .claude\")",
+      "Bash(mvn -q -DskipTests compile)",
+      "PowerShell(mvn *)",
+      "PowerShell(.\\\\mvnw.cmd -q -DskipTests compile 2>&1 | Select-Object -Last 100)",
+      "PowerShell(.\\\\mvnw.cmd -DskipTests compile 2>&1 | Select-Object -Last 60)",
+      "PowerShell(.\\\\mvnw.cmd -DskipTests clean compile 2>&1 | Select-Object -Last 80)",
+      "PowerShell(.\\\\mvnw.cmd test-compile 2>&1 | Select-Object -Last 40)",
+      "Bash(go build *)",
+      "Bash(go vet *)",
+      "Bash(wsl *)"
     ]
   }
 }

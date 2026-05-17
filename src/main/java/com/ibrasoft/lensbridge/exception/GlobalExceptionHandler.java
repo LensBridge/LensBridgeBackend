@@ -1,6 +1,9 @@
 package com.ibrasoft.lensbridge.exception;
 
-import com.ibrasoft.lensbridge.dto.response.MessageResponse;
+import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
+import com.ibrasoft.lensbridge.dto.upload.response.DailyLimitErrorResponse;
+import com.ibrasoft.lensbridge.dto.upload.response.ErrorResponse;
+import com.ibrasoft.lensbridge.dto.upload.response.FileSizeErrorResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,49 +25,70 @@ import java.util.Map;
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
+
     @ExceptionHandler(ApiResponseException.class)
     public ResponseEntity<Object> handleApiResponseException(ApiResponseException ex) {
         return ResponseEntity.status(ex.getStatus()).body(ex.getBody());
     }
 
-
-    @ExceptionHandler(VideoProcessingException.class)
-    public ResponseEntity<Map<String, Object>> handleVideoProcessingException(VideoProcessingException ex) {
-        log.error("Video processing error: {}", ex.getMessage());
-        Map<String, Object> response = new HashMap<>();
-        response.put("error", "Video Processing Error");
-        response.put("message", ex.getMessage());
-        response.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+    @ExceptionHandler(RefreshTokenException.class)
+    public ResponseEntity<MessageResponse> handleRefreshToken(RefreshTokenException ex) {
+        log.warn("Refresh token rejected: {}", ex.getMessage());
+        return ResponseEntity.status(ex.getStatus()).body(new MessageResponse(ex.getMessage()));
     }
 
-    @ExceptionHandler(VideoTooLongException.class)
-    public ResponseEntity<Map<String, Object>> handleVideoTooLongException(VideoTooLongException ex) {
-        log.error("Video too long error: {}", ex.getMessage());
-        Map<String, Object> response = new HashMap<>();
-        response.put("error", "Video Too Long");
-        response.put("message", ex.getMessage());
-        response.put("status", HttpStatus.BAD_REQUEST.value());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<MessageResponse> handleIllegalArgument(IllegalArgumentException ex) {
+        return ResponseEntity.badRequest().body(new MessageResponse(ex.getMessage()));
+    }
+
+    @ExceptionHandler(SecurityException.class)
+    public ResponseEntity<MessageResponse> handleSecurity(SecurityException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new MessageResponse(ex.getMessage()));
+    }
+
+    @ExceptionHandler(DailyLimitExceededException.class)
+    public ResponseEntity<Object> handleDailyLimitExceeded(DailyLimitExceededException ex) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(DailyLimitErrorResponse.of(ex.getMessage(), ex.getLimit(), ex.getCurrent(), "unknown"));
+    }
+
+    @ExceptionHandler(FileSizeLimitExceededException.class)
+    public ResponseEntity<Object> handleFileSizeLimitExceeded(FileSizeLimitExceededException ex) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(FileSizeErrorResponse.of(ex.getMessage(),
+                        (ex.getMaxBytes() / 1024 / 1024) + "MB",
+                        (ex.getActualBytes() / 1024 / 1024) + "MB"));
+    }
+
+    @ExceptionHandler(InvalidContentTypeException.class)
+    public ResponseEntity<Object> handleInvalidContentType(InvalidContentTypeException ex) {
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+                .body(ErrorResponse.of(ex.getMessage()));
+    }
+
+    @ExceptionHandler(EventNotAcceptingUploadsException.class)
+    public ResponseEntity<Object> handleEventNotAcceptingUploads(EventNotAcceptingUploadsException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(ex.getMessage()));
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<Map<String, Object>> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException ex) {
-        log.error("File size too large: {}", ex.getMessage());
+        log.error("Multipart upload too large: {}", ex.getMessage());
         Map<String, Object> response = new HashMap<>();
         response.put("error", "File Too Large");
         response.put("message", "The uploaded file exceeds the maximum allowed size");
-        response.put("status", HttpStatus.BAD_REQUEST.value());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        response.put("status", HttpStatus.PAYLOAD_TOO_LARGE.value());
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(response);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, String>> handleValidationExceptions(MethodArgumentNotValidException ex) {
         Map<String, String> errors = new HashMap<>();
-        ex.getBindingResult().getAllErrors().forEach((error) -> {
+        ex.getBindingResult().getAllErrors().forEach(error -> {
             String fieldName = ((FieldError) error).getField();
-            String errorMessage = error.getDefaultMessage();
-            errors.put(fieldName, errorMessage);
+            errors.put(fieldName, error.getDefaultMessage());
         });
         return ResponseEntity.badRequest().body(errors);
     }
@@ -89,7 +113,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AuthorizationDeniedException.class)
     public ResponseEntity<MessageResponse> handleAuthorizationDeniedException(AuthorizationDeniedException ex) {
-        log.warn("Authorization failed - access denied: {}", ex.getMessage());
+        log.warn("Authorization failed: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new MessageResponse("Access denied."));
     }
 
@@ -101,19 +125,18 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<MessageResponse> handleHttpRequestMethodNotSupportedException(HttpRequestMethodNotSupportedException ex) {
-        log.error("HTTP method not supported: ", ex);
         return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(new MessageResponse("HTTP method not supported"));
     }
 
     @ExceptionHandler(FileProcessingException.class)
-    public ResponseEntity<MessageResponse> handleIOException(FileProcessingException ex) {
-        log.error("I/O error occurred: {}", ex.getMessage(), ex);
+    public ResponseEntity<MessageResponse> handleFileProcessingException(FileProcessingException ex) {
+        log.error("File processing error: {}", ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new MessageResponse("Failed to process upload"));
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<MessageResponse> handleGenericException(Exception ex) {
-        log.error("Unexpected error occurred: {}", ex.getMessage(), ex);
+        log.error("Unexpected error: {}", ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new MessageResponse("An unexpected error occurred"));
     }
 }

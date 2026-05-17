@@ -1,18 +1,17 @@
 package com.ibrasoft.lensbridge.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ibrasoft.lensbridge.dto.request.IssueCommandRequest;
-import com.ibrasoft.lensbridge.dto.request.IssueEnrollmentTokenRequest;
-import com.ibrasoft.lensbridge.dto.response.CommandIssuedResponse;
-import com.ibrasoft.lensbridge.dto.response.CommandView;
-import com.ibrasoft.lensbridge.dto.response.DeviceSummary;
-import com.ibrasoft.lensbridge.dto.response.IssueEnrollmentTokenResponse;
-import com.ibrasoft.lensbridge.dto.response.MessageResponse;
+import com.ibrasoft.lensbridge.dto.board.request.IssueCommandRequest;
+import com.ibrasoft.lensbridge.dto.board.request.IssueEnrollmentTokenRequest;
+import com.ibrasoft.lensbridge.dto.board.response.CommandIssuedResponse;
+import com.ibrasoft.lensbridge.dto.board.response.CommandView;
+import com.ibrasoft.lensbridge.dto.board.response.DeviceSummary;
+import com.ibrasoft.lensbridge.dto.board.response.IssueEnrollmentTokenResponse;
+import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.repository.sql.DeviceCommandRepository;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
-import com.ibrasoft.lensbridge.security.services.UserDetailsImpl;
 import com.ibrasoft.lensbridge.service.agent.AgentSessionRegistry;
 import com.ibrasoft.lensbridge.service.agent.CommandDispatcher;
 import com.ibrasoft.lensbridge.service.agent.EnrollmentTokenService;
@@ -23,6 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.socket.CloseStatus;
@@ -35,7 +35,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/admin/board/devices")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('" + Role.ROOT + "')")
+@PreAuthorize("hasRole('" + Role.Authority.ROOT + "')")
 @Slf4j
 public class DeviceAdminController {
 
@@ -64,15 +64,15 @@ public class DeviceAdminController {
     @PostMapping("/enrollment-tokens")
     public ResponseEntity<IssueEnrollmentTokenResponse> issueEnrollmentToken(
             @Valid @RequestBody IssueEnrollmentTokenRequest request) {
-        UserDetailsImpl admin = currentUser();
+        String adminEmail = getCurrentUserEmail();
         Issued issued = enrollmentTokenService.issue(
                 request.getDisplayName(),
                 request.getAudience(),
                 request.getExpiresInMinutes(),
-                admin.getEmail()
+            adminEmail
         );
         log.info("Admin {} issued enrollment token {} ({})",
-                admin.getEmail(), issued.token().getId(), request.getDisplayName());
+            adminEmail, issued.token().getId(), request.getDisplayName());
         return ResponseEntity.status(HttpStatus.CREATED).body(
                 IssueEnrollmentTokenResponse.builder()
                         .tokenId(issued.token().getId())
@@ -94,7 +94,7 @@ public class DeviceAdminController {
             d.setRevokedAt(Instant.now());
             deviceRepository.save(d);
             sessionRegistry.closeIfPresent(deviceId, CloseStatus.POLICY_VIOLATION.withReason("device_revoked"));
-            log.warn("Device {} revoked by {}", deviceId, currentUser().getEmail());
+            log.warn("Device {} revoked by {}", deviceId, getCurrentUserEmail());
         }
         return ResponseEntity.ok(DeviceSummary.of(d));
     }
@@ -102,8 +102,7 @@ public class DeviceAdminController {
     @PostMapping("/{deviceId}/commands")
     public ResponseEntity<?> issueCommand(@PathVariable UUID deviceId,
                                           @Valid @RequestBody IssueCommandRequest request) {
-        UserDetailsImpl admin = currentUser();
-        CommandIssuedResponse response = commandDispatcher.issue(deviceId, admin.getEmail(), request);
+        CommandIssuedResponse response = commandDispatcher.issue(deviceId, getCurrentUserEmail(), request);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
 
@@ -117,7 +116,8 @@ public class DeviceAdminController {
         return ResponseEntity.ok(commands);
     }
 
-    private UserDetailsImpl currentUser() {
-        return (UserDetailsImpl) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+    private String getCurrentUserEmail() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null ? authentication.getName() : "unknown";
     }
 }

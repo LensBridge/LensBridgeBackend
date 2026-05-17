@@ -82,7 +82,8 @@ public class WebSecurityConfig {
         .csrf(csrf -> csrf.disable())
         .exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizedHandler))
         .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-        .authorizeHttpRequests(auth -> auth.requestMatchers("/api/gallery/**").permitAll()
+        .authorizeHttpRequests(auth -> auth.requestMatchers("/actuator/health").permitAll()
+            .requestMatchers("/api/gallery/**").permitAll()
             .requestMatchers("/api/auth/**").permitAll()
             .requestMatchers("/api/events/**").permitAll()
             .requestMatchers("/api/musallah/**").permitAll()
@@ -90,6 +91,7 @@ public class WebSecurityConfig {
             .requestMatchers("/api/agent/enroll").permitAll()
             .requestMatchers("/api/agent/ws").permitAll()
             .requestMatchers("/api/dashboard/ws/**").permitAll()
+            .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
             .anyRequest().authenticated());
 
     http.authenticationProvider(authenticationProvider());

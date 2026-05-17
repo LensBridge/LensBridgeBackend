@@ -1,10 +1,10 @@
 package com.ibrasoft.lensbridge.service;
 
-import com.ibrasoft.lensbridge.dto.request.CreateCalendarEventRequest;
-import com.ibrasoft.lensbridge.dto.request.UpdateBoardConfigRequest;
-import com.ibrasoft.lensbridge.dto.request.UpdateCalendarEventRequest;
-import com.ibrasoft.lensbridge.dto.request.WeeklyContentRequest;
-import com.ibrasoft.lensbridge.dto.response.ErrorResponse;
+import com.ibrasoft.lensbridge.dto.board.request.CreateCalendarEventRequest;
+import com.ibrasoft.lensbridge.dto.board.request.UpdateBoardConfigRequest;
+import com.ibrasoft.lensbridge.dto.board.request.UpdateCalendarEventRequest;
+import com.ibrasoft.lensbridge.dto.board.request.WeeklyContentRequest;
+import com.ibrasoft.lensbridge.dto.upload.response.ErrorResponse;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
 import com.ibrasoft.lensbridge.model.board.*;
 import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
@@ -66,7 +66,7 @@ public class BoardService {
         Patch.apply(request.getPosterCycleIntervalMs(), existing::setPosterCycleIntervalMs);
         Patch.apply(request.getRefreshAfterIshaMinutes(), existing::setRefreshAfterIshaMinutes);
         Patch.apply(request.getDarkModeAfterIsha(), existing::setDarkModeAfterIsha);
-        Patch.apply(request.getDarkModeAfterIshaMinutes(), existing::setDarkModeAfterMaghribMinutes);
+        Patch.apply(request.getDarkModeAfterMaghribMinutes(), existing::setDarkModeAfterMaghribMinutes);
         Patch.apply(request.getEnableScrollingMessage(), existing::setEnableScrollingMessage);
         Patch.apply(request.getScrollingMessages(), existing::setScrollingMessages);
         DeviceConfig saved = boardConfigRepository.save(existing);
@@ -155,46 +155,46 @@ public class BoardService {
 
     // ==================== Events ====================
 
-    public List<Event> getAllEvents() {
+    public List<BoardEvent> getAllEvents() {
         return boardEventRepository.findAllByOrderByStartTimeAsc();
     }
 
-    public Event getEventById(UUID eventId) {
+    public BoardEvent getEventById(UUID eventId) {
         return boardEventRepository.findById(eventId)
                 .orElseThrow(() -> new ApiResponseException(
                         HttpStatus.NOT_FOUND,
                         ErrorResponse.of("Event not found with id: " + eventId)));
     }
 
-    public List<Event> getEventsForAudience(Audience audience) {
+    public List<BoardEvent> getEventsForAudience(Audience audience) {
         return boardEventRepository.findByAudienceOrBoth(audience);
     }
 
-    public List<Event> getUpcomingEventsForAudience(Audience audience) {
+    public List<BoardEvent> getUpcomingEventsForAudience(Audience audience) {
         return boardEventRepository.findUpcomingByAudienceOrBoth(audience, Instant.now());
     }
 
-    public List<Event> getEventsForAudienceInRange(Audience audience, Instant rangeStart, Instant rangeEnd) {
+    public List<BoardEvent> getEventsForAudienceInRange(Audience audience, Instant rangeStart, Instant rangeEnd) {
         return boardEventRepository.findOverlappingForAudienceOrBoth(audience, rangeStart, rangeEnd);
     }
 
-    public Event createEvent(CreateCalendarEventRequest request) {
-        Event event = Event.builder()
+    public BoardEvent createEvent(CreateCalendarEventRequest request) {
+        BoardEvent boardEvent = BoardEvent.builder()
                 .name(request.getName())
                 .description(request.getDescription())
                 .location(request.getLocation())
-                .startTime(request.getStartTime())
-                .endTime(request.getEndTime())
+                .startTime(Instant.ofEpochMilli(request.getStartEpochMs()))
+                .endTime(Instant.ofEpochMilli(request.getEndEpochMs()))
                 .allDay(request.getAllDay())
                 .audience(request.getAudience())
                 .build();
-        Event saved = boardEventRepository.save(event);
+        BoardEvent saved = boardEventRepository.save(boardEvent);
         log.info("Created event: id={}, name={}", saved.getId(), saved.getName());
         return saved;
     }
 
-    public Event updateEvent(UUID eventId, UpdateCalendarEventRequest request) {
-        Event existing = getEventById(eventId);
+    public BoardEvent updateEvent(UUID eventId, UpdateCalendarEventRequest request) {
+        BoardEvent existing = getEventById(eventId);
         Patch.apply(request.getName(), existing::setName);
         Patch.apply(request.getDescription(), existing::setDescription);
         Patch.apply(request.getLocation(), existing::setLocation);
@@ -202,14 +202,14 @@ public class BoardService {
         Patch.apply(request.getEndTime(), existing::setEndTime);
         Patch.apply(request.getAllDay(), existing::setAllDay);
         Patch.apply(request.getAudience(), existing::setAudience);
-        Event saved = boardEventRepository.save(existing);
+        BoardEvent saved = boardEventRepository.save(existing);
         log.info("Updated event: id={}", eventId);
         return saved;
     }
 
     public void deleteEvent(UUID eventId) {
-        Event event = getEventById(eventId);
-        boardEventRepository.delete(event);
+        BoardEvent boardEvent = getEventById(eventId);
+        boardEventRepository.delete(boardEvent);
         log.info("Deleted event: id={}", eventId);
     }
 }

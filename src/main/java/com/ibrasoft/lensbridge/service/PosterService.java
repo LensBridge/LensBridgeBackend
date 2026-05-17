@@ -1,8 +1,8 @@
 package com.ibrasoft.lensbridge.service;
 
-import com.ibrasoft.lensbridge.dto.request.CreatePosterRequest;
-import com.ibrasoft.lensbridge.dto.request.UpdatePosterRequest;
-import com.ibrasoft.lensbridge.dto.response.ErrorResponse;
+import com.ibrasoft.lensbridge.dto.board.request.CreatePosterRequest;
+import com.ibrasoft.lensbridge.dto.board.request.UpdatePosterRequest;
+import com.ibrasoft.lensbridge.dto.upload.response.ErrorResponse;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.Poster;
@@ -88,7 +88,7 @@ public class PosterService {
         String objectKey;
         try {
             String filename = generatePosterFilename(imageFile.getOriginalFilename());
-            objectKey = r2StorageService.uploadImage(imageFile.getBytes(), filename);
+            objectKey = r2StorageService.uploadImage(filename, imageFile);
             log.info("Uploaded poster image to R2: {}", objectKey);
         } catch (IOException e) {
             log.error("Failed to upload poster image", e);
@@ -161,7 +161,7 @@ public class PosterService {
         String objectKey;
         try {
             String filename = generatePosterFilename(imageFile.getOriginalFilename());
-            objectKey = r2StorageService.uploadImage(imageFile.getBytes(), filename);
+            objectKey = r2StorageService.uploadImage(filename, imageFile);
             log.info("Uploaded new poster image to R2: {}", objectKey);
         } catch (IOException e) {
             log.error("Failed to upload poster image", e);

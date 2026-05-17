@@ -1,6 +1,6 @@
 package com.ibrasoft.lensbridge.service.agent;
 
-import com.ibrasoft.lensbridge.dto.agent.HeartbeatFrame;
+import com.ibrasoft.lensbridge.dto.board.agent.HeartbeatFrame;
 import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.model.board.DeviceTelemetry;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;

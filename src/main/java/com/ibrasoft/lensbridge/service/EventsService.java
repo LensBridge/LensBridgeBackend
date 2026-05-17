@@ -1,14 +1,19 @@
 package com.ibrasoft.lensbridge.service;
 
-import com.ibrasoft.lensbridge.model.event.Event;
-import com.ibrasoft.lensbridge.model.event.EventStatus;
-import com.ibrasoft.lensbridge.repository.mongo.EventsRepository;
+import com.ibrasoft.lensbridge.dto.upload.request.CreateEventDto;
+import com.ibrasoft.lensbridge.model.upload.MediaEvent;
+import com.ibrasoft.lensbridge.model.upload.EventStatus;
+import com.ibrasoft.lensbridge.repository.upload.EventsRepository;
+
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -19,79 +24,84 @@ public class EventsService {
 
     private final EventsRepository eventsRepository;
 
-    public Event createEvent(Event event) {
-        if (event.getId() == null) {
-            event.setId(UUID.randomUUID());
-        }
-        Event saved = eventsRepository.save(event);
-        this.cleanUpOldEvents();
-        return saved;
+    @Value("${lensbridge.app.daysCutoffForPastEvent:7}")
+    private int daysCutoffForPastEvent;
+
+    public MediaEvent createEvent(CreateEventDto event) {
+        MediaEvent newMediaEvent = MediaEvent.builder()
+                .name(event.getName())
+                .date(event.getDate())
+                .status(computeStatus(event.getDate(), Instant.now()))
+                .build();
+
+        return eventsRepository.save(newMediaEvent);
     }
 
-    public Event createEvent(String name, LocalDateTime date) {
-        Event event = Event.builder().id(UUID.randomUUID()).name(name).date(date).status(EventStatus.UPCOMING).build();
-        return createEvent(event);
+    private EventStatus computeStatus(Instant eventDate, Instant now) {
+        ZoneId zone = ZoneId.systemDefault();
+        LocalDate today = LocalDate.ofInstant(now, zone);
+        LocalDate eventDay = LocalDate.ofInstant(eventDate, zone);
+
+        if (eventDay.isBefore(today)) return EventStatus.PAST;
+        if (eventDay.isAfter(today)) return EventStatus.UPCOMING;
+        return now.isBefore(eventDate) ? EventStatus.UPCOMING : EventStatus.ONGOING;
     }
 
-    public List<Event> getAllEvents() {
+    public List<MediaEvent> getAllEvents() {
         return eventsRepository.findAll();
     }
 
-    public Optional<Event> getEventById(UUID id) {
+    public List<MediaEvent> getPublicVisibleEvents() {
+        Instant cutoff = Instant.now().minus(java.time.Duration.ofDays(daysCutoffForPastEvent));
+        return eventsRepository.findAll().stream()
+                .filter(e -> e.getStatus() == EventStatus.ONGOING ||
+                        (e.getStatus() == EventStatus.PAST && e.getDate().isAfter(cutoff)))
+                .toList();
+    }
+
+    public MediaEvent createEvent(String eventName, Instant eventDate) {
+        return createEvent(CreateEventDto.builder().name(eventName).date(eventDate).build());
+    }
+
+    public Optional<MediaEvent> getEventById(UUID id) {
         return eventsRepository.findById(id);
     }
 
-    public Event updateEvent(Event event) {
-        return eventsRepository.save(event);
+    public MediaEvent updateEvent(MediaEvent mediaEvent) {
+        return eventsRepository.save(mediaEvent);
     }
 
     public void deleteEvent(UUID id) {
         eventsRepository.deleteById(id);
     }
 
-    @Scheduled(cron = "0 0 0 * * ?") // Runs daily at midnight
-    public void cleanUpOldEvents() {
-        this.cleanUpOldEvents(LocalDateTime.now());
+    @Scheduled(cron = "0 0 0 * * ?")
+    void cleanUpOldEvents() {
+        this.cleanUpOldEvents(Instant.now());
     }
 
     public boolean isEventAcceptingUploads(UUID eventId) {
-        Optional<Event> eventOpt = eventsRepository.findById(eventId);
+        Optional<MediaEvent> eventOpt = eventsRepository.findById(eventId);
         if (eventOpt.isEmpty()) {
             return false;
         }
-        Event event = eventOpt.get();
+        MediaEvent mediaEvent = eventOpt.get();
 
-        return event.getStatus() == EventStatus.ONGOING ||
-                (event.getStatus() == EventStatus.PAST &&
-                        event.getDate().isAfter(LocalDateTime.now().minusDays(7)));
+        return mediaEvent.getStatus() == EventStatus.ONGOING ||
+                (mediaEvent.getStatus() == EventStatus.PAST &&
+                        mediaEvent.getDate().isAfter(Instant.now().minus(java.time.Duration.ofDays(7))));
 
     }
 
-    public void cleanUpOldEvents(LocalDateTime now) {
-        LocalDate today = now.toLocalDate();
-        List<Event> allEvents = eventsRepository.findAll();
+    public void cleanUpOldEvents(Instant now) {
+        List<MediaEvent> allMediaEvents = eventsRepository.findAll();
 
-        for (Event event : allEvents) {
-            if (event.getDate() == null)
+        for (MediaEvent mediaEvent : allMediaEvents) {
+            if (mediaEvent.getDate() == null)
                 continue;
 
-            LocalDate eventDate = event.getDate().toLocalDate();
-            EventStatus newStatus;
-
-            if (eventDate.isBefore(today)) {
-                newStatus = EventStatus.PAST;
-            } else if (eventDate.isAfter(today)) {
-                newStatus = EventStatus.UPCOMING;
-            } else {
-                if (!now.isBefore(event.getDate())) {
-                    newStatus = EventStatus.ONGOING;
-                } else {
-                    newStatus = EventStatus.UPCOMING;
-                }
-            }
-
-            event.setStatus(newStatus);
-            eventsRepository.save(event);
+            mediaEvent.setStatus(computeStatus(mediaEvent.getDate(), now));
+            eventsRepository.save(mediaEvent);
         }
     }
 

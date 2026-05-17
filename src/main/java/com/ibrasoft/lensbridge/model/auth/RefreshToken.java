@@ -1,17 +1,24 @@
 package com.ibrasoft.lensbridge.model.auth;
 
-import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.mapping.Document;
-import org.springframework.data.mongodb.core.index.Indexed;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
-@Document(collection = "refresh_tokens")
+@Entity
+@Table(name = "refresh_tokens")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -19,27 +26,38 @@ import java.util.UUID;
 public class RefreshToken {
     
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
     
-    @Indexed(unique = true)
-    private String token;
+    @NotBlank
+    @Column(nullable = false, unique = true)
+    private String tokenHash;
+
+    @ManyToOne
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
     
-    @Indexed
-    private UUID userId;
+    @Column(nullable = false)
+    private Instant expiryDate;
     
-    private LocalDateTime expiryDate;
+    @Column(nullable = false)
+    private Instant createdDate;
     
-    private LocalDateTime createdDate;
+    @Column(nullable = false)
+    private Instant lastUsedDate;
     
-    private LocalDateTime lastUsedDate;
-    
-    private String deviceInfo;
-    
-    private String ipAddress; 
-    
+    @Column(nullable = false)
     private boolean revoked;
-    
+
+    public String getToken() {
+        return tokenHash;
+    }
+
+    public UUID getUserId() {
+        return user != null ? user.getId() : null;
+    }
+
     public boolean isExpired() {
-        return LocalDateTime.now().isAfter(this.expiryDate);
+        return expiryDate != null && expiryDate.isBefore(Instant.now());
     }
 }

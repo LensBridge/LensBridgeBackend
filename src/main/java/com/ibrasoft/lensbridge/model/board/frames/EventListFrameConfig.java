@@ -1,6 +1,6 @@
 package com.ibrasoft.lensbridge.model.board.frames;
 
-import com.ibrasoft.lensbridge.dto.response.frames.EventView;
+import com.ibrasoft.lensbridge.dto.board.response.frames.EventView;
 import lombok.*;
 import java.util.List;
 
