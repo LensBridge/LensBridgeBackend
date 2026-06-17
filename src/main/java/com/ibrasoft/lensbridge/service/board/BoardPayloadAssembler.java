@@ -10,6 +10,7 @@ import com.ibrasoft.lensbridge.model.board.WeeklyContent;
 import com.ibrasoft.lensbridge.model.board.frames.FrameDefinition;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.service.BoardService;
+import com.ibrasoft.lensbridge.service.OpenWeatherService;
 import com.ibrasoft.lensbridge.service.PosterService;
 import com.ibrasoft.lensbridge.service.board.transformer.EventListFrameTransformer;
 import com.ibrasoft.lensbridge.service.board.transformer.PosterFrameTransformer;
@@ -34,6 +35,7 @@ public class BoardPayloadAssembler {
     private final PosterFrameTransformer posterTransformer;
     private final EventListFrameTransformer eventListTransformer;
     private final WeeklyContentFrameTransformer weeklyContentTransformer;
+    private final OpenWeatherService openWeatherService;
 
     public MusallahBoardPayload assemble(UUID deviceId) {
         Device device = deviceRepository.findById(deviceId)
@@ -51,6 +53,7 @@ public class BoardPayloadAssembler {
         return MusallahBoardPayload.builder()
                 .deviceConfig(ctx.getConfig())
                 .frames(frames)
+                .weather(openWeatherService.getCurrentWeather())
                 .build();
     }
 

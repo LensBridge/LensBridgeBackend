@@ -1,5 +1,6 @@
 package com.ibrasoft.lensbridge.dto.board.response;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
 import com.ibrasoft.lensbridge.model.board.frames.FrameDefinition;
 import lombok.AllArgsConstructor;
@@ -16,4 +17,5 @@ import java.util.List;
 public class MusallahBoardPayload {
     private DeviceConfig deviceConfig;
     private List<FrameDefinition> frames;
+    private JsonNode weather;
 }

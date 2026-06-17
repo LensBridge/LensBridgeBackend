@@ -31,7 +31,11 @@
       "PowerShell(.\\\\mvnw.cmd test-compile 2>&1 | Select-Object -Last 40)",
       "Bash(go build *)",
       "Bash(go vet *)",
-      "Bash(wsl *)"
+      "Bash(wsl *)",
+      "Bash(Select-Object -First 50)",
+      "Bash(gh pr *)",
+      "Read(//tmp/**)",
+      "Bash(Select-Object Name)"
     ]
   }
 }
