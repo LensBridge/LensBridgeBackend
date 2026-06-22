@@ -43,3 +43,4 @@ lensbridge-dev.db
 !.env.example
 docker/nginx/certs/*
 !docker/nginx/certs/.gitkeep
+.claude/worktrees/*
