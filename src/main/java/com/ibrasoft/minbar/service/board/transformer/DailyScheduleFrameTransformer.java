@@ -1,0 +1,57 @@
+package com.ibrasoft.minbar.service.board.transformer;
+
+import com.ibrasoft.minbar.dto.board.response.frames.EventView;
+import com.ibrasoft.minbar.model.board.BoardEvent;
+import com.ibrasoft.minbar.model.board.frames.DailyScheduleFrameConfig;
+import com.ibrasoft.minbar.model.board.frames.FrameDefinition;
+import com.ibrasoft.minbar.model.board.frames.FrameSlot;
+import com.ibrasoft.minbar.model.board.frames.FrameType;
+import com.ibrasoft.minbar.service.board.BoardContext;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+/**
+ * Transforms a list of Events into a single DAILY_SCHEDULE FrameDefinition
+ * representing events for the current day.
+ */
+@Component
+public class DailyScheduleFrameTransformer implements FrameTransformer<List<BoardEvent>> {
+
+    @Override
+    public FrameType supports() {
+        return FrameType.DAILY_SCHEDULE;
+    }
+
+    @Override
+    public FrameDefinition transform(List<BoardEvent> boardEvents, BoardContext ctx) {
+        List<EventView> eventViews = boardEvents.stream()
+                .map(this::toEventView)
+                .collect(Collectors.toList());
+
+        DailyScheduleFrameConfig config = DailyScheduleFrameConfig.builder()
+                .heading("Today")
+                .events(eventViews)
+                .build();
+
+        return FrameDefinition.builder()
+                .frameType(FrameType.DAILY_SCHEDULE)
+                .durationInSeconds(null)
+                .frameConfig(config)
+                .slot(FrameSlot.PRIMARY)
+                .priority(null)
+                .build();
+    }
+
+    private EventView toEventView(BoardEvent boardEvent) {
+        return EventView.builder()
+                .name(boardEvent.getName())
+                .description(boardEvent.getDescription())
+                .location(boardEvent.getLocation())
+                .startTime(boardEvent.getStartTime())
+                .endTime(boardEvent.getEndTime())
+                .allDay(boardEvent.getAllDay())
+                .build();
+    }
+}
