@@ -25,7 +25,7 @@ import java.util.UUID;
 @Builder
 @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 @Entity
-@Table(name = "events")
+@Table(name = "mediaEvents")
 public class MediaEvent {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

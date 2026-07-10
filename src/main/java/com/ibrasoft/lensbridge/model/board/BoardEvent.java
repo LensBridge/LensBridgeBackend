@@ -7,7 +7,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "board_events")
+@Table(name = "boardEvents")
 @Data @Builder @NoArgsConstructor @AllArgsConstructor
 public class BoardEvent {
     @Id
