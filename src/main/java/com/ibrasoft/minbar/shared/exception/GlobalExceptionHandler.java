@@ -1,0 +1,142 @@
+package com.ibrasoft.minbar.shared.exception;
+
+import com.ibrasoft.minbar.auth.dto.response.MessageResponse;
+import com.ibrasoft.minbar.media.dto.response.DailyLimitErrorResponse;
+import com.ibrasoft.minbar.media.dto.response.ErrorResponse;
+import com.ibrasoft.minbar.media.dto.response.FileSizeErrorResponse;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.authorization.AuthorizationDeniedException;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.validation.FieldError;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+
+import java.util.HashMap;
+import java.util.Map;
+
+@RestControllerAdvice
+@Slf4j
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(ApiResponseException.class)
+    public ResponseEntity<Object> handleApiResponseException(ApiResponseException ex) {
+        return ResponseEntity.status(ex.getStatus()).body(ex.getBody());
+    }
+
+    @ExceptionHandler(RefreshTokenException.class)
+    public ResponseEntity<MessageResponse> handleRefreshToken(RefreshTokenException ex) {
+        log.warn("Refresh token rejected: {}", ex.getMessage());
+        return ResponseEntity.status(ex.getStatus()).body(new MessageResponse(ex.getMessage()));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<MessageResponse> handleIllegalArgument(IllegalArgumentException ex) {
+        return ResponseEntity.badRequest().body(new MessageResponse(ex.getMessage()));
+    }
+
+    @ExceptionHandler(SecurityException.class)
+    public ResponseEntity<MessageResponse> handleSecurity(SecurityException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new MessageResponse(ex.getMessage()));
+    }
+
+    @ExceptionHandler(DailyLimitExceededException.class)
+    public ResponseEntity<Object> handleDailyLimitExceeded(DailyLimitExceededException ex) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(DailyLimitErrorResponse.of(ex.getMessage(), ex.getLimit(), ex.getCurrent(), "unknown"));
+    }
+
+    @ExceptionHandler(FileSizeLimitExceededException.class)
+    public ResponseEntity<Object> handleFileSizeLimitExceeded(FileSizeLimitExceededException ex) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(FileSizeErrorResponse.of(ex.getMessage(),
+                        (ex.getMaxBytes() / 1024 / 1024) + "MB",
+                        (ex.getActualBytes() / 1024 / 1024) + "MB"));
+    }
+
+    @ExceptionHandler(InvalidContentTypeException.class)
+    public ResponseEntity<Object> handleInvalidContentType(InvalidContentTypeException ex) {
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+                .body(ErrorResponse.of(ex.getMessage()));
+    }
+
+    @ExceptionHandler(EventNotAcceptingUploadsException.class)
+    public ResponseEntity<Object> handleEventNotAcceptingUploads(EventNotAcceptingUploadsException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(ex.getMessage()));
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<Map<String, Object>> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException ex) {
+        log.error("Multipart upload too large: {}", ex.getMessage());
+        Map<String, Object> response = new HashMap<>();
+        response.put("error", "File Too Large");
+        response.put("message", "The uploaded file exceeds the maximum allowed size");
+        response.put("status", HttpStatus.PAYLOAD_TOO_LARGE.value());
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(response);
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<Map<String, String>> handleValidationExceptions(MethodArgumentNotValidException ex) {
+        Map<String, String> errors = new HashMap<>();
+        ex.getBindingResult().getAllErrors().forEach(error -> {
+            String fieldName = ((FieldError) error).getField();
+            errors.put(fieldName, error.getDefaultMessage());
+        });
+        return ResponseEntity.badRequest().body(errors);
+    }
+
+    @ExceptionHandler(UsernameNotFoundException.class)
+    public ResponseEntity<MessageResponse> handleUsernameNotFoundException(UsernameNotFoundException ex) {
+        log.warn("Authentication failed - user not found: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new MessageResponse("Invalid username or password"));
+    }
+
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<MessageResponse> handleBadCredentialsException(BadCredentialsException ex) {
+        log.warn("Authentication failed - bad credentials: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new MessageResponse("Invalid username or password"));
+    }
+
+    @ExceptionHandler(DisabledException.class)
+    public ResponseEntity<MessageResponse> handleDisabledException(DisabledException ex) {
+        log.warn("Authentication failed - account disabled: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new MessageResponse("Account is disabled. Please verify your email."));
+    }
+
+    @ExceptionHandler(AuthorizationDeniedException.class)
+    public ResponseEntity<MessageResponse> handleAuthorizationDeniedException(AuthorizationDeniedException ex) {
+        log.warn("Authorization failed: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new MessageResponse("Access denied."));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<MessageResponse> handleHttpMessageNotReadableException(HttpMessageNotReadableException ex) {
+        log.error("Malformed JSON request: ", ex);
+        return ResponseEntity.badRequest().body(new MessageResponse("Malformed JSON request"));
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<MessageResponse> handleHttpRequestMethodNotSupportedException(HttpRequestMethodNotSupportedException ex) {
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(new MessageResponse("HTTP method not supported"));
+    }
+
+    @ExceptionHandler(FileProcessingException.class)
+    public ResponseEntity<MessageResponse> handleFileProcessingException(FileProcessingException ex) {
+        log.error("File processing error: {}", ex.getMessage(), ex);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new MessageResponse("Failed to process upload"));
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<MessageResponse> handleGenericException(Exception ex) {
+        log.error("Unexpected error: {}", ex.getMessage(), ex);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new MessageResponse("An unexpected error occurred"));
+    }
+}

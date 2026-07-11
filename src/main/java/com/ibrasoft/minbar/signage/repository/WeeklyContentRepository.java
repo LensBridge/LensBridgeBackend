@@ -1,0 +1,16 @@
+package com.ibrasoft.minbar.signage.repository;
+
+import com.ibrasoft.minbar.signage.model.WeeklyContent;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+@Repository
+public interface WeeklyContentRepository extends JpaRepository<WeeklyContent, UUID> {
+    Optional<WeeklyContent> findByYearAndWeekNumber(int year, int weekNumber);
+    boolean existsByYearAndWeekNumber(int year, int weekNumber);
+    List<WeeklyContent> findByYear(int year);
+}
