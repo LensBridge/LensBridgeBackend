@@ -5,6 +5,7 @@ import com.ibrasoft.lensbridge.dto.board.request.UpdateBoardConfigRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateCalendarEventRequest;
 import com.ibrasoft.lensbridge.dto.board.request.WeeklyContentRequest;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
+import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.BoardEvent;
 import com.ibrasoft.lensbridge.model.board.Device;
@@ -50,6 +51,8 @@ class BoardServiceTest {
     private BoardEventRepository boardEventRepository;
     @Mock
     private WeeklyContentRepository weeklyContentRepository;
+    @Mock
+    private BoardStreamHandler boardStream;
 
     @InjectMocks
     private BoardService service;
@@ -57,7 +60,7 @@ class BoardServiceTest {
     private DeviceConfig config(UUID deviceId) {
         DeviceConfig c = new DeviceConfig();
         c.setId(deviceId);
-        c.setPosterCycleIntervalMs(5000);
+        c.setDarkModeAfterIsha(true);
         return c;
     }
 
@@ -116,13 +119,11 @@ class BoardServiceTest {
         when(boardConfigRepository.save(existing)).thenReturn(existing);
 
         UpdateBoardConfigRequest request = UpdateBoardConfigRequest.builder()
-                .posterCycleIntervalMs(9000)
                 .enableScrollingMessage(true)
                 .build();
 
         DeviceConfig saved = service.updateBoardConfig(id, request);
 
-        assertThat(saved.getPosterCycleIntervalMs()).isEqualTo(9000);
         assertThat(saved.isEnableScrollingMessage()).isTrue();
         assertThat(saved.getLocation()).isNull(); // untouched
     }

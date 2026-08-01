@@ -8,7 +8,8 @@ import java.util.UUID;
 
 /**
  * Append-only telemetry sample emitted by an agent over its WebSocket session.
- * Retention is bounded by a periodic prune (default 30 days).
+ * <p>
+ * Currently unbounded — one row per heartbeat, forever. A retention prune is still owed.
  */
 @Entity
 @Table(name = "device_telemetry", indexes = {
@@ -20,6 +21,8 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class DeviceTelemetry {
+
+    public static final int MAX_FRAME_KEY_LENGTH = 64;
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -46,6 +49,6 @@ public class DeviceTelemetry {
 
     private String wifiSsid;
 
-    /** UUID of the FrameDefinition currently on screen, if known. */
-    private UUID displayedFrameId;
+    @Column(name = "displayed_frame_key", length = MAX_FRAME_KEY_LENGTH)
+    private String displayedFrameKey;
 }

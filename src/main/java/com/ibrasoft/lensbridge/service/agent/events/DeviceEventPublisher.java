@@ -79,6 +79,16 @@ public class DeviceEventPublisher {
         publishCommandEvent(cmd, "result", extra);
     }
 
+    /**
+     * Terminal transition the backend decided on its own (expiry, timeout) rather than one
+     * the agent reported. Emitted as {@code result} so dashboards need only one handler.
+     */
+    public void commandTerminated(DeviceCommand cmd) {
+        Map<String, Object> extra = new LinkedHashMap<>();
+        extra.put("errorMessage", cmd.getErrorMessage());
+        publishCommandEvent(cmd, "result", extra);
+    }
+
     private void publishCommandEvent(DeviceCommand cmd, String event, Map<String, Object> extra) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("event", event);

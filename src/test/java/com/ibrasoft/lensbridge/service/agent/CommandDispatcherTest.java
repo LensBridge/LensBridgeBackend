@@ -60,7 +60,7 @@ class CommandDispatcherTest {
         UUID deviceId = registerDevice();
 
         CommandIssuedResponse resp = dispatcher.issue(deviceId, "admin@example.com",
-                new IssueCommandRequest("chrome.reload", null, null));
+                new IssueCommandRequest("chrome.reload", null, null, null));
 
         assertEquals(deviceId, resp.deviceId());
         assertEquals(DeviceCommandStatus.PENDING, resp.status());
@@ -73,7 +73,7 @@ class CommandDispatcherTest {
         UUID deviceId = registerDevice();
         AgentSession session = liveSession(deviceId);
 
-        dispatcher.issue(deviceId, "admin", new IssueCommandRequest("chrome.reload", null, 15_000));
+        dispatcher.issue(deviceId, "admin", new IssueCommandRequest("chrome.reload", null, 15_000, null));
 
         verify(session.getTransport(), atLeastOnce()).sendMessage(any());
         verify(events).commandDelivered(any());
@@ -85,7 +85,7 @@ class CommandDispatcherTest {
         AgentSession session = closedSession(deviceId);
 
         CommandIssuedResponse resp = dispatcher.issue(deviceId, "admin",
-                new IssueCommandRequest("chrome.reload", null, 15_000));
+                new IssueCommandRequest("chrome.reload", null, 15_000, null));
 
         assertEquals(DeviceCommandStatus.PENDING, resp.status());
         verify(events, never()).commandDelivered(any());
@@ -95,7 +95,7 @@ class CommandDispatcherTest {
     void issue_rejectsUnknownKind() {
         UUID deviceId = registerDevice();
         ResponseStatusException ex = assertThrows(ResponseStatusException.class, () ->
-                dispatcher.issue(deviceId, "admin", new IssueCommandRequest("not.a.thing", null, null)));
+                dispatcher.issue(deviceId, "admin", new IssueCommandRequest("not.a.thing", null, null, null)));
         assertEquals(400, ex.getStatusCode().value());
     }
 
@@ -107,7 +107,7 @@ class CommandDispatcherTest {
         when(deviceRepo.findById(deviceId)).thenReturn(Optional.of(d));
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class, () ->
-                dispatcher.issue(deviceId, "admin", new IssueCommandRequest("chrome.reload", null, null)));
+                dispatcher.issue(deviceId, "admin", new IssueCommandRequest("chrome.reload", null, null, null)));
         assertEquals(409, ex.getStatusCode().value());
     }
 
@@ -180,6 +180,65 @@ class CommandDispatcherTest {
         verify(events, times(2)).commandDelivered(any());
     }
 
+    @Test
+    void flushPending_expiresStaleCommandsInsteadOfDelivering() {
+        UUID deviceId = registerDevice();
+        AgentSession session = liveSession(deviceId);
+
+        DeviceCommand fresh = persistedCommand(deviceId, DeviceCommandStatus.PENDING);
+        DeviceCommand stale = persistedCommand(deviceId, DeviceCommandStatus.PENDING);
+        stale.setKind("system.reboot");
+        stale.setExpiresAt(Instant.now().minusSeconds(1));
+        when(commandRepo.findByDeviceIdAndStatusOrderByIssuedAtAsc(deviceId, DeviceCommandStatus.PENDING))
+                .thenReturn(List.of(stale, fresh));
+
+        dispatcher.flushPending(deviceId, session);
+
+        assertEquals(DeviceCommandStatus.EXPIRED, stale.getStatus());
+        assertNotNull(stale.getFinishedAt());
+        assertNotNull(stale.getErrorMessage());
+        assertEquals(DeviceCommandStatus.DELIVERED, fresh.getStatus());
+        verify(events, times(1)).commandDelivered(any());
+        verify(events, times(1)).commandTerminated(eq(stale));
+    }
+
+    @Test
+    void flushPending_treatsMissingExpiryAsNonExpiring() {
+        UUID deviceId = registerDevice();
+        AgentSession session = liveSession(deviceId);
+
+        // Rows written before expiry support carry a null expiresAt.
+        DeviceCommand legacy = persistedCommand(deviceId, DeviceCommandStatus.PENDING);
+        legacy.setExpiresAt(null);
+        when(commandRepo.findByDeviceIdAndStatusOrderByIssuedAtAsc(deviceId, DeviceCommandStatus.PENDING))
+                .thenReturn(List.of(legacy));
+
+        dispatcher.flushPending(deviceId, session);
+
+        assertEquals(DeviceCommandStatus.DELIVERED, legacy.getStatus());
+    }
+
+    @Test
+    void issue_stampsExpiryFromDefaultTtl() {
+        UUID deviceId = registerDevice();
+
+        CommandIssuedResponse resp = dispatcher.issue(deviceId, "admin",
+                new IssueCommandRequest("chrome.reload", null, null, null));
+
+        assertNotNull(resp.expiresAt());
+        assertTrue(resp.expiresAt().isAfter(resp.issuedAt()));
+    }
+
+    @Test
+    void issue_honoursExplicitTtl() {
+        UUID deviceId = registerDevice();
+
+        CommandIssuedResponse resp = dispatcher.issue(deviceId, "admin",
+                new IssueCommandRequest("system.reboot", null, null, 30));
+
+        assertEquals(30, resp.expiresAt().getEpochSecond() - resp.issuedAt().getEpochSecond());
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────
 
     private UUID registerDevice() {
@@ -207,6 +266,7 @@ class CommandDispatcherTest {
                 .deadlineMs(30_000)
                 .status(status)
                 .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(300))
                 .build();
         when(commandRepo.findById(cmd.getId())).thenReturn(Optional.of(cmd));
         return cmd;

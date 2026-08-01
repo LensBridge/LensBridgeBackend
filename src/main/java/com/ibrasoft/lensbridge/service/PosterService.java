@@ -4,6 +4,7 @@ import com.ibrasoft.lensbridge.dto.board.request.CreatePosterRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdatePosterRequest;
 import com.ibrasoft.lensbridge.dto.upload.response.ErrorResponse;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
+import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.Poster;
 import java.time.Instant;
@@ -31,6 +32,7 @@ public class PosterService {
     private final PosterRepository posterRepository;
     private final R2StorageService r2StorageService;
     private final PosterFrameTransformer posterFrameTransformer;
+    private final BoardStreamHandler boardStream;
 
     @Value("${cloudflare.r2.public-url}")
     private String publicUrl;
@@ -108,6 +110,7 @@ public class PosterService {
 
         poster = posterRepository.save(poster);
         log.info("Created poster: id={}, title={}", poster.getId(), poster.getTitle());
+        boardStream.contentChanged("posters");
 
         return poster;
     }
@@ -132,6 +135,7 @@ public class PosterService {
 
         poster = posterRepository.save(poster);
         log.info("Updated poster: id={}", posterId);
+        boardStream.contentChanged("posters");
 
         return poster;
     }
@@ -173,6 +177,7 @@ public class PosterService {
         poster.setImage(publicUrl + "/" + objectKey);
         poster = posterRepository.save(poster);
         log.info("Updated poster image: id={}", posterId);
+        boardStream.contentChanged("posters");
 
         return poster;
     }
@@ -198,6 +203,7 @@ public class PosterService {
 
         posterRepository.delete(poster);
         log.info("Deleted poster: id={}", posterId);
+        boardStream.contentChanged("posters");
     }
 
     // ==================== Musallah Board Methods ====================

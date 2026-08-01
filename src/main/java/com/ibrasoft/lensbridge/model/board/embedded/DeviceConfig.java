@@ -24,10 +24,7 @@ public class DeviceConfig {
     @Embedded
     private Location location;
 
-    private int posterCycleIntervalMs;
-    private int refreshAfterIshaMinutes;
     private boolean darkModeAfterIsha;
-    private int darkModeAfterMaghribMinutes;
     private boolean enableScrollingMessage;
 
     @ElementCollection(fetch = FetchType.EAGER)

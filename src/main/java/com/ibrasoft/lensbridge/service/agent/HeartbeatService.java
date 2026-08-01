@@ -31,15 +31,22 @@ public class HeartbeatService {
     public void record(UUID deviceId, HeartbeatFrame frame, String remoteIp) {
         Instant now = Instant.now();
 
+        HeartbeatFrame.Telemetry t = frame.getTelemetry();
+
         deviceRepository.findById(deviceId).ifPresent(device -> {
             device.setLastHeartbeat(now);
             if (remoteIp != null && !remoteIp.isBlank()) {
                 device.setLastSeenIp(remoteIp);
             }
+            // Enrollment set this once; a binary push changes it without re-enrolling.
+            String reported = t == null ? null : t.getAgentVersion();
+            if (reported != null && !reported.isBlank() && !reported.equals(device.getAgentVersion())) {
+                log.info("Device {} agent version {} → {}", deviceId, device.getAgentVersion(), reported);
+                device.setAgentVersion(reported);
+            }
             deviceRepository.save(device);
         });
 
-        HeartbeatFrame.Telemetry t = frame.getTelemetry();
         if (t == null) return;
 
         DeviceTelemetry row = DeviceTelemetry.builder()
@@ -54,10 +61,15 @@ public class HeartbeatService {
                 .kioskAlive(t.getKioskAlive())
                 .ipv4(t.getIpv4() == null ? null : String.join(",", t.getIpv4()))
                 .wifiSsid(t.getWifiSsid())
-                .displayedFrameId(t.getDisplayedFrameId())
+                .displayedFrameKey(truncate(t.getDisplayedFrameKey(), DeviceTelemetry.MAX_FRAME_KEY_LENGTH))
                 .build();
         telemetryRepository.save(row);
 
         events.heartbeat(deviceId, frame);
+    }
+
+    private static String truncate(String value, int max) {
+        if (value == null || value.length() <= max) return value;
+        return value.substring(0, max);
     }
 }

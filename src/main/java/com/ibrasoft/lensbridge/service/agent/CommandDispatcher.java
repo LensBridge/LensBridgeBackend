@@ -23,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -49,6 +50,13 @@ import java.util.UUID;
 public class CommandDispatcher {
 
     private static final int DEFAULT_DEADLINE_MS = 30_000;
+
+    /**
+     * How long an undelivered command stays deliverable. Long enough to survive a kiosk
+     * restart or a brief WiFi drop, short enough that nothing surprising fires after an
+     * outage. Overridable per command via {@code ttlSeconds}.
+     */
+    private static final Duration DEFAULT_TTL = Duration.ofMinutes(5);
 
     /** Discriminator strings registered on {@link CommandPayload}. Updated when adding a command kind. */
     private static final Set<String> KNOWN_KINDS = Set.of(
@@ -86,6 +94,8 @@ public class CommandDispatcher {
         }
 
         int deadline = request.deadlineMs() == null ? DEFAULT_DEADLINE_MS : request.deadlineMs();
+        Duration ttl = request.ttlSeconds() == null ? DEFAULT_TTL : Duration.ofSeconds(request.ttlSeconds());
+        Instant issuedAt = Instant.now();
 
         DeviceCommand cmd = commandRepository.save(DeviceCommand.builder()
                 .deviceId(deviceId)
@@ -93,6 +103,8 @@ public class CommandDispatcher {
                 .payloadJson(payloadJson)
                 .issuedBy(issuedBy)
                 .deadlineMs(deadline)
+                .issuedAt(issuedAt)
+                .expiresAt(issuedAt.plus(ttl))
                 .status(DeviceCommandStatus.PENDING)
                 .build());
 
@@ -104,19 +116,49 @@ public class CommandDispatcher {
                 cmd.getId(), cmd.getKind(), deviceId, issuedBy, cmd.getStatus());
 
         return new CommandIssuedResponse(
-                cmd.getId(), cmd.getDeviceId(), cmd.getKind(), cmd.getStatus(), cmd.getIssuedAt());
+                cmd.getId(), cmd.getDeviceId(), cmd.getKind(), cmd.getStatus(),
+                cmd.getIssuedAt(), cmd.getExpiresAt());
     }
 
-    /** Delivers all PENDING commands for the device to the freshly-authenticated session. */
+    /**
+     * Delivers PENDING commands for the device to the freshly-authenticated session,
+     * oldest first. Anything past its {@code expiresAt} is retired rather than delivered —
+     * a device returning from a long outage must not replay a queue of stale commands.
+     */
     @Transactional
     public void flushPending(UUID deviceId, AgentSession session) {
         List<DeviceCommand> pending = commandRepository
                 .findByDeviceIdAndStatusOrderByIssuedAtAsc(deviceId, DeviceCommandStatus.PENDING);
         if (pending.isEmpty()) return;
-        log.info("Flushing {} pending command(s) to device {}", pending.size(), deviceId);
+
+        Instant now = Instant.now();
+        int delivered = 0;
+        int expired = 0;
         for (DeviceCommand cmd : pending) {
-            deliverTo(cmd, session);
+            if (isExpired(cmd, now)) {
+                expire(cmd, now);
+                expired++;
+            } else {
+                deliverTo(cmd, session);
+                delivered++;
+            }
         }
+        log.info("Flushed {} pending command(s) to device {} ({} expired)", delivered, deviceId, expired);
+    }
+
+    /** Retires a command that outlived its delivery window. */
+    void expire(DeviceCommand cmd, Instant now) {
+        cmd.setStatus(DeviceCommandStatus.EXPIRED);
+        cmd.setFinishedAt(now);
+        cmd.setErrorMessage("Expired before delivery (device offline since " + cmd.getIssuedAt() + ")");
+        commandRepository.save(cmd);
+        events.commandTerminated(cmd);
+        log.info("Command {} ({}) for device {} expired undelivered", cmd.getId(), cmd.getKind(), cmd.getDeviceId());
+    }
+
+    /** Null {@code expiresAt} means a row predating expiry support; treat it as non-expiring. */
+    static boolean isExpired(DeviceCommand cmd, Instant now) {
+        return cmd.getExpiresAt() != null && cmd.getExpiresAt().isBefore(now);
     }
 
     private void deliverTo(DeviceCommand cmd, AgentSession session) {

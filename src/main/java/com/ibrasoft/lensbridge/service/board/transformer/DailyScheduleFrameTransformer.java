@@ -27,7 +27,7 @@ public class DailyScheduleFrameTransformer implements FrameTransformer<List<Boar
     @Override
     public FrameDefinition transform(List<BoardEvent> boardEvents, BoardContext ctx) {
         List<EventView> eventViews = boardEvents.stream()
-                .map(this::toEventView)
+                .map(EventView::of)
                 .collect(Collectors.toList());
 
         DailyScheduleFrameConfig config = DailyScheduleFrameConfig.builder()
@@ -44,14 +44,4 @@ public class DailyScheduleFrameTransformer implements FrameTransformer<List<Boar
                 .build();
     }
 
-    private EventView toEventView(BoardEvent boardEvent) {
-        return EventView.builder()
-                .name(boardEvent.getName())
-                .description(boardEvent.getDescription())
-                .location(boardEvent.getLocation())
-                .startTime(boardEvent.getStartTime())
-                .endTime(boardEvent.getEndTime())
-                .allDay(boardEvent.getAllDay())
-                .build();
-    }
 }

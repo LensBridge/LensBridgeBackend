@@ -9,7 +9,7 @@ import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
 
 import com.ibrasoft.lensbridge.handler.AgentWebSocketHandler;
-import com.ibrasoft.lensbridge.handler.SignboardHandler;
+import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
 import org.springframework.web.socket.config.annotation.WebSocketTransportRegistration;
 import org.springframework.web.socket.server.standard.ServletServerContainerFactoryBean;
 
@@ -17,7 +17,7 @@ import org.springframework.web.socket.server.standard.ServletServerContainerFact
 @EnableWebSocket
 public class WebSocketConfig implements WebSocketConfigurer {
 
-    private final SignboardHandler signboardHandler;
+    private final BoardStreamHandler boardStreamHandler;
     private final AgentWebSocketHandler agentWebSocketHandler;
 
     @Value("${frontend.baseurl}")
@@ -26,15 +26,16 @@ public class WebSocketConfig implements WebSocketConfigurer {
     @Value("${musallahboard.baseurl}")
     String musallahBoardBaseUrl;
 
-    public WebSocketConfig(SignboardHandler signboardHandler,
+    public WebSocketConfig(BoardStreamHandler boardStreamHandler,
                            AgentWebSocketHandler agentWebSocketHandler) {
-        this.signboardHandler = signboardHandler;
+        this.boardStreamHandler = boardStreamHandler;
         this.agentWebSocketHandler = agentWebSocketHandler;
     }
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-        registry.addHandler(signboardHandler, "/api/refresh-musallahboard")
+        // Path is the deployed kiosk's; boards scope themselves with ?deviceId=<uuid>.
+        registry.addHandler(boardStreamHandler, "/api/refresh-musallahboard")
                 .setAllowedOrigins(frontendBaseUrl, musallahBoardBaseUrl);
 
         // Agents authenticate per-frame inside the channel; the WS upgrade itself is open.

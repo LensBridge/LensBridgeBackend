@@ -3,6 +3,7 @@ package com.ibrasoft.lensbridge.service;
 import com.ibrasoft.lensbridge.dto.board.request.CreatePosterRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdatePosterRequest;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
+import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.Poster;
 import com.ibrasoft.lensbridge.model.board.frames.FrameDefinition;
@@ -45,6 +46,8 @@ class PosterServiceTest {
 
     @Mock
     private PosterFrameTransformer posterFrameTransformer;
+    @Mock
+    private BoardStreamHandler boardStream;
 
     @InjectMocks
     private PosterService service;

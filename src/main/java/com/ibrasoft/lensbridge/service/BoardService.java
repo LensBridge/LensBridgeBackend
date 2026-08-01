@@ -6,6 +6,7 @@ import com.ibrasoft.lensbridge.dto.board.request.UpdateCalendarEventRequest;
 import com.ibrasoft.lensbridge.dto.board.request.WeeklyContentRequest;
 import com.ibrasoft.lensbridge.dto.upload.response.ErrorResponse;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
+import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
 import com.ibrasoft.lensbridge.model.board.*;
 import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
 import com.ibrasoft.lensbridge.repository.sql.BoardConfigRepository;
@@ -35,6 +36,7 @@ public class BoardService {
     private final DeviceRepository deviceRepository;
     private final BoardEventRepository boardEventRepository;
     private final WeeklyContentRepository weeklyContentRepository;
+    private final BoardStreamHandler boardStream;
 
     // ==================== Board Config ====================
 
@@ -57,20 +59,19 @@ public class BoardService {
         deviceConfig.setDevice(device);
         DeviceConfig saved = boardConfigRepository.save(deviceConfig);
         log.info("Saved board config for device: {}", deviceId);
+        boardStream.configChanged(deviceId);
         return saved;
     }
 
     public DeviceConfig updateBoardConfig(UUID deviceId, UpdateBoardConfigRequest request) {
         DeviceConfig existing = getBoardConfigOrThrow(deviceId);
         Patch.apply(request.getLocation(), existing::setLocation);
-        Patch.apply(request.getPosterCycleIntervalMs(), existing::setPosterCycleIntervalMs);
-        Patch.apply(request.getRefreshAfterIshaMinutes(), existing::setRefreshAfterIshaMinutes);
         Patch.apply(request.getDarkModeAfterIsha(), existing::setDarkModeAfterIsha);
-        Patch.apply(request.getDarkModeAfterMaghribMinutes(), existing::setDarkModeAfterMaghribMinutes);
         Patch.apply(request.getEnableScrollingMessage(), existing::setEnableScrollingMessage);
         Patch.apply(request.getScrollingMessages(), existing::setScrollingMessages);
         DeviceConfig saved = boardConfigRepository.save(existing);
         log.info("Updated board config for device: {}", deviceId);
+        boardStream.configChanged(deviceId);
         return saved;
     }
 
@@ -95,9 +96,19 @@ public class BoardService {
                         ErrorResponse.of("Weekly content not found for week " + weekNumber + " of " + year)));
     }
 
+    /**
+     * @param today the board's local date. Callers with a device in hand must pass its date,
+     *              not the server's — near midnight the two disagree and the board would
+     *              show the wrong week's jummah times.
+     */
+    public Optional<WeeklyContent> getWeeklyContentFor(LocalDate today) {
+        WeekId week = WeekId.fromDate(today);
+        return weeklyContentRepository.findByYearAndWeekNumber(week.getYear(), week.getWeekNumber());
+    }
+
+    /** Current week in the server's zone. For callers with no device context. */
     public Optional<WeeklyContent> getCurrentWeeklyContent() {
-        WeekId current = WeekId.fromDate(LocalDate.now());
-        return weeklyContentRepository.findByYearAndWeekNumber(current.getYear(), current.getWeekNumber());
+        return getWeeklyContentFor(LocalDate.now());
     }
 
     public List<WeeklyContent> getWeeklyContentByYear(int year) {
@@ -141,6 +152,7 @@ public class BoardService {
 
         WeeklyContent saved = weeklyContentRepository.save(content);
         log.info("Saved weekly content for week {} of {}", weekNumber, year);
+        boardStream.contentChanged("weekly-content");
         return saved;
     }
 
@@ -151,6 +163,7 @@ public class BoardService {
                         ErrorResponse.of("Weekly content not found for week " + weekNumber + " of " + year)));
         weeklyContentRepository.delete(content);
         log.info("Deleted weekly content for week {} of {}", weekNumber, year);
+        boardStream.contentChanged("weekly-content");
     }
 
     // ==================== Events ====================
@@ -190,6 +203,7 @@ public class BoardService {
                 .build();
         BoardEvent saved = boardEventRepository.save(boardEvent);
         log.info("Created event: id={}, name={}", saved.getId(), saved.getName());
+        boardStream.contentChanged("events");
         return saved;
     }
 
@@ -204,6 +218,7 @@ public class BoardService {
         Patch.apply(request.getAudience(), existing::setAudience);
         BoardEvent saved = boardEventRepository.save(existing);
         log.info("Updated event: id={}", eventId);
+        boardStream.contentChanged("events");
         return saved;
     }
 
@@ -211,5 +226,6 @@ public class BoardService {
         BoardEvent boardEvent = getEventById(eventId);
         boardEventRepository.delete(boardEvent);
         log.info("Deleted event: id={}", eventId);
+        boardStream.contentChanged("events");
     }
 }

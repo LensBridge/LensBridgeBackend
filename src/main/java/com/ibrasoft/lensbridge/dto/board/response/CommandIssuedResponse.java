@@ -10,5 +10,6 @@ public record CommandIssuedResponse(
         UUID deviceId,
         String kind,
         DeviceCommandStatus status,
-        Instant issuedAt
+        Instant issuedAt,
+        Instant expiresAt
 ) {}

@@ -48,7 +48,7 @@ class HeartbeatServiceTest {
         t.setKioskAlive(true);
         t.setIpv4(List.of("10.0.0.1", "192.168.1.2"));
         t.setWifiSsid("MSA-WIFI");
-        t.setDisplayedFrameId(UUID.randomUUID());
+        t.setDisplayedFrameKey("poster-3");
         frame.setTelemetry(t);
         return frame;
     }

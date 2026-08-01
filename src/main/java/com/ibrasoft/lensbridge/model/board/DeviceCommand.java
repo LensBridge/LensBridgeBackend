@@ -44,8 +44,11 @@ public class DeviceCommand {
     @Column(nullable = false)
     private String issuedBy;
 
-    /** Maximum execution time as supplied by the issuer; null = server default. */
+    /** Maximum execution time once the agent picks the command up; null = server default. */
     private Integer deadlineMs;
+
+    @Column(name = "expires_at")
+    private Instant expiresAt;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

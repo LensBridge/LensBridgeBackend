@@ -7,7 +7,7 @@ import com.ibrasoft.lensbridge.dto.board.request.UpdateCalendarEventRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdatePosterRequest;
 import com.ibrasoft.lensbridge.dto.board.request.WeeklyContentRequest;
 import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
-import com.ibrasoft.lensbridge.handler.SignboardHandler;
+import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
 import com.ibrasoft.lensbridge.model.audit.AuditAction;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.BoardEvent;
@@ -23,7 +23,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -52,8 +51,7 @@ public class BoardAdminController {
     private final PosterService posterService;
     private final BoardService boardService;
     private final AdminAuditService auditService;
-    @Autowired
-    private SignboardHandler signboardHandler;
+    private final BoardStreamHandler boardStream;
 
     // ==================== Board Config Endpoints ====================
 
@@ -285,12 +283,10 @@ public class BoardAdminController {
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<String> refreshSignboard() {
-        signboardHandler.sendRefreshCommand();
-        return ResponseEntity.ok("Refresh command sent to MusallahBoard instances");
+    public ResponseEntity<MessageResponse> refreshSignboard() {
+        boardStream.refreshAll();
+        return ResponseEntity.ok(new MessageResponse("Refresh sent to all MusallahBoard instances"));
     }
-
-    // ==================== Helper Methods ====================
 
     private String getCurrentUserEmail() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();

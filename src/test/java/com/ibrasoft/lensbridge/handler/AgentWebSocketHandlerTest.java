@@ -3,6 +3,7 @@ package com.ibrasoft.lensbridge.handler;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ibrasoft.lensbridge.model.board.Audience;
+import com.ibrasoft.lensbridge.dto.board.agent.HeartbeatFrame;
 import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.service.agent.AgentSessionRegistry;
@@ -14,6 +15,7 @@ import com.ibrasoft.lensbridge.service.agent.handshake.AuthSignaturePayload;
 import com.ibrasoft.lensbridge.service.agent.handshake.Ed25519Verifier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketMessage;
@@ -208,6 +210,32 @@ class AgentWebSocketHandlerTest {
 
         verify(heartbeatService).record(eq(device.getId()), any(), any());
         assertTrue(s.isOpen, "heartbeat should not close session");
+    }
+
+    /**
+     * Regression: the agent reports the kiosk's slide key ("next-prayer", "poster-3"), which
+     * is not a UUID. While the field was typed UUID every heartbeat from a working board
+     * failed to parse and the session was closed with 4004, so devices looked permanently
+     * offline. The legacy displayedFrameId name must keep working.
+     */
+    @Test
+    void heartbeat_acceptsNonUuidFrameKey() throws Exception {
+        KeyPair kp = Ed25519TestUtil.generate();
+        Device device = persistedDeviceWith(Ed25519TestUtil.rawPublicKey(kp.getPublic()));
+
+        FakeSession s = openSession();
+        Hello hello = parseHello(s.outbox.get(0));
+        deliverAuth(s, hello.sessionId, hello.challenge, device.getId(), System.currentTimeMillis(), kp);
+
+        ArgumentCaptor<HeartbeatFrame> captor = ArgumentCaptor.forClass(HeartbeatFrame.class);
+        deliver(s, String.format(
+                "{\"type\":\"heartbeat\",\"seq\":2,\"sessionId\":\"%s\"," +
+                        "\"telemetry\":{\"kioskAlive\":true,\"displayedFrameId\":\"next-prayer\"}}",
+                hello.sessionId));
+
+        verify(heartbeatService).record(eq(device.getId()), captor.capture(), any());
+        assertEquals("next-prayer", captor.getValue().getTelemetry().getDisplayedFrameKey());
+        assertTrue(s.isOpen, "a non-UUID frame key must not close the session");
     }
 
     @Test

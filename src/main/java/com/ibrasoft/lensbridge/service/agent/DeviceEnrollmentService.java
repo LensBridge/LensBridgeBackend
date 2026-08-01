@@ -95,10 +95,7 @@ public class DeviceEnrollmentService {
                         .timezone("America/Toronto")
                         .method(CalculationMethod.ISNA)
                         .build())
-                .posterCycleIntervalMs(10000)
-                .refreshAfterIshaMinutes(30)
                 .darkModeAfterIsha(true)
-                .darkModeAfterMaghribMinutes(45)
                 .enableScrollingMessage(true)
                 .scrollingMessages(List.of("Welcome to UTM MSA - Follow us @utmmsa for updates!"))
                 .build();

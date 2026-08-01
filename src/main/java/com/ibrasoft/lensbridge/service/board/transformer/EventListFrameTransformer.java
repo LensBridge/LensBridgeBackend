@@ -27,7 +27,7 @@ public class EventListFrameTransformer implements FrameTransformer<List<BoardEve
     @Override
     public FrameDefinition transform(List<BoardEvent> boardEvents, BoardContext ctx) {
         List<EventView> eventViews = boardEvents.stream()
-                .map(this::toEventView)
+                .map(EventView::of)
                 .collect(Collectors.toList());
 
         EventListFrameConfig config = EventListFrameConfig.builder()
@@ -44,14 +44,4 @@ public class EventListFrameTransformer implements FrameTransformer<List<BoardEve
                 .build();
     }
 
-    private EventView toEventView(BoardEvent boardEvent) {
-        return EventView.builder()
-                .name(boardEvent.getName())
-                .description(boardEvent.getDescription())
-                .location(boardEvent.getLocation())
-                .startTime(boardEvent.getStartTime())
-                .endTime(boardEvent.getEndTime())
-                .allDay(boardEvent.getAllDay())
-                .build();
-    }
 }
