@@ -29,6 +29,12 @@
     </scm>
     <properties>
         <java.version>21</java.version>
+        <springdoc.version>2.8.8</springdoc.version>
+        <springdoc-maven-plugin.version>1.4</springdoc-maven-plugin.version>
+        <!-- Deliberately not 8080: spec generation must not collide with a
+             running dev server, locally or on a shared CI runner. -->
+        <openapi.gen.port>8089</openapi.gen.port>
+        <openapi.gen.jmxPort>9011</openapi.gen.jmxPort>
     </properties>
     <dependencies>
         <dependency>
@@ -159,7 +165,7 @@
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-            <version>2.8.8</version>
+            <version>${springdoc.version}</version>
         </dependency>
 
         <dependency>
@@ -179,11 +185,6 @@
             <scope>runtime</scope>
         </dependency>
 
-          <dependency>
-      <groupId>com.ibrasoft</groupId>
-      <artifactId>tcketmanage-core</artifactId>
-      <version>0.0.1-SNAPSHOT</version>
-  </dependency>
 
 
 
@@ -221,5 +222,77 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!--
+            Generates openapi.yaml, the contract consumed by LensBridgeFrontend,
+            MusallahBoard/frontend and the Go agent. The file is committed so that
+            any change to a response shape shows up as a reviewable spec diff.
+
+            Run with: ./mvnw verify -P openapi
+
+            The spec is produced by starting the app and scraping /v3/api-docs.yaml,
+            so this needs a bootable context: the dev profile supplies fallbacks for
+            every external credential, and SPRINGDOC_API_DOCS_ENABLED is forced on
+            because the prod profile disables it.
+        -->
+        <profile>
+            <id>openapi</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.springframework.boot</groupId>
+                        <artifactId>spring-boot-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>pre-integration-test</id>
+                                <goals>
+                                    <goal>start</goal>
+                                </goals>
+                                <configuration>
+                                    <profiles>dev</profiles>
+                                    <jmxPort>${openapi.gen.jmxPort}</jmxPort>
+                                    <arguments>
+                                        <argument>--server.port=${openapi.gen.port}</argument>
+                                    </arguments>
+                                    <environmentVariables>
+                                        <SPRINGDOC_API_DOCS_ENABLED>true</SPRINGDOC_API_DOCS_ENABLED>
+                                    </environmentVariables>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>post-integration-test</id>
+                                <goals>
+                                    <goal>stop</goal>
+                                </goals>
+                                <configuration>
+                                    <jmxPort>${openapi.gen.jmxPort}</jmxPort>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.springdoc</groupId>
+                        <artifactId>springdoc-openapi-maven-plugin</artifactId>
+                        <version>${springdoc-maven-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>generate-openapi-spec</id>
+                                <phase>integration-test</phase>
+                                <goals>
+                                    <goal>generate</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <apiDocsUrl>http://localhost:${openapi.gen.port}/v3/api-docs.yaml</apiDocsUrl>
+                            <outputFileName>openapi.yaml</outputFileName>
+                            <outputDir>${project.basedir}</outputDir>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
 </project>

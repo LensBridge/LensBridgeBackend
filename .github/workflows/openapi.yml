@@ -1,0 +1,61 @@
+name: OpenAPI contract
+
+# openapi.yaml is the contract three separate repositories generate their clients
+# from: LensBridgeFrontend, MusallahBoard (kiosk) and the Go agent. It is committed
+# so that a change to a response shape shows up as a reviewable diff -- this job
+# exists to make sure the committed copy actually matches the controllers.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      - name: Set up Python for the spec quality gate
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: pip install pyyaml
+
+      - name: Run tests
+        run: ./mvnw --batch-mode test
+
+      - name: Regenerate openapi.yaml
+        # Boots the app on a dedicated port and scrapes /v3/api-docs.yaml.
+        run: ./mvnw --batch-mode -P openapi verify -DskipTests
+
+      - name: Fail if the committed spec is stale
+        run: |
+          if ! git diff --exit-code --stat -- openapi.yaml; then
+            echo "::error::openapi.yaml does not match the controllers."
+            echo "A contract change was made without regenerating the spec."
+            echo "Run './mvnw -P openapi verify -DskipTests' and commit openapi.yaml."
+            git diff -- openapi.yaml
+            exit 1
+          fi
+          echo "openapi.yaml matches the controllers."
+
+      - name: Check spec quality
+        # Untyped responses generate `unknown` in TypeScript and `interface{}` in Go,
+        # which is indistinguishable from having no contract at all.
+        run: python tools/check_openapi.py openapi.yaml --strict-ids
+
+      - name: Publish the spec for downstream repos
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi
+          path: openapi.yaml
+          if-no-files-found: error
