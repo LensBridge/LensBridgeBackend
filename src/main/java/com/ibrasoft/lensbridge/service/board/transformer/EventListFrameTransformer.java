@@ -13,8 +13,9 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Transforms a list of Events into a single EVENT_LIST FrameDefinition
- * representing events for the current week.
+ * Transforms a list of Events into a single EVENT_LIST FrameDefinition representing the board's
+ * rolling agenda window (today and the next six days
+ * See {@link com.ibrasoft.lensbridge.service.board.BoardContext#rollingWindowEnd()}.
  */
 @Component
 public class EventListFrameTransformer implements FrameTransformer<List<BoardEvent>> {
@@ -31,7 +32,7 @@ public class EventListFrameTransformer implements FrameTransformer<List<BoardEve
                 .collect(Collectors.toList());
 
         EventListFrameConfig config = EventListFrameConfig.builder()
-                .heading("This Week")
+                .heading("Next 7 Days")
                 .events(eventViews)
                 .build();
 

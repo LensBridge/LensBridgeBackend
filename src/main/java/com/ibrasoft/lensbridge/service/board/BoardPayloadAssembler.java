@@ -80,7 +80,7 @@ public class BoardPayloadAssembler {
 
     private List<FrameDefinition> eventFrames(BoardContext ctx) {
         List<BoardEvent> boardEvents = boardService.getEventsForAudienceInRange(
-                ctx.getDevice().getAudience(), ctx.currentWeekStart(), ctx.currentWeekEnd());
+                ctx.getDevice().getAudience(), ctx.currentDayStart(), ctx.rollingWindowEnd());
         if (boardEvents.isEmpty()) return List.of();
         return List.of(eventListTransformer.transform(boardEvents, ctx));
     }

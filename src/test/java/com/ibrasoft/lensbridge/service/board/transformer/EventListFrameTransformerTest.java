@@ -57,7 +57,7 @@ class EventListFrameTransformerTest {
         FrameDefinition def = transformer.transform(List.of(event("Conference", true)), null);
 
         EventListFrameConfig config = (EventListFrameConfig) def.getFrameConfig();
-        assertThat(config.getHeading()).isEqualTo("This Week");
+        assertThat(config.getHeading()).isEqualTo("Next 7 Days");
         assertThat(config.getEvents()).hasSize(1);
         EventView view = config.getEvents().get(0);
         assertThat(view.getName()).isEqualTo("Conference");
@@ -84,7 +84,7 @@ class EventListFrameTransformerTest {
         FrameDefinition def = transformer.transform(Collections.emptyList(), null);
 
         EventListFrameConfig config = (EventListFrameConfig) def.getFrameConfig();
-        assertThat(config.getHeading()).isEqualTo("This Week");
+        assertThat(config.getHeading()).isEqualTo("Next 7 Days");
         assertThat(config.getEvents()).isEmpty();
         assertThat(def.getFrameType()).isEqualTo(FrameType.EVENT_LIST);
     }

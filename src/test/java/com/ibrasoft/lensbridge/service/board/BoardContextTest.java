@@ -114,6 +114,41 @@ class BoardContextTest {
     }
 
     @Test
+    void rollingWindowEndIsSixDaysOnAtEndOfDay() {
+        ZonedDateTime windowEnd = at(WEDNESDAY).rollingWindowEnd().atZone(ZoneOffset.UTC);
+
+        assertThat(windowEnd.toLocalDate()).isEqualTo(WEDNESDAY.toLocalDate().plusDays(6));
+        assertThat(windowEnd.getHour()).isEqualTo(23);
+        assertThat(windowEnd.getMinute()).isEqualTo(59);
+    }
+
+    /**
+     * The reason the agenda window is not the ISO week: on a Saturday the ISO window ends
+     * tomorrow, so a board showing seven day columns would spend five of them on the past.
+     */
+    @Test
+    void rollingWindowLooksAheadOnSaturdayWhereTheIsoWeekDoesNot() {
+        ZonedDateTime saturday = WEDNESDAY.plusDays(3);
+        BoardContext ctx = at(saturday);
+
+        assertThat(ctx.currentWeekEnd().atZone(ZoneOffset.UTC).toLocalDate())
+                .isEqualTo(saturday.toLocalDate().plusDays(1));
+        assertThat(ctx.rollingWindowEnd().atZone(ZoneOffset.UTC).toLocalDate())
+                .isEqualTo(saturday.toLocalDate().plusDays(6));
+        assertThat(ctx.rollingWindowEnd()).isAfter(ctx.currentWeekEnd());
+    }
+
+    /** The window opens at today's midnight, never mid-day — this morning's events still show. */
+    @Test
+    void rollingWindowStartsAtTodayMidnight() {
+        BoardContext ctx = at(WEDNESDAY);
+
+        assertThat(ctx.currentDayStart().atZone(ZoneOffset.UTC).toLocalDate())
+                .isEqualTo(WEDNESDAY.toLocalDate());
+        assertThat(ctx.currentDayStart()).isBefore(ctx.rollingWindowEnd());
+    }
+
+    @Test
     void currentDayStartAndEndBracketTheMoment() {
         BoardContext ctx = at(WEDNESDAY);
 

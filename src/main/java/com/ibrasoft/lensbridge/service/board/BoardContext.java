@@ -57,6 +57,10 @@ public class BoardContext {
                   .toInstant();
     }
 
+    public Instant rollingWindowEnd() {
+        return now.plusDays(6).with(LocalTime.MAX).toInstant();
+    }
+
     public Instant currentDayStart() {
         return now.with(LocalTime.MIN).toInstant();
     }
