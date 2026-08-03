@@ -82,15 +82,15 @@ public class PosterService {
     /**
      * Create a new poster with an uploaded image.
      */
-    public Poster createPoster(CreatePosterRequest request, MultipartFile imageFile) {
+    public Poster createPoster(CreatePosterRequest request) {
         validateDates(request.getStartTime(), request.getEndTime());
-        validateImageFile(imageFile);
+        validateImageFile(request.getImageFile());
 
         // Upload the image to R2
         String objectKey;
         try {
-            String filename = generatePosterFilename(imageFile.getOriginalFilename());
-            objectKey = r2StorageService.uploadImage(filename, imageFile);
+            String filename = generatePosterFilename(request.getImageFile().getOriginalFilename());
+            objectKey = r2StorageService.uploadImage(filename, request.getImageFile());
             log.info("Uploaded poster image to R2: {}", objectKey);
         } catch (IOException e) {
             log.error("Failed to upload poster image", e);
@@ -106,6 +106,7 @@ public class PosterService {
                 .startTime(request.getStartTime())
                 .endTime(request.getEndTime())
                 .audience(request.getAudience())
+                .signupUrl(request.getSignupUrl())
                 .build();
 
         poster = posterRepository.save(poster);
@@ -130,6 +131,13 @@ public class PosterService {
         Patch.apply(request.getStartTime(), poster::setStartTime);
         Patch.apply(request.getEndTime(), poster::setEndTime);
         Patch.apply(request.getAudience(), poster::setAudience);
+        // An empty string clears the link, so the QR panel can be removed from a
+        // poster without deleting and re-uploading it. Not Patch.apply: the lambda
+        // would capture `poster`, which is reassigned by save() below.
+        if (request.getSignupUrl() != null) {
+            String signupUrl = request.getSignupUrl().trim();
+            poster.setSignupUrl(signupUrl.isEmpty() ? null : signupUrl);
+        }
 
         validateDates(poster.getStartTime(), poster.getEndTime());
 

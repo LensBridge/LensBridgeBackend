@@ -69,6 +69,11 @@ public class BoardService {
         Patch.apply(request.getDarkModeAfterIsha(), existing::setDarkModeAfterIsha);
         Patch.apply(request.getEnableScrollingMessage(), existing::setEnableScrollingMessage);
         Patch.apply(request.getScrollingMessages(), existing::setScrollingMessages);
+        // Empty string clears the link, which drops the QR from the closing slide.
+        if (request.getSocialUrl() != null) {
+            String socialUrl = request.getSocialUrl().trim();
+            existing.setSocialUrl(socialUrl.isEmpty() ? null : socialUrl);
+        }
         DeviceConfig saved = boardConfigRepository.save(existing);
         log.info("Updated board config for device: {}", deviceId);
         boardStream.configChanged(deviceId);

@@ -32,4 +32,16 @@ public class DeviceConfig {
         joinColumns = @JoinColumn(name = "device_id"))
     @Column(name = "message")
     private List<String> scrollingMessages;
+
+    /**
+     * Destination for the "Stay Connected" QR code on the closing slide. Optional:
+     * a board with no socialUrl renders that slide without a QR.
+     *
+     * Deliberately nullable. NOT NULL could not be satisfied here -- devices are
+     * enrolled with a default config that does not set this
+     * (DeviceEnrollmentService), and rows created before the column exists have
+     * no value to backfill from.
+     */
+    @Column(name = "social_url")
+    private String socialUrl;
 }

@@ -8,6 +8,9 @@ import lombok.*;
 
 import java.time.Instant;
 
+import org.hibernate.validator.constraints.URL;
+import org.springframework.web.multipart.MultipartFile;
+
 @Data @Builder @NoArgsConstructor @AllArgsConstructor
 public class CreatePosterRequest {
     @NotBlank(message = "Title is required")
@@ -24,4 +27,10 @@ public class CreatePosterRequest {
 
     @NotNull(message = "Audience is required")
     private Audience audience;
+
+    @NotNull(message = "Image file is required")
+    MultipartFile imageFile;
+
+    @URL
+    private String signupUrl;
 }

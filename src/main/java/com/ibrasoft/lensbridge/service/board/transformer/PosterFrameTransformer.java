@@ -21,6 +21,7 @@ public class PosterFrameTransformer implements FrameTransformer<Poster> {
         PosterFrameConfig config = PosterFrameConfig.builder()
                 .posterUrl(poster.getImage())
                 .title(poster.getTitle())
+                .signupUrl(poster.getSignupUrl())
                 .build();
 
         return FrameDefinition.builder()

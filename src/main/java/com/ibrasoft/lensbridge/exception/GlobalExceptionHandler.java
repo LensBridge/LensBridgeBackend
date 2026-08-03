@@ -21,6 +21,7 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestControllerAdvice
 @Slf4j
@@ -84,13 +85,14 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Map<String, String>> handleValidationExceptions(MethodArgumentNotValidException ex) {
-        Map<String, String> errors = new HashMap<>();
-        ex.getBindingResult().getAllErrors().forEach(error -> {
-            String fieldName = ((FieldError) error).getField();
-            errors.put(fieldName, error.getDefaultMessage());
-        });
-        return ResponseEntity.badRequest().body(errors);
+    public ResponseEntity<MessageResponse> handleValidationExceptions(MethodArgumentNotValidException ex) {
+        String details = ex.getBindingResult().getAllErrors().stream()
+                .map(error -> error instanceof FieldError fieldError
+                        ? fieldError.getField() + ": " + fieldError.getDefaultMessage()
+                        : error.getDefaultMessage())
+                .sorted()
+                .collect(Collectors.joining("; "));
+        return ResponseEntity.badRequest().body(new MessageResponse(details));
     }
 
     @ExceptionHandler(UsernameNotFoundException.class)

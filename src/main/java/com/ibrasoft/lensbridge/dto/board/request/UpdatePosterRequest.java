@@ -16,4 +16,11 @@ public class UpdatePosterRequest {
     private Instant startTime;
     private Instant endTime;
     private Audience audience;
+
+    /**
+     * Sign-up link rendered as a QR code beside the poster. Send an empty string
+     * to clear it; null leaves the existing value alone, like every other field
+     * on this patch request.
+     */
+    private String signupUrl;
 }

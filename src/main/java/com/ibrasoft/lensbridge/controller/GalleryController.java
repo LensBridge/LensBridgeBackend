@@ -10,6 +10,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
+import io.swagger.v3.oas.annotations.Operation;
+import org.springdoc.core.annotations.ParameterObject;
 
 @RestController
 @RequestMapping("/api")
@@ -20,12 +22,13 @@ public class GalleryController {
     private final GalleryService galleryService;
 
     @GetMapping("/gallery")
-    public ResponseEntity<Page<GalleryItemDto>> getAllUploads(Pageable pageable) {
+    @Operation(operationId = "getGalleryUploads", summary = "Page through approved gallery media")
+    public ResponseEntity<Page<GalleryItemDto>> getAllUploads(@ParameterObject Pageable pageable) {
         return ResponseEntity.ok(galleryService.getAllApprovedGalleryItems(pageable));
     }
 
     @GetMapping("/gallery/event/{eventId}")
-    public ResponseEntity<Page<GalleryItemDto>> getGalleryByEvent(@PathVariable UUID eventId, Pageable pageable) {
+    public ResponseEntity<Page<GalleryItemDto>> getGalleryByEvent(@PathVariable UUID eventId, @ParameterObject Pageable pageable) {
         return ResponseEntity.ok(galleryService.getGalleryItemsByEvent(eventId, pageable));
     }
 }

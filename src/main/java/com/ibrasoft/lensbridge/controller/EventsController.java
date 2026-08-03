@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.UUID;
+import io.swagger.v3.oas.annotations.Operation;
 
 @RestController
 @RequestMapping("/api/events")
@@ -17,11 +18,13 @@ public class EventsController {
     private final EventsService eventsService;
 
     @GetMapping
+    @Operation(operationId = "getPublicEvents", summary = "List publicly visible events")
     public ResponseEntity<List<MediaEvent>> getAllEvents() {
         return ResponseEntity.ok(eventsService.getPublicVisibleEvents());
     }
 
     @GetMapping("/{id}")
+    @Operation(operationId = "getPublicEventById", summary = "Fetch a single publicly visible event")
     public ResponseEntity<MediaEvent> getEventById(@PathVariable UUID id) {
         return eventsService.getEventById(id)
                 .map(ResponseEntity::ok)

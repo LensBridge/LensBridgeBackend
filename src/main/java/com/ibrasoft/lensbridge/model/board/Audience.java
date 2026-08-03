@@ -1,5 +1,8 @@
 package com.ibrasoft.lensbridge.model.board;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonValue;
+
 import java.util.Arrays;
 import java.util.Optional;
 
@@ -19,6 +22,17 @@ public enum Audience {
         return Arrays.stream(values())
                 .filter(a -> a.name().equalsIgnoreCase(s) || a.toString().equalsIgnoreCase(s))
                 .findFirst();
+    }
+
+    @JsonValue
+    public String toJson() {
+        return audienceName;
+    }
+
+    /** Accepts either case, so pre-existing callers sending "BROTHERS" still bind. */
+    @JsonCreator
+    public static Audience fromJson(String s) {
+        return from(s).orElseThrow(() -> new IllegalArgumentException("Unknown audience: " + s));
     }
 
     @Override

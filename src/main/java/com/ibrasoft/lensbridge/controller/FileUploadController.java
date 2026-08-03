@@ -3,6 +3,7 @@ package com.ibrasoft.lensbridge.controller;
 import com.ibrasoft.lensbridge.dto.upload.response.PresignedUploadResponse;
 import com.ibrasoft.lensbridge.dto.upload.response.UploadCompletionResponse;
 import com.ibrasoft.lensbridge.dto.upload.response.UploadDto;
+import com.ibrasoft.lensbridge.dto.upload.response.UploadLimitsResponse;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.model.auth.User;
 import com.ibrasoft.lensbridge.security.CurrentUser;
@@ -19,6 +20,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
+import org.springdoc.core.annotations.ParameterObject;
 
 @RestController
 @RequestMapping("/api/upload")
@@ -40,7 +42,7 @@ public class FileUploadController {
 
     @GetMapping("/event/{eventId}")
     @PreAuthorize("hasRole('" + Role.Authority.USER + "')")
-    public ResponseEntity<Page<UploadDto>> getUploadsByEvent(@PathVariable UUID eventId, Pageable pageable) {
+    public ResponseEntity<Page<UploadDto>> getUploadsByEvent(@PathVariable UUID eventId, @ParameterObject Pageable pageable) {
         return ResponseEntity.ok(uploadService.getUploadsByEventAsDto(eventId, pageable));
     }
 
@@ -79,7 +81,7 @@ public class FileUploadController {
 
     @GetMapping("/limits")
     @PreAuthorize("hasRole('" + Role.Authority.USER + "')")
-    public ResponseEntity<?> getUploadLimits(@CurrentUser User user, Authentication authentication) {
+    public ResponseEntity<UploadLimitsResponse> getUploadLimits(@CurrentUser User user, Authentication authentication) {
         Role role = uploadLimitsService.getHighestRole(authentication);
         return ResponseEntity.ok(uploadLimitsService.getLimitsForRole(role, user.getId()));
     }

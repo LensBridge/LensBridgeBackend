@@ -4,6 +4,7 @@ import com.ibrasoft.lensbridge.dto.audit.AuditEventDto;
 import com.ibrasoft.lensbridge.model.audit.AuditAction;
 import com.ibrasoft.lensbridge.service.AdminAuditService;
 import com.ibrasoft.lensbridge.dto.auth.request.SignupRequest;
+import com.ibrasoft.lensbridge.dto.auth.request.VerifyUserRequest;
 import com.ibrasoft.lensbridge.dto.auth.response.UserInfoResponse;
 import com.ibrasoft.lensbridge.dto.upload.response.AdminUploadDto;
 import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
@@ -14,7 +15,9 @@ import com.ibrasoft.lensbridge.model.upload.EventStatus;
 import com.ibrasoft.lensbridge.service.EventsService;
 import com.ibrasoft.lensbridge.service.UploadService;
 import com.ibrasoft.lensbridge.service.UserService;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -28,10 +31,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import org.springdoc.core.annotations.ParameterObject;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -45,19 +48,19 @@ public class AdminController {
     private final AdminAuditService auditService;
     private final UserService userService;
 
-    private ResponseEntity<?> executeUploadAction(UUID uploadId, HttpServletRequest request, Consumer<UUID> serviceAction, AuditAction auditAction, String successMessage) {
+    private ResponseEntity<MessageResponse> executeUploadAction(UUID uploadId, HttpServletRequest request, Consumer<UUID> serviceAction, AuditAction auditAction, String successMessage) {
         serviceAction.accept(uploadId);
         this.auditService.logAuditEvent(getCurrentUserEmail(), auditAction, "Upload", uploadId, request.getRemoteAddr());
         return ResponseEntity.ok(new MessageResponse(successMessage));
     }
 
-    private ResponseEntity<?> executeUserAction(UUID userId, HttpServletRequest request, Consumer<UUID> serviceAction, AuditAction auditAction, String successMessage) {
+    private ResponseEntity<MessageResponse> executeUserAction(UUID userId, HttpServletRequest request, Consumer<UUID> serviceAction, AuditAction auditAction, String successMessage) {
         serviceAction.accept(userId);
         this.auditService.logAuditEvent(getCurrentUserEmail(), auditAction, "User", userId, request.getRemoteAddr());
         return ResponseEntity.ok(new MessageResponse(successMessage));
     }
 
-    private <T, R> ResponseEntity<?> executeCreationAction(T input, HttpServletRequest request,
+    private <T, R> ResponseEntity<MessageResponse> executeCreationAction(T input, HttpServletRequest request,
                                                            Function<T, R> serviceAction, AuditAction auditAction,
                                                            String entityType, Function<R, UUID> idExtractor,
                                                            String successMessage) {
@@ -68,7 +71,8 @@ public class AdminController {
     }
 
     @PostMapping("/create-event")
-    public ResponseEntity<?> createEvent(@RequestParam("eventName") String eventName,
+    @Operation(operationId = "createMediaEvent", summary = "Create a media event")
+    public ResponseEntity<MessageResponse> createEvent(@RequestParam("eventName") String eventName,
                                          @RequestParam(value = "eventDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant eventDate,
                                          @RequestParam(value = "status", required = false) EventStatus status,
                                          HttpServletRequest request) {
@@ -82,65 +86,67 @@ public class AdminController {
 
     // Upload Management Operations
     @PostMapping("/upload/{uploadId}")
-    public ResponseEntity<?> approveUpload(@PathVariable UUID uploadId, HttpServletRequest request) {
+    public ResponseEntity<MessageResponse> approveUpload(@PathVariable UUID uploadId, HttpServletRequest request) {
         return executeUploadAction(uploadId, request, uploadService::approveUpload, AuditAction.APPROVE_UPLOAD, "Upload approved successfully");
     }
 
     @DeleteMapping("/upload/{uploadId}")
-    public ResponseEntity<?> deleteUpload(@PathVariable UUID uploadId, HttpServletRequest request) {
+    public ResponseEntity<MessageResponse> deleteUpload(@PathVariable UUID uploadId, HttpServletRequest request) {
         return executeUploadAction(uploadId, request, uploadService::deleteUpload, AuditAction.DELETE_UPLOAD, "Upload deleted successfully");
     }
 
     @PostMapping("/feature-upload/{uploadId}")
-    public ResponseEntity<?> featureUpload(@PathVariable UUID uploadId, HttpServletRequest request) {
+    public ResponseEntity<MessageResponse> featureUpload(@PathVariable UUID uploadId, HttpServletRequest request) {
         return executeUploadAction(uploadId, request, uploadService::featureUpload, AuditAction.FEATURE_UPLOAD, "Upload featured successfully");
     }
 
     @DeleteMapping("/upload/{uploadId}/approval")
-    public ResponseEntity<?> unapproveUpload(@PathVariable UUID uploadId, HttpServletRequest request) {
+    public ResponseEntity<MessageResponse> unapproveUpload(@PathVariable UUID uploadId, HttpServletRequest request) {
         return executeUploadAction(uploadId, request, uploadService::unapproveUpload, AuditAction.UNAPPROVE_UPLOAD, "Upload unapproved successfully");
     }
 
     @DeleteMapping("/upload/{uploadId}/featured")
-    public ResponseEntity<?> unfeatureUpload(@PathVariable UUID uploadId, HttpServletRequest request) {
+    public ResponseEntity<MessageResponse> unfeatureUpload(@PathVariable UUID uploadId, HttpServletRequest request) {
         return executeUploadAction(uploadId, request, uploadService::unfeatureUpload, AuditAction.UNFEATURE_UPLOAD, "Upload unfeatured successfully");
     }
 
     // Data Retrieval Operations
     @GetMapping("/uploads")
-    public ResponseEntity<Page<AdminUploadDto>> getAllUploads(Pageable pageable) {
+    @Operation(operationId = "getAdminUploads", summary = "Page through every upload, any approval state")
+    public ResponseEntity<Page<AdminUploadDto>> getAllUploads(@ParameterObject Pageable pageable) {
         return ResponseEntity.ok(uploadService.getAllUploadsForAdmin(pageable));
     }
 
     @GetMapping("/uploads/pending")
-    public ResponseEntity<Page<AdminUploadDto>> getPendingUploads(Pageable pageable) {
+    public ResponseEntity<Page<AdminUploadDto>> getPendingUploads(@ParameterObject Pageable pageable) {
         return ResponseEntity.ok(uploadService.getUploadsByApprovalStatus(false, pageable));
     }
 
     @GetMapping("/uploads/approved")
-    public ResponseEntity<Page<AdminUploadDto>> getApprovedUploads(Pageable pageable) {
+    public ResponseEntity<Page<AdminUploadDto>> getApprovedUploads(@ParameterObject Pageable pageable) {
         return ResponseEntity.ok(uploadService.getUploadsByApprovalStatus(true, pageable));
     }
 
     @GetMapping("/uploads/featured")
-    public ResponseEntity<Page<AdminUploadDto>> getFeaturedUploads(Pageable pageable) {
+    public ResponseEntity<Page<AdminUploadDto>> getFeaturedUploads(@ParameterObject Pageable pageable) {
         return ResponseEntity.ok(uploadService.getUploadsByFeaturedStatus(true, pageable));
     }
 
+    @Operation(operationId = "getAllEventsForAdmin", summary = "List every event, including unpublished ones")
     @GetMapping("/events")
-    public ResponseEntity<?> getAllEvents() {
+    public ResponseEntity<List<MediaEvent>> getAllEvents() {
         return ResponseEntity.ok(eventsService.getAllEvents());
     }
 
     @GetMapping("/users")
     @PreAuthorize("hasRole('" + Role.Authority.ROOT + "')")
-    public ResponseEntity<Page<UserInfoResponse>> getAllUsers(Pageable pageable) {
+    public ResponseEntity<Page<UserInfoResponse>> getAllUsers(@ParameterObject Pageable pageable) {
         return ResponseEntity.ok(userService.getAllUsers(pageable));
     }
 
     @PostMapping("/user/{userId}/add-role")
     @PreAuthorize("hasRole('" + Role.Authority.ROOT + "')")
-    public ResponseEntity<?> addRoleToUser(@PathVariable UUID userId, @RequestBody Role role, HttpServletRequest request) {
+    public ResponseEntity<MessageResponse> addRoleToUser(@PathVariable UUID userId, @RequestBody Role role, HttpServletRequest request) {
         return executeUserAction(userId, request,
                 (id) -> userService.addRole(id, role),
                 AuditAction.ADD_USER_ROLE,
@@ -149,7 +155,7 @@ public class AdminController {
 
     @PostMapping("/user/{userId}/remove-role")
     @PreAuthorize("hasRole('" + Role.Authority.ROOT + "')")
-    public ResponseEntity<?> removeRoleFromUser(@PathVariable UUID userId, @RequestBody Role role, HttpServletRequest request) {
+    public ResponseEntity<MessageResponse> removeRoleFromUser(@PathVariable UUID userId, @RequestBody Role role, HttpServletRequest request) {
         return executeUserAction(userId, request,
                 (id) -> userService.removeRole(id, role),
                 AuditAction.REMOVE_USER_ROLE,
@@ -158,15 +164,15 @@ public class AdminController {
 
     @PostMapping("/user/verify")
     @PreAuthorize("hasRole('" + Role.Authority.ROOT + "')")
-    public ResponseEntity<?> verifyUser(@RequestBody Map<String, UUID> payload, HttpServletRequest request) {
-        return executeUserAction(payload.get("userId"), request,
+    public ResponseEntity<MessageResponse> verifyUser(@Valid @RequestBody VerifyUserRequest payload, HttpServletRequest request) {
+        return executeUserAction(payload.getUserId(), request,
                 userService::verifyDirectly, AuditAction.VERIFY_USER,
                 "User verified successfully");
     }
 
     @PostMapping("/user/create")
     @PreAuthorize("hasRole('" + Role.Authority.ROOT + "')")
-    public ResponseEntity<?> createUser(@RequestBody SignupRequest signUpRequest, HttpServletRequest request) {
+    public ResponseEntity<MessageResponse> createUser(@RequestBody SignupRequest signUpRequest, HttpServletRequest request) {
         return executeCreationAction(signUpRequest, request,
                 (signupRequest) -> {
                     User newUser = userService.createUser(signupRequest, false);
@@ -180,20 +186,21 @@ public class AdminController {
                 "User created successfully: " + signUpRequest.getEmail());
     }
 
+    @Operation(operationId = "getAvailableRoles", summary = "List the roles that can be assigned to a user")
     @GetMapping("/roles")
     @PreAuthorize("hasRole('" + Role.Authority.ROOT + "')")
-    public ResponseEntity<?> getAvailableRoles() {
-        return ResponseEntity.ok(Role.values());
+    public ResponseEntity<List<Role>> getAvailableRoles() {
+        return ResponseEntity.ok(List.of(Role.values()));
     }
 
     // Audit Reporting Endpoints
     @GetMapping("/audit")
-    public ResponseEntity<Page<AuditEventDto>> getAuditEvents(Pageable pageable) {
+    public ResponseEntity<Page<AuditEventDto>> getAuditEvents(@ParameterObject Pageable pageable) {
         return ResponseEntity.ok(auditService.getAllAuditEvents(pageable));
     }
 
     @GetMapping("/audit/failed")
-    public ResponseEntity<Page<AuditEventDto>> getFailedOperations(Pageable pageable) {
+    public ResponseEntity<Page<AuditEventDto>> getFailedOperations(@ParameterObject Pageable pageable) {
         return ResponseEntity.ok(auditService.getFailedOperations(pageable));
     }
 
@@ -203,18 +210,19 @@ public class AdminController {
     }
 
     @GetMapping("/audit/action/{action}")
-    public ResponseEntity<Page<AuditEventDto>> getAuditEventsByAction(@PathVariable AuditAction action, Pageable pageable) {
+    public ResponseEntity<Page<AuditEventDto>> getAuditEventsByAction(@PathVariable AuditAction action, @ParameterObject Pageable pageable) {
         return ResponseEntity.ok(auditService.getAuditEventsByAction(action, pageable));
     }
 
     @GetMapping("/audit/daterange")
-    public ResponseEntity<Page<AuditEventDto>> getAuditEventsByDateRange(@RequestParam Instant start, @RequestParam Instant end, Pageable pageable) {
+    public ResponseEntity<Page<AuditEventDto>> getAuditEventsByDateRange(@RequestParam Instant start, @RequestParam Instant end, @ParameterObject Pageable pageable) {
         return ResponseEntity.ok(auditService.getAuditEventsByDateRange(start, end, pageable));
     }
 
+    @Operation(operationId = "getAvailableAuditActions", summary = "List the audit action types available for filtering")
     @GetMapping("/audit/actions")
-    public ResponseEntity<?> getAvailableActions() {
-        return ResponseEntity.ok(AuditAction.values());
+    public ResponseEntity<List<AuditAction>> getAvailableActions() {
+        return ResponseEntity.ok(List.of(AuditAction.values()));
     }
 
     private String getCurrentUserEmail() {

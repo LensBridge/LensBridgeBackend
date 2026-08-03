@@ -23,6 +23,7 @@ import com.ibrasoft.lensbridge.security.CurrentUser;
 import com.ibrasoft.lensbridge.service.GalleryService;
 import com.ibrasoft.lensbridge.service.UploadService;
 import com.ibrasoft.lensbridge.service.UserService;
+import org.springdoc.core.annotations.ParameterObject;
 
 @RestController
 @RequestMapping("/api/user")
@@ -61,7 +62,7 @@ public class UserController {
 
     @GetMapping("/uploads")
     @PreAuthorize("hasRole('" + Role.Authority.USER + "')")
-    public ResponseEntity<Page<GalleryItemDto>> getUserUploads(Pageable pageable, @CurrentUser User user) {
+    public ResponseEntity<Page<GalleryItemDto>> getUserUploads(@ParameterObject Pageable pageable, @CurrentUser User user) {
         return ResponseEntity.ok(galleryService.getUserGallery(user.getId(), pageable));
     }
 

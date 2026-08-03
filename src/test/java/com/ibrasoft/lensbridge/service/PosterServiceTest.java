@@ -150,12 +150,13 @@ class PosterServiceTest {
                 .startTime(Instant.now())
                 .endTime(Instant.now().plusSeconds(7200))
                 .audience(Audience.BROTHERS)
+                .imageFile(imageFile())
                 .build();
         when(r2StorageService.uploadImage(anyString(), any(MultipartFile.class)))
                 .thenReturn("poster-key.png");
         when(posterRepository.save(any(Poster.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        Poster created = service.createPoster(request, imageFile());
+        Poster created = service.createPoster(request);
 
         assertThat(created.getTitle()).isEqualTo("New");
         assertThat(created.getImage()).isEqualTo("https://cdn.example.com/poster-key.png");
@@ -172,9 +173,10 @@ class PosterServiceTest {
                 .startTime(start)
                 .endTime(start) // not after start
                 .audience(Audience.BOTH)
+                .imageFile(imageFile())
                 .build();
 
-        assertThatThrownBy(() -> service.createPoster(request, imageFile()))
+        assertThatThrownBy(() -> service.createPoster(request))
                 .isInstanceOf(ApiResponseException.class)
                 .satisfies(e -> assertThat(((ApiResponseException) e).getStatus())
                         .isEqualTo(HttpStatus.BAD_REQUEST));
@@ -189,10 +191,10 @@ class PosterServiceTest {
                 .startTime(Instant.now())
                 .endTime(Instant.now().plusSeconds(60))
                 .audience(Audience.BOTH)
+                .imageFile(new MockMultipartFile("file", new byte[0]))
                 .build();
-        MultipartFile empty = new MockMultipartFile("file", new byte[0]);
 
-        assertThatThrownBy(() -> service.createPoster(request, empty))
+        assertThatThrownBy(() -> service.createPoster(request))
                 .isInstanceOf(ApiResponseException.class)
                 .satisfies(e -> assertThat(((ApiResponseException) e).getStatus())
                         .isEqualTo(HttpStatus.BAD_REQUEST));
@@ -205,11 +207,11 @@ class PosterServiceTest {
                 .duration(5)
                 .startTime(Instant.now())
                 .endTime(Instant.now().plusSeconds(60))
+                .imageFile(new MockMultipartFile("file", "x.pdf", "application/pdf", new byte[]{1}))
                 .audience(Audience.BOTH)
                 .build();
-        MultipartFile pdf = new MockMultipartFile("file", "x.pdf", "application/pdf", new byte[]{1});
 
-        assertThatThrownBy(() -> service.createPoster(request, pdf))
+        assertThatThrownBy(() -> service.createPoster(request))
                 .isInstanceOf(ApiResponseException.class);
     }
 
@@ -221,11 +223,12 @@ class PosterServiceTest {
                 .startTime(Instant.now())
                 .endTime(Instant.now().plusSeconds(60))
                 .audience(Audience.BOTH)
+                .imageFile(imageFile())
                 .build();
         when(r2StorageService.uploadImage(anyString(), any(MultipartFile.class)))
                 .thenThrow(new IOException("boom"));
 
-        assertThatThrownBy(() -> service.createPoster(request, imageFile()))
+        assertThatThrownBy(() -> service.createPoster(request))
                 .isInstanceOf(ApiResponseException.class)
                 .satisfies(e -> assertThat(((ApiResponseException) e).getStatus())
                         .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR));

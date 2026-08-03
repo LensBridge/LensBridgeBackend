@@ -15,7 +15,13 @@ import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.service.agent.AgentSessionRegistry;
 import com.ibrasoft.lensbridge.service.agent.CommandDispatcher;
 import com.ibrasoft.lensbridge.service.agent.EnrollmentTokenService;
+import com.ibrasoft.lensbridge.exception.ApiResponseException;
 import com.ibrasoft.lensbridge.service.agent.EnrollmentTokenService.Issued;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,6 +52,7 @@ public class DeviceAdminController {
     private final ObjectMapper objectMapper;
     private final AgentSessionRegistry sessionRegistry;
 
+    @Operation(operationId = "listDevices", summary = "List every enrolled board device")
     @GetMapping
     public ResponseEntity<List<DeviceSummary>> list() {
         return ResponseEntity.ok(
@@ -53,14 +60,23 @@ public class DeviceAdminController {
         );
     }
 
+    @Operation(operationId = "getDevice", summary = "Fetch a single board device")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Device found"),
+            @ApiResponse(responseCode = "404", description = "No device with that id",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class)))
+    })
     @GetMapping("/{deviceId}")
-    public ResponseEntity<?> get(@PathVariable UUID deviceId) {
-        Optional<Device> found = deviceRepository.findById(deviceId);
-        return found.<ResponseEntity<?>>map(d -> ResponseEntity.ok(DeviceSummary.of(d)))
-                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(new MessageResponse("Device not found")));
+    public ResponseEntity<DeviceSummary> get(@PathVariable UUID deviceId) {
+        return deviceRepository.findById(deviceId)
+                .map(d -> ResponseEntity.ok(DeviceSummary.of(d)))
+                .orElseThrow(() -> new ApiResponseException(HttpStatus.NOT_FOUND,
+                        new MessageResponse("Device not found")));
     }
 
+    @Operation(operationId = "issueEnrollmentToken",
+            summary = "Mint a one-time token a new device can exchange for an identity")
+    @ApiResponse(responseCode = "201", description = "Token issued; the plaintext is returned exactly once")
     @PostMapping("/enrollment-tokens")
     public ResponseEntity<IssueEnrollmentTokenResponse> issueEnrollmentToken(
             @Valid @RequestBody IssueEnrollmentTokenRequest request) {
@@ -82,12 +98,20 @@ public class DeviceAdminController {
         );
     }
 
+    @Operation(operationId = "revokeDevice",
+            summary = "Revoke a device's enrollment",
+            description = "Closes any live agent session. Idempotent: re-revoking an already revoked device is a no-op.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Device revoked"),
+            @ApiResponse(responseCode = "404", description = "No device with that id",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class)))
+    })
     @PostMapping("/{deviceId}/revoke")
-    public ResponseEntity<?> revoke(@PathVariable UUID deviceId) {
+    public ResponseEntity<DeviceSummary> revoke(@PathVariable UUID deviceId) {
         Optional<Device> found = deviceRepository.findById(deviceId);
         if (found.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(new MessageResponse("Device not found"));
+            throw new ApiResponseException(HttpStatus.NOT_FOUND,
+                    new MessageResponse("Device not found"));
         }
         Device d = found.get();
         if (d.getRevokedAt() == null) {
@@ -99,13 +123,19 @@ public class DeviceAdminController {
         return ResponseEntity.ok(DeviceSummary.of(d));
     }
 
+    @Operation(operationId = "issueDeviceCommand",
+            summary = "Queue a command for a device",
+            description = "Returns as soon as the command is queued; delivery and execution are reported "
+                    + "asynchronously over the agent websocket.")
+    @ApiResponse(responseCode = "202", description = "Command accepted and queued for delivery")
     @PostMapping("/{deviceId}/commands")
-    public ResponseEntity<?> issueCommand(@PathVariable UUID deviceId,
+    public ResponseEntity<CommandIssuedResponse> issueCommand(@PathVariable UUID deviceId,
                                           @Valid @RequestBody IssueCommandRequest request) {
         CommandIssuedResponse response = commandDispatcher.issue(deviceId, getCurrentUserEmail(), request);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
 
+    @Operation(operationId = "listDeviceCommands", summary = "Fetch the 50 most recent commands for a device")
     @GetMapping("/{deviceId}/commands")
     public ResponseEntity<List<CommandView>> recentCommands(@PathVariable UUID deviceId) {
         List<CommandView> commands = commandRepository

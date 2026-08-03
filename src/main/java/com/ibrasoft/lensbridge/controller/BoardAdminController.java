@@ -35,6 +35,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import io.swagger.v3.oas.annotations.Operation;
 
 /**
  * Admin controller for managing board content (posters, calendar events, board config, weekly content).
@@ -62,6 +63,7 @@ public class BoardAdminController {
     }
 
     @GetMapping("/configs/{deviceId}")
+    @Operation(operationId = "getAdminBoardConfig", summary = "Fetch a device config as an administrator")
     public ResponseEntity<DeviceConfig> getBoardConfig(@PathVariable UUID deviceId) {
         log.debug("Admin fetching board config for device: {}", deviceId);
         return ResponseEntity.ok(boardService.getBoardConfigOrThrow(deviceId));
@@ -104,6 +106,7 @@ public class BoardAdminController {
     }
 
     @GetMapping("/weekly-content/{year}/{weekNumber}")
+    @Operation(operationId = "getAdminWeeklyContent", summary = "Fetch weekly content as an administrator")
     public ResponseEntity<WeeklyContent> getWeeklyContent(
             @PathVariable int year,
             @PathVariable int weekNumber) {
@@ -156,25 +159,18 @@ public class BoardAdminController {
 
     @PostMapping(value = "/posters", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<Poster> createPoster(
-            @RequestParam("title") String title,
-            @RequestParam("duration") int duration,
-            @RequestParam("startTime") Instant startTime,
-            @RequestParam("endTime") Instant endTime,
-            @RequestParam("audience") Audience audience,
-            @RequestParam("image") MultipartFile imageFile,
+            // @ModelAttribute, not @RequestParam: on a complex type @RequestParam
+            // makes Spring look for one parameter literally named "createRequest"
+            // and convert it, which no converter can do. Binding a multipart form
+            // field-by-field onto a DTO is what @ModelAttribute is for, and it is
+            // also what makes springdoc document the individual fields instead of
+            // a single opaque object.
+            @ModelAttribute @Valid CreatePosterRequest createRequest,
             HttpServletRequest request) {
 
-        log.info("Admin creating new poster: title={}", title);
+        log.info("Admin creating new poster: title={}", createRequest.getTitle());
 
-        CreatePosterRequest createRequest = CreatePosterRequest.builder()
-                .title(title)
-                .duration(duration)
-                .startTime(startTime)
-                .endTime(endTime)
-                .audience(audience)
-                .build();
-
-        Poster response = posterService.createPoster(createRequest, imageFile);
+        Poster response = posterService.createPoster(createRequest);
 
         auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.CREATE_POSTER, "Poster", response.getId(), request.getRemoteAddr());
 
@@ -225,6 +221,7 @@ public class BoardAdminController {
     // ==================== Calendar Event Endpoints ====================
 
     @GetMapping("/events")
+    @Operation(operationId = "getBoardEvents", summary = "List every board event")
     public ResponseEntity<List<BoardEvent>> getAllEvents() {
         log.debug("Admin fetching all calendar events");
         return ResponseEntity.ok(boardService.getAllEvents());
@@ -237,12 +234,14 @@ public class BoardAdminController {
     }
 
     @GetMapping("/events/{eventId}")
+    @Operation(operationId = "getBoardEventById", summary = "Fetch a single board event")
     public ResponseEntity<BoardEvent> getEventById(@PathVariable UUID eventId) {
         log.debug("Admin fetching calendar event: {}", eventId);
         return ResponseEntity.ok(boardService.getEventById(eventId));
     }
 
     @PostMapping("/events")
+    @Operation(operationId = "createBoardEvent", summary = "Create a board event")
     public ResponseEntity<BoardEvent> createEvent(
             @Valid @RequestBody CreateCalendarEventRequest createRequest,
             HttpServletRequest request) {

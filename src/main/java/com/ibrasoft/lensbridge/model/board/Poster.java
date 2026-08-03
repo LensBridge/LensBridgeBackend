@@ -31,4 +31,10 @@ public class Poster {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Audience audience;
+
+    @Column(nullable = true)
+    /**
+     * Optional URL for the associated signup page. If provided, the frontend will show a QR Code linking to this URL.
+     */
+    private String signupUrl;
 }

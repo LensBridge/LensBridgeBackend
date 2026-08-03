@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import io.swagger.v3.oas.annotations.Operation;
 
 @RestController
 @RequestMapping("/api/musallah")
@@ -31,6 +32,7 @@ public class MusallahBoardController {
     // ==================== Board Configuration ====================
 
     @GetMapping("/config")
+    @Operation(operationId = "getPublicBoardConfig", summary = "Fetch the config a kiosk should render")
     public ResponseEntity<DeviceConfig> getBoardConfig(@RequestParam UUID deviceId) {
         log.debug("Musallah board fetching config for device: {}", deviceId);
         return boardService.getBoardConfig(deviceId)
@@ -49,6 +51,7 @@ public class MusallahBoardController {
     }
 
     @GetMapping("/weekly-content/{year}/{weekNumber}")
+    @Operation(operationId = "getPublicWeeklyContent", summary = "Fetch weekly content for a kiosk")
     public ResponseEntity<WeeklyContent> getWeeklyContent(
             @PathVariable int year,
             @PathVariable int weekNumber) {
