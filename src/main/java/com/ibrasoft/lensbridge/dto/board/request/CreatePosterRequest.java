@@ -31,6 +31,6 @@ public class CreatePosterRequest {
     @NotNull(message = "Image file is required")
     MultipartFile imageFile;
 
-    @URL
+    @URL(message = "Signup URL must be a valid URL")
     private String signupUrl;
 }
