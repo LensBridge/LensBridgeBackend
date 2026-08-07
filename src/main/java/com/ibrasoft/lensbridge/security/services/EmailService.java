@@ -9,8 +9,8 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.Map;
 
 import org.slf4j.Logger;
@@ -122,7 +122,9 @@ public class EmailService {
     private String loadEmailTemplate(String templateName) {
         try {
             ClassPathResource resource = new ClassPathResource("templates/" + templateName);
-            return new String(Files.readAllBytes(resource.getFile().toPath()), StandardCharsets.UTF_8);
+            try (InputStream in = resource.getInputStream()) {
+                return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            }
         } catch (Exception e) {
             logger.error("Failed to load email template: {} - Error: {}", templateName, e.getMessage(), e);
             throw new RuntimeException("Failed to load email template", e);
