@@ -1560,12 +1560,17 @@ paths:
       - admin-controller
   /api/admin/user/create:
     post:
+      description: "Omit the password — the normal case — and the account is created\
+        \ disabled and the user is emailed a password reset link; setting a password\
+        \ through that link is what enables the account. Supply a password only when\
+        \ the account has to be usable immediately: it is then enabled on creation\
+        \ and no email is sent."
       operationId: createUser
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SignupRequest"
+              $ref: "#/components/schemas/CreateUserRequest"
         required: true
       responses:
         "200":
@@ -1580,6 +1585,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
           description: Request failed; body carries a human-readable message
+      summary: Create an account for someone else
       tags:
       - admin-controller
   /api/admin/user/verify:
@@ -3250,6 +3256,39 @@ components:
       - imageFile
       - startTime
       - title
+    CreateUserRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          maxLength: 50
+          minLength: 0
+        firstName:
+          type: string
+          maxLength: 20
+          minLength: 0
+          pattern: "^[A-Za-z]+([ '-][A-Za-z]+)*$"
+        lastName:
+          type: string
+          maxLength: 20
+          minLength: 0
+          pattern: "^[A-Za-z]+([ '-][A-Za-z]+)*$"
+        password:
+          type: string
+          description: Optional. Omit it to create a disabled account and email the
+            user a password reset link; supply it to create an account that can sign
+            in right away.
+          maxLength: 40
+          minLength: 6
+        studentNumber:
+          type: string
+          maxLength: 10
+          minLength: 0
+      required:
+      - email
+      - firstName
+      - lastName
+      - studentNumber
     DailyScheduleFrameConfig:
       allOf:
       - $ref: "#/components/schemas/FrameConfig"

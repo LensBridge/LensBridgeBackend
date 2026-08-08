@@ -1,14 +1,17 @@
 package com.ibrasoft.lensbridge.service;
 
+import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -19,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ibrasoft.lensbridge.dto.auth.request.ChangePasswordRequest;
+import com.ibrasoft.lensbridge.dto.auth.request.CreateUserRequest;
 import com.ibrasoft.lensbridge.dto.auth.request.SignupRequest;
 import com.ibrasoft.lensbridge.dto.auth.request.UpdateProfileRequest;
 import com.ibrasoft.lensbridge.dto.auth.response.UserInfoResponse;
@@ -44,6 +48,8 @@ public class UserService {
     private final VerificationTokenService verificationTokenService;
     private final RefreshTokenService refreshTokenService;
     private final AuthorityResolver authorityResolver;
+
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     @Value("${frontend.baseurl}")
     private String frontendBaseUrl;
@@ -94,21 +100,13 @@ public class UserService {
     public User createUser(SignupRequest signUpRequest, boolean sendConfirmEmail) {
         log.info("Creating new user: {}", signUpRequest.getEmail());
 
-        if (existsByEmail(signUpRequest.getEmail()) || existsByStudentNumber(signUpRequest.getStudentNumber())) {
-            throw new IllegalArgumentException("User with this email or student number already exists");
-        }
-
-        User user = new User(
+        User savedUser = register(
                 signUpRequest.getFirstName(),
                 signUpRequest.getLastName(),
                 signUpRequest.getStudentNumber(),
                 signUpRequest.getEmail(),
-                signUpRequest.getPassword() == null ? null : passwordEncoder.encode(signUpRequest.getPassword())
+                () -> signUpRequest.getPassword() == null ? null : passwordEncoder.encode(signUpRequest.getPassword())
         );
-        user.setRoles(new HashSet<>());
-        user.addRole(Role.USER);
-
-        User savedUser = saveUser(user);
 
         if (sendConfirmEmail) {
             String token = verificationTokenService.generateEmailVerificationToken(savedUser);
@@ -117,12 +115,83 @@ public class UserService {
                     savedUser.getFirstName(), verificationUrl);
         }
 
-        log.info("User created: {}", user.getEmail());
+        log.info("User created: {}", savedUser.getEmail());
         return savedUser;
     }
 
     public User createUser(SignupRequest signUpRequest) {
         return createUser(signUpRequest, true);
+    }
+
+    /**
+     * Creates an account on an administrator's behalf.
+     * <p>
+     * With no password supplied the account is created <em>disabled</em> — {@code verifiedAt}
+     * stays null, which is what {@code UserDetailsServiceImpl} reports as
+     * {@code disabled(true)} — and the invitee gets a password reset email. Setting a password
+     * through that link is what turns the account on, so the administrator never handles a
+     * credential and never has to transmit one out of band.
+     * <p>
+     * A supplied password is taken as "make this usable now", so the account is marked verified
+     * immediately and no email goes out. Nothing else here needs an unverified branch: the
+     * address was chosen by an administrator, not self-asserted by a stranger, so email
+     * verification is not what is being established.
+     */
+    public User createUserByAdmin(CreateUserRequest request) {
+        log.info("Admin creating user: {} (password supplied: {})", request.getEmail(), request.hasPassword());
+
+        User user = register(
+                request.getFirstName(),
+                request.getLastName(),
+                request.getStudentNumber(),
+                request.getEmail(),
+                () -> request.hasPassword() ? passwordEncoder.encode(request.getPassword()) : unusablePassword()
+        );
+
+        if (request.hasPassword()) {
+            user.setVerifiedAt(Instant.now());
+            user = saveUser(user);
+            log.info("Admin created enabled user: {}", user.getEmail());
+        } else {
+            sendPasswordResetEmail(user);
+            log.info("Admin created disabled user {}, password reset email sent", user.getEmail());
+        }
+
+        return user;
+    }
+
+    /**
+     * Duplicate check, {@code ROLE_USER}, save. Shared by self-signup and admin creation.
+     *
+     * @param passwordHash supplied lazily so a rejected duplicate does not pay for a bcrypt round
+     *                     first — and so the check cannot be reordered after it by accident
+     */
+    private User register(String firstName, String lastName, String studentNumber, String email,
+                         Supplier<String> passwordHash) {
+        if (existsByEmail(email) || existsByStudentNumber(studentNumber)) {
+            throw new IllegalArgumentException("User with this email or student number already exists");
+        }
+
+        User user = new User(firstName, lastName, studentNumber, email, passwordHash.get());
+        user.setRoles(new HashSet<>());
+        user.addRole(Role.USER);
+
+        return saveUser(user);
+    }
+
+    /**
+     * A hash nothing can match, for an account whose owner has not chosen a password yet.
+     * <p>
+     * {@code User.passwordHash} is {@code @NotBlank} and {@code nullable = false}, so a null is
+     * not storable; a placeholder rather than a schema change also keeps
+     * {@code UserDetailsServiceImpl} away from a null password, which the Spring
+     * {@code User} builder rejects outright. The input is 32 random bytes that are never
+     * retained, so the only route into the account is the reset link.
+     */
+    private String unusablePassword() {
+        byte[] secret = new byte[32];
+        SECURE_RANDOM.nextBytes(secret);
+        return passwordEncoder.encode(HexFormat.of().formatHex(secret));
     }
 
     public User verifyUserEmail(String plaintextToken) {
@@ -354,21 +423,35 @@ public class UserService {
     }
 
     public void requestPasswordReset(String email) {
-        userRepository.findByEmail(email).ifPresent(user -> {
-            String token = verificationTokenService.generatePasswordResetToken(user);
-            String resetUrl = frontendBaseUrl + "/reset-password?token=" + token;
-            emailService.sendPasswordResetEmail(user.getEmail(), user.getFirstName(), resetUrl);
-        });
+        userRepository.findByEmail(email).ifPresent(this::sendPasswordResetEmail);
+    }
+
+    private void sendPasswordResetEmail(User user) {
+        String token = verificationTokenService.generatePasswordResetToken(user);
+        String resetUrl = frontendBaseUrl + "/reset-password?token=" + token;
+        emailService.sendPasswordResetEmail(user.getEmail(), user.getFirstName(), resetUrl);
     }
 
     public boolean validateResetToken(String token) {
         return verificationTokenService.isValidResetToken(token);
     }
 
+    /**
+     * Consumes a reset token and sets the new password.
+     * <p>
+     * A still-unverified account is verified here as well, and that is load-bearing for
+     * {@link #createUserByAdmin}: an invited account is disabled until verified, so without
+     * this the invitee would set a password through the emailed link and still be refused at
+     * sign-in, with no way out. Following a link sent to the address proves control of it —
+     * the same thing the verification email proves — so nothing is being taken on trust.
+     */
     public User resetPassword(String token, String newPassword) {
         VerificationToken verificationToken = verificationTokenService.consumePasswordReset(token);
         User user = verificationToken.getUser();
         user.setPassword(passwordEncoder.encode(newPassword));
+        if (!user.isVerified()) {
+            user.setVerifiedAt(Instant.now());
+        }
         User saved = saveUser(user);
         refreshTokenService.revokeAllUserTokens(user.getId());
         return saved;

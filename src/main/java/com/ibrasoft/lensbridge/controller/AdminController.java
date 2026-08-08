@@ -3,7 +3,7 @@ package com.ibrasoft.lensbridge.controller;
 import com.ibrasoft.lensbridge.dto.audit.AuditEventDto;
 import com.ibrasoft.lensbridge.model.audit.AuditAction;
 import com.ibrasoft.lensbridge.service.AdminAuditService;
-import com.ibrasoft.lensbridge.dto.auth.request.SignupRequest;
+import com.ibrasoft.lensbridge.dto.auth.request.CreateUserRequest;
 import com.ibrasoft.lensbridge.dto.auth.request.VerifyUserRequest;
 import com.ibrasoft.lensbridge.dto.auth.response.PermissionResponse;
 import com.ibrasoft.lensbridge.dto.auth.response.RoleDefinitionResponse;
@@ -232,20 +232,24 @@ public class AdminController {
                 "User verified successfully");
     }
 
+    @Operation(operationId = "createUser",
+            summary = "Create an account for someone else",
+            description = "Omit the password — the normal case — and the account is created disabled "
+                    + "and the user is emailed a password reset link; setting a password through that "
+                    + "link is what enables the account. Supply a password only when the account has "
+                    + "to be usable immediately: it is then enabled on creation and no email is sent.")
     @PostMapping("/user/create")
     @PreAuthorize("hasAuthority('" + Permission.Authority.IAM_USER_WRITE + "')")
-    public ResponseEntity<MessageResponse> createUser(@RequestBody SignupRequest signUpRequest, HttpServletRequest request) {
-        return executeCreationAction(signUpRequest, request,
-                (signupRequest) -> {
-                    User newUser = userService.createUser(signupRequest, false);
-                    userService.verifyDirectly(newUser.getId());
-                    userService.requestPasswordReset(newUser.getEmail());
-                    return newUser;
-                },
+    public ResponseEntity<MessageResponse> createUser(@Valid @RequestBody CreateUserRequest createUserRequest, HttpServletRequest request) {
+        return executeCreationAction(createUserRequest, request,
+                userService::createUserByAdmin,
                 AuditAction.ADD_USER,
                 "User",
                 User::getId,
-                "User created successfully: " + signUpRequest.getEmail());
+                createUserRequest.hasPassword()
+                        ? "User created successfully: " + createUserRequest.getEmail()
+                        : "User created and invited: " + createUserRequest.getEmail()
+                                + ". The account stays disabled until they set a password from the email.");
     }
 
     @Operation(operationId = "getAvailableRoles",

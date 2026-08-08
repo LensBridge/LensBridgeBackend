@@ -1,6 +1,7 @@
 package com.ibrasoft.lensbridge.service;
 
 import com.ibrasoft.lensbridge.dto.auth.request.ChangePasswordRequest;
+import com.ibrasoft.lensbridge.dto.auth.request.CreateUserRequest;
 import com.ibrasoft.lensbridge.dto.auth.request.SignupRequest;
 import com.ibrasoft.lensbridge.dto.auth.request.UpdateProfileRequest;
 import com.ibrasoft.lensbridge.model.auth.Permission;
@@ -13,10 +14,12 @@ import com.ibrasoft.lensbridge.security.services.EmailService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Instant;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Optional;
@@ -125,6 +128,78 @@ class UserServiceTest {
 
         assertThatThrownBy(() -> userService.createUser(req, false))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    private CreateUserRequest adminCreate() {
+        CreateUserRequest req = new CreateUserRequest();
+        req.setFirstName("Jane");
+        req.setLastName("Doe");
+        req.setStudentNumber("1000001");
+        req.setEmail("jane@mail.utoronto.ca");
+        return req;
+    }
+
+    @Test
+    void createUserByAdminWithoutPasswordLeavesAccountDisabledAndEmailsResetLink() {
+        when(passwordEncoder.encode(anyString())).thenReturn("UNUSABLE");
+        when(verificationTokenService.generatePasswordResetToken(any(User.class))).thenReturn("rtok");
+
+        User created = userService.createUserByAdmin(adminCreate());
+
+        assertThat(created.isVerified()).isFalse();
+        assertThat(created.getRoles()).containsExactly(Role.USER);
+        verify(emailService).sendPasswordResetEmail(eqEmail(), any(),
+                org.mockito.ArgumentMatchers.contains("token=rtok"));
+        verify(emailService, never()).sendVerificationEmail(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void createUserByAdminWithoutPasswordStoresAHashNoInputCanMatch() {
+        ArgumentCaptor<String> encoded = ArgumentCaptor.forClass(String.class);
+        when(passwordEncoder.encode(encoded.capture())).thenReturn("UNUSABLE");
+
+        User created = userService.createUserByAdmin(adminCreate());
+
+        // Never null: passwordHash is @NotBlank and nullable = false.
+        assertThat(created.getPassword()).isEqualTo("UNUSABLE");
+        assertThat(encoded.getValue()).hasSize(64); // 32 random bytes, hex
+    }
+
+    @Test
+    void createUserByAdminWithPasswordEnablesAccountAndSendsNothing() {
+        CreateUserRequest req = adminCreate();
+        req.setPassword("password1");
+        when(passwordEncoder.encode("password1")).thenReturn("ENC");
+
+        User created = userService.createUserByAdmin(req);
+
+        assertThat(created.getPassword()).isEqualTo("ENC");
+        assertThat(created.isVerified()).isTrue();
+        verifyNoInteractions(emailService);
+        verifyNoInteractions(verificationTokenService);
+    }
+
+    @Test
+    void createUserByAdminTreatsBlankPasswordAsAbsent() {
+        CreateUserRequest req = adminCreate();
+        req.setPassword("   ");
+        when(passwordEncoder.encode(anyString())).thenReturn("UNUSABLE");
+
+        User created = userService.createUserByAdmin(req);
+
+        assertThat(created.isVerified()).isFalse();
+        verify(emailService).sendPasswordResetEmail(eqEmail(), any(), anyString());
+    }
+
+    @Test
+    void createUserByAdminRejectsDuplicateEmail() {
+        when(userRepository.existsByEmail("jane@mail.utoronto.ca")).thenReturn(true);
+
+        assertThatThrownBy(() -> userService.createUserByAdmin(adminCreate()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("already exists");
+        verify(userRepository, never()).save(any());
+        verifyNoInteractions(emailService);
     }
 
     @Test
@@ -429,6 +504,35 @@ class UserServiceTest {
 
         assertThat(result.getPassword()).isEqualTo("ENC");
         verify(refreshTokenService).revokeAllUserTokens(userId);
+    }
+
+    @Test
+    void resetPasswordEnablesAStillUnverifiedAccount() {
+        // The admin-invite path: without this the invitee sets a password and is still disabled.
+        User user = new User("A", "B", "1", "a@b.ca", "unusable");
+        user.setId(UUID.randomUUID());
+        VerificationToken vt = VerificationToken.builder().user(user).build();
+        when(verificationTokenService.consumePasswordReset("ptok")).thenReturn(vt);
+        when(passwordEncoder.encode("newpass")).thenReturn("ENC");
+
+        User result = userService.resetPassword("ptok", "newpass");
+
+        assertThat(result.isVerified()).isTrue();
+    }
+
+    @Test
+    void resetPasswordLeavesAnExistingVerificationTimestampAlone() {
+        User user = new User("A", "B", "1", "a@b.ca", "old");
+        user.setId(UUID.randomUUID());
+        Instant verifiedAt = Instant.now().minusSeconds(86400);
+        user.setVerifiedAt(verifiedAt);
+        VerificationToken vt = VerificationToken.builder().user(user).build();
+        when(verificationTokenService.consumePasswordReset("ptok")).thenReturn(vt);
+        when(passwordEncoder.encode("newpass")).thenReturn("ENC");
+
+        User result = userService.resetPassword("ptok", "newpass");
+
+        assertThat(result.getVerifiedAt()).isEqualTo(verifiedAt);
     }
 
     @Test
