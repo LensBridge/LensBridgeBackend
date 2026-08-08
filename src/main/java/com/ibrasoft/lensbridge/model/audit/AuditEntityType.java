@@ -4,6 +4,7 @@ public enum AuditEntityType {
     USER("User"),
     UPLOAD("Upload"),
     MUSALLAH_BOARD("Musallah Board"),
+    DEVICE("Device"),
     EVENT("Event");
 
 

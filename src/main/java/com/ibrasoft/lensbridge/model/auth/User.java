@@ -17,6 +17,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -69,6 +70,12 @@ public class User {
   @CollectionTable(name = "user_roles")
   @Column(name = "role", nullable = false)
   private Set<Role> roles = new HashSet<>();
+  
+  @ElementCollection(targetClass = Permission.class, fetch = FetchType.LAZY)
+  @Enumerated(EnumType.STRING)
+  @CollectionTable(name = "user_permissions", joinColumns = @JoinColumn(name = "user_id"))
+  @Column(name = "permission", nullable = false)
+  private Set<Permission> directPermissions = new HashSet<>();
 
   @Column(nullable = true)
   private Instant verifiedAt;
@@ -80,6 +87,7 @@ public class User {
     this.email = email;
     this.passwordHash = passwordHash;
     this.roles = new HashSet<>();
+    this.directPermissions = new HashSet<>();
   }
 
   @JsonIgnore
@@ -98,6 +106,15 @@ public class User {
 
   public boolean hasRole(Role role) {
     return roles != null && roles.contains(role);
+  }
+
+  public void addDirectPermission(Permission permission) {
+    if (directPermissions == null) directPermissions = new HashSet<>();
+    directPermissions.add(permission);
+  }
+
+  public boolean hasDirectPermission(Permission permission) {
+    return directPermissions != null && directPermissions.contains(permission);
   }
 
   public boolean isVerified() {

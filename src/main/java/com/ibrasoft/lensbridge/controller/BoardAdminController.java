@@ -5,6 +5,7 @@ import com.ibrasoft.lensbridge.dto.board.request.CreatePosterRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateBoardConfigRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateCalendarEventRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdatePosterRequest;
+import com.ibrasoft.lensbridge.dto.board.request.UpdateTickerRequest;
 import com.ibrasoft.lensbridge.dto.board.request.WeeklyContentRequest;
 import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
 import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
@@ -14,7 +15,7 @@ import com.ibrasoft.lensbridge.model.board.BoardEvent;
 import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
 import com.ibrasoft.lensbridge.model.board.Poster;
 import com.ibrasoft.lensbridge.model.board.WeeklyContent;
-import com.ibrasoft.lensbridge.model.auth.Role;
+import com.ibrasoft.lensbridge.model.auth.Permission;
 import com.ibrasoft.lensbridge.service.AdminAuditService;
 import com.ibrasoft.lensbridge.service.BoardService;
 import com.ibrasoft.lensbridge.service.PosterService;
@@ -40,12 +41,15 @@ import io.swagger.v3.oas.annotations.Operation;
 /**
  * Admin controller for managing board content (posters, calendar events, board config, weekly content).
  * Returns raw entity data for admin console viewing/editing.
- * All endpoints require ROOT role access.
+ * <p>
+ * Authorization is per-endpoint by permission, not by role. There is deliberately no
+ * class-level {@code @PreAuthorize}: reading a poster and moving a board's coordinates are
+ * not the same privilege, and a blanket annotation is what made them the same before.
+ * See {@code docs/PERMISSIONS.md}.
  */
 @RestController
 @RequestMapping("/api/admin/board")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('" + Role.Authority.ROOT + "')")
 @Slf4j
 public class BoardAdminController {
 
@@ -57,12 +61,14 @@ public class BoardAdminController {
     // ==================== Board Config Endpoints ====================
 
     @GetMapping("/configs")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_CONFIG_READ + "')")
     public ResponseEntity<List<DeviceConfig>> getAllBoardConfigs() {
         log.debug("Admin fetching all board configs");
         return ResponseEntity.ok(boardService.getAllBoardConfigs());
     }
 
     @GetMapping("/configs/{deviceId}")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_CONFIG_READ + "')")
     @Operation(operationId = "getAdminBoardConfig", summary = "Fetch a device config as an administrator")
     public ResponseEntity<DeviceConfig> getBoardConfig(@PathVariable UUID deviceId) {
         log.debug("Admin fetching board config for device: {}", deviceId);
@@ -70,6 +76,7 @@ public class BoardAdminController {
     }
 
     @PutMapping("/configs/{deviceId}")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_CONFIG_WRITE + "')")
     public ResponseEntity<DeviceConfig> saveBoardConfig(
             @PathVariable UUID deviceId,
             @Valid @RequestBody DeviceConfig deviceConfig,
@@ -77,10 +84,15 @@ public class BoardAdminController {
 
         log.info("Admin saving board config for device: {}", deviceId);
         DeviceConfig saved = boardService.saveBoardConfig(deviceId, deviceConfig);
+
+        auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.UPDATE_BOARD_CONFIG,
+                "BoardConfig", deviceId, request.getRemoteAddr());
+
         return ResponseEntity.ok(saved);
     }
 
     @PatchMapping("/configs/{deviceId}")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_CONFIG_WRITE + "')")
     public ResponseEntity<DeviceConfig> updateBoardConfig(
             @PathVariable UUID deviceId,
             @Valid @RequestBody UpdateBoardConfigRequest updateRequest,
@@ -88,24 +100,53 @@ public class BoardAdminController {
 
         log.info("Admin updating board config for device: {}", deviceId);
         DeviceConfig updated = boardService.updateBoardConfig(deviceId, updateRequest);
+
+        auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.UPDATE_BOARD_CONFIG,
+                "BoardConfig", deviceId, request.getRemoteAddr());
+
+        return ResponseEntity.ok(updated);
+    }
+
+    /**
+     * Ticker-only door into the config, for holders of {@code board:ticker:write} who have no
+     * business setting the board's coordinates. Anyone with {@code board:config:write} can
+     * reach the same fields through the PATCH above.
+     */
+    @PatchMapping("/configs/{deviceId}/ticker")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_TICKER_WRITE + "')")
+    @Operation(operationId = "updateBoardTicker", summary = "Update a board's scrolling messages")
+    public ResponseEntity<DeviceConfig> updateTicker(
+            @PathVariable UUID deviceId,
+            @Valid @RequestBody UpdateTickerRequest updateRequest,
+            HttpServletRequest request) {
+
+        log.info("Admin updating ticker for device: {}", deviceId);
+        DeviceConfig updated = boardService.updateTicker(deviceId, updateRequest);
+
+        auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.UPDATE_BOARD_TICKER,
+                "BoardConfig", deviceId, request.getRemoteAddr());
+
         return ResponseEntity.ok(updated);
     }
 
     // ==================== Weekly Content Endpoints ====================
 
     @GetMapping("/weekly-content")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_CONTENT_READ + "')")
     public ResponseEntity<List<WeeklyContent>> getAllWeeklyContent() {
         log.debug("Admin fetching all weekly content");
         return ResponseEntity.ok(boardService.getAllWeeklyContent());
     }
 
     @GetMapping("/weekly-content/year/{year}")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_CONTENT_READ + "')")
     public ResponseEntity<List<WeeklyContent>> getWeeklyContentByYear(@PathVariable int year) {
         log.debug("Admin fetching weekly content for year: {}", year);
         return ResponseEntity.ok(boardService.getWeeklyContentByYear(year));
     }
 
     @GetMapping("/weekly-content/{year}/{weekNumber}")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_CONTENT_READ + "')")
     @Operation(operationId = "getAdminWeeklyContent", summary = "Fetch weekly content as an administrator")
     public ResponseEntity<WeeklyContent> getWeeklyContent(
             @PathVariable int year,
@@ -114,7 +155,13 @@ public class BoardAdminController {
         return ResponseEntity.ok(boardService.getWeeklyContentOrThrow(year, weekNumber));
     }
 
+    /**
+     * Writes quotes and jummah prayer times together — they share this endpoint, so they
+     * share one permission. The audit event is therefore the only record of who last moved
+     * a khutbah time; see {@code docs/PERMISSIONS.md} §3.
+     */
     @PutMapping("/weekly-content/{year}/{weekNumber}")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_WEEKLY_WRITE + "')")
     public ResponseEntity<WeeklyContent> saveWeeklyContent(
             @PathVariable int year,
             @PathVariable int weekNumber,
@@ -123,41 +170,54 @@ public class BoardAdminController {
 
         log.info("Admin saving weekly content for week {} of {}", weekNumber, year);
         WeeklyContent saved = boardService.saveWeeklyContent(year, weekNumber, contentRequest);
+
+        auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.SAVE_WEEKLY_CONTENT,
+                "WeeklyContent", saved.getId(), request.getRemoteAddr());
+
         return ResponseEntity.ok(saved);
     }
 
     @DeleteMapping("/weekly-content/{year}/{weekNumber}")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_WEEKLY_WRITE + "')")
     public ResponseEntity<MessageResponse> deleteWeeklyContent(
             @PathVariable int year,
             @PathVariable int weekNumber,
             HttpServletRequest request) {
 
         log.info("Admin deleting weekly content for week {} of {}", weekNumber, year);
-        boardService.deleteWeeklyContent(year, weekNumber);
+        UUID deletedId = boardService.deleteWeeklyContent(year, weekNumber);
+
+        auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.DELETE_WEEKLY_CONTENT,
+                "WeeklyContent", deletedId, request.getRemoteAddr());
+
         return ResponseEntity.ok(new MessageResponse("Weekly content deleted successfully"));
     }
 
     // ==================== Poster Endpoints ====================
 
     @GetMapping("/posters")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_CONTENT_READ + "')")
     public ResponseEntity<List<Poster>> getAllPosters() {
         log.debug("Admin fetching all posters");
         return ResponseEntity.ok(posterService.getAllPosters());
     }
 
     @GetMapping("/posters/by-audience")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_CONTENT_READ + "')")
     public ResponseEntity<List<Poster>> getPostersForAudience(@RequestParam Audience audience) {
         log.debug("Admin fetching posters for audience: {}", audience);
         return ResponseEntity.ok(posterService.getPostersForAudience(audience));
     }
 
     @GetMapping("/posters/{posterId}")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_CONTENT_READ + "')")
     public ResponseEntity<Poster> getPosterById(@PathVariable UUID posterId) {
         log.debug("Admin fetching poster: {}", posterId);
         return ResponseEntity.ok(posterService.getPosterById(posterId));
     }
 
     @PostMapping(value = "/posters", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_POSTER_WRITE + "')")
     public ResponseEntity<Poster> createPoster(
             // @ModelAttribute, not @RequestParam: on a complex type @RequestParam
             // makes Spring look for one parameter literally named "createRequest"
@@ -178,6 +238,7 @@ public class BoardAdminController {
     }
 
     @PatchMapping("/posters/{posterId}")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_POSTER_WRITE + "')")
     public ResponseEntity<Poster> updatePoster(
             @PathVariable UUID posterId,
             @Valid @RequestBody UpdatePosterRequest updateRequest,
@@ -192,6 +253,7 @@ public class BoardAdminController {
     }
 
     @PutMapping(value = "/posters/{posterId}/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_POSTER_WRITE + "')")
     public ResponseEntity<Poster> updatePosterImage(
             @PathVariable UUID posterId,
             @RequestParam("image") MultipartFile imageFile,
@@ -206,6 +268,7 @@ public class BoardAdminController {
     }
 
     @DeleteMapping("/posters/{posterId}")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_POSTER_WRITE + "')")
     public ResponseEntity<MessageResponse> deletePoster(
             @PathVariable UUID posterId,
             HttpServletRequest request) {
@@ -221,6 +284,7 @@ public class BoardAdminController {
     // ==================== Calendar Event Endpoints ====================
 
     @GetMapping("/events")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_CONTENT_READ + "')")
     @Operation(operationId = "getBoardEvents", summary = "List every board event")
     public ResponseEntity<List<BoardEvent>> getAllEvents() {
         log.debug("Admin fetching all calendar events");
@@ -228,12 +292,14 @@ public class BoardAdminController {
     }
 
     @GetMapping("/events/by-audience")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_CONTENT_READ + "')")
     public ResponseEntity<List<BoardEvent>> getEventsForAudience(@RequestParam Audience audience) {
         log.debug("Admin fetching calendar events for audience: {}", audience);
         return ResponseEntity.ok(boardService.getEventsForAudience(audience));
     }
 
     @GetMapping("/events/{eventId}")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_CONTENT_READ + "')")
     @Operation(operationId = "getBoardEventById", summary = "Fetch a single board event")
     public ResponseEntity<BoardEvent> getEventById(@PathVariable UUID eventId) {
         log.debug("Admin fetching calendar event: {}", eventId);
@@ -241,6 +307,7 @@ public class BoardAdminController {
     }
 
     @PostMapping("/events")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_EVENT_WRITE + "')")
     @Operation(operationId = "createBoardEvent", summary = "Create a board event")
     public ResponseEntity<BoardEvent> createEvent(
             @Valid @RequestBody CreateCalendarEventRequest createRequest,
@@ -255,6 +322,7 @@ public class BoardAdminController {
     }
 
     @PatchMapping("/events/{eventId}")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_EVENT_WRITE + "')")
     public ResponseEntity<BoardEvent> updateEvent(
             @PathVariable UUID eventId,
             @Valid @RequestBody UpdateCalendarEventRequest updateRequest,
@@ -269,6 +337,7 @@ public class BoardAdminController {
     }
 
     @DeleteMapping("/events/{eventId}")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_EVENT_WRITE + "')")
     public ResponseEntity<MessageResponse> deleteEvent(
             @PathVariable UUID eventId,
             HttpServletRequest request) {
@@ -282,8 +351,13 @@ public class BoardAdminController {
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<MessageResponse> refreshSignboard() {
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_REFRESH + "')")
+    public ResponseEntity<MessageResponse> refreshSignboard(HttpServletRequest request) {
         boardStream.refreshAll();
+
+        auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.REFRESH_BOARDS,
+                "Musallah Board", null, request.getRemoteAddr());
+
         return ResponseEntity.ok(new MessageResponse("Refresh sent to all MusallahBoard instances"));
     }
 

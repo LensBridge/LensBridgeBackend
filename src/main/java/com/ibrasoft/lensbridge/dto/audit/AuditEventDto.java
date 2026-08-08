@@ -21,6 +21,7 @@ public class AuditEventDto {
     private String adminEmail;
     private AuditEntityType targetEntityType;
     private UUID targetEntityId;
+    private String details;
     private String ipAddress;
     private String userAgent;
 }

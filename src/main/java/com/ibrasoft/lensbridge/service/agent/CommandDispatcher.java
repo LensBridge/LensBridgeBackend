@@ -12,7 +12,7 @@ import com.ibrasoft.lensbridge.dto.board.response.CommandIssuedResponse;
 import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.model.board.DeviceCommand;
 import com.ibrasoft.lensbridge.model.board.DeviceCommandStatus;
-import com.ibrasoft.lensbridge.model.board.commands.CommandPayload;
+import com.ibrasoft.lensbridge.model.board.commands.CommandKind;
 import com.ibrasoft.lensbridge.repository.sql.DeviceCommandRepository;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.service.agent.events.DeviceEventPublisher;
@@ -27,7 +27,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -58,16 +57,6 @@ public class CommandDispatcher {
      */
     private static final Duration DEFAULT_TTL = Duration.ofMinutes(5);
 
-    /** Discriminator strings registered on {@link CommandPayload}. Updated when adding a command kind. */
-    private static final Set<String> KNOWN_KINDS = Set.of(
-            "chrome.reload",
-            "chrome.screenshot",
-            "kiosk.restart",
-            "system.reboot",
-            "config.refresh",
-            "logs.tail"
-    );
-
     private final DeviceCommandRepository commandRepository;
     private final DeviceRepository deviceRepository;
     private final AgentSessionRegistry registry;
@@ -76,9 +65,8 @@ public class CommandDispatcher {
 
     @Transactional
     public CommandIssuedResponse issue(UUID deviceId, String issuedBy, IssueCommandRequest request) {
-        if (!KNOWN_KINDS.contains(request.kind())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown command kind: " + request.kind());
-        }
+        CommandKind kind = CommandKind.from(request.kind()).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown command kind: " + request.kind()));
         Device device = deviceRepository.findById(deviceId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Device not found"));
         if (device.getRevokedAt() != null) {
@@ -112,8 +100,8 @@ public class CommandDispatcher {
 
         registry.get(deviceId).ifPresent(session -> deliverTo(cmd, session));
 
-        log.info("Issued command {} ({}) for device {} by {} — initial status {}",
-                cmd.getId(), cmd.getKind(), deviceId, issuedBy, cmd.getStatus());
+        log.info("Issued command {} ({}, risk={}) for device {} by {} — initial status {}",
+                cmd.getId(), cmd.getKind(), kind.getRisk(), deviceId, issuedBy, cmd.getStatus());
 
         return new CommandIssuedResponse(
                 cmd.getId(), cmd.getDeviceId(), cmd.getKind(), cmd.getStatus(),

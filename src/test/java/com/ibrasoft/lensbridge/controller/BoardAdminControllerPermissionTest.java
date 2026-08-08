@@ -1,160 +1,162 @@
-// package com.ibrasoft.lensbridge.controller;
+package com.ibrasoft.lensbridge.controller;
 
-// import com.ibrasoft.lensbridge.handler.SignboardHandler;
-// import com.ibrasoft.lensbridge.service.AdminAuditService;
-// import com.ibrasoft.lensbridge.service.BoardService;
-// import com.ibrasoft.lensbridge.service.PosterService;
-// import org.junit.jupiter.api.Test;
-// import org.junit.jupiter.params.ParameterizedTest;
-// import org.junit.jupiter.params.provider.CsvSource;
-// import org.springframework.beans.factory.annotation.Autowired;
-// import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-// import org.springframework.context.annotation.Import;
-// import org.springframework.http.MediaType;
-// import org.springframework.security.test.context.support.WithAnonymousUser;
-// import org.springframework.security.test.context.support.WithMockUser;
-// import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
-// import org.springframework.test.context.bean.override.mockito.MockitoBean;
-// import org.springframework.test.web.servlet.MockMvc;
-// import org.springframework.test.web.servlet.ResultActions;
-// import org.springframework.test.web.servlet.request.RequestPostProcessor;
+import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
+import com.ibrasoft.lensbridge.model.auth.Role;
+import com.ibrasoft.lensbridge.service.AdminAuditService;
+import com.ibrasoft.lensbridge.service.BoardService;
+import com.ibrasoft.lensbridge.service.PosterService;
+import com.ibrasoft.lensbridge.service.UserService;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithAnonymousUser;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
-// import java.util.UUID;
+import java.util.UUID;
 
-// import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
-// import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-// import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
-// import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-// import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
-// import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-// /**
-//  * Security-only integration tests for {@link BoardAdminController}. Every endpoint is class-level
-//  * {@code @PreAuthorize("hasRole('ROOT')")}; this verifies anonymous -> 401, USER/ADMIN -> 403,
-//  * and ROOT -> not 401/403. CSRF is disabled, so no csrf() post-processor is needed.
-//  */
-// @WebMvcTest(controllers = BoardAdminController.class)
-// @Import(MethodSecurityTestConfig.class)
-// class BoardAdminControllerPermissionTest {
+/**
+ * Security-only tests for {@link BoardAdminController}. Endpoints are authorized by
+ * permission rather than by role, so what matters here is that a role holding adjacent
+ * permissions is still refused — a BOARD_EDITOR must not reach board config.
+ * <p>
+ * CSRF is disabled in production, so no csrf() post-processor is needed.
+ */
+@WebMvcTest(controllers = BoardAdminController.class)
+@Import(MethodSecurityTestConfig.class)
+class BoardAdminControllerPermissionTest {
 
-//     private static final String BASE = "/api/admin/board";
+    private static final String BASE = "/api/admin/board";
 
-//     @Autowired
-//     private MockMvc mockMvc;
+    @Autowired
+    private MockMvc mockMvc;
 
-//     @MockitoBean
-//     private PosterService posterService;
-//     @MockitoBean
-//     private BoardService boardService;
-//     @MockitoBean
-//     private AdminAuditService auditService;
-//     @MockitoBean
-//     private SignboardHandler signboardHandler;
+    @MockitoBean
+    private PosterService posterService;
+    @MockitoBean
+    private BoardService boardService;
+    @MockitoBean
+    private AdminAuditService auditService;
+    @MockitoBean
+    private BoardStreamHandler boardStreamHandler;
 
-//     private static String id() {
-//         return UUID.randomUUID().toString();
-//     }
+    /**
+     * Not used by this controller. WebConfig registers CurrentUserArgumentResolver, which
+     * needs a UserService, and the slice does not load the service layer.
+     */
+    @MockitoBean
+    private UserService userService;
 
-//     // ==================== Anonymous -> 401 ====================
+    private static String id() {
+        return UUID.randomUUID().toString();
+    }
 
-//     @Test
-//     @WithAnonymousUser
-//     void anonymousIsUnauthorizedForAllEndpoints() throws Exception {
-//         mockMvc.perform(get(BASE + "/configs")).andExpect(status().isUnauthorized());
-//         mockMvc.perform(get(BASE + "/configs/" + id())).andExpect(status().isUnauthorized());
-//         mockMvc.perform(put(BASE + "/configs/" + id()).contentType(MediaType.APPLICATION_JSON).content("{}"))
-//                 .andExpect(status().isUnauthorized());
-//         mockMvc.perform(patch(BASE + "/configs/" + id()).contentType(MediaType.APPLICATION_JSON).content("{}"))
-//                 .andExpect(status().isUnauthorized());
-//         mockMvc.perform(get(BASE + "/weekly-content")).andExpect(status().isUnauthorized());
-//         mockMvc.perform(get(BASE + "/weekly-content/year/2026")).andExpect(status().isUnauthorized());
-//         mockMvc.perform(get(BASE + "/weekly-content/2026/1")).andExpect(status().isUnauthorized());
-//         mockMvc.perform(put(BASE + "/weekly-content/2026/1").contentType(MediaType.APPLICATION_JSON).content("{}"))
-//                 .andExpect(status().isUnauthorized());
-//         mockMvc.perform(delete(BASE + "/weekly-content/2026/1")).andExpect(status().isUnauthorized());
-//         mockMvc.perform(get(BASE + "/posters")).andExpect(status().isUnauthorized());
-//         mockMvc.perform(get(BASE + "/posters/by-audience").param("audience", "BOTH"))
-//                 .andExpect(status().isUnauthorized());
-//         mockMvc.perform(get(BASE + "/posters/" + id())).andExpect(status().isUnauthorized());
-//         mockMvc.perform(post(BASE + "/posters").contentType(MediaType.MULTIPART_FORM_DATA))
-//                 .andExpect(status().isUnauthorized());
-//         mockMvc.perform(patch(BASE + "/posters/" + id()).contentType(MediaType.APPLICATION_JSON).content("{}"))
-//                 .andExpect(status().isUnauthorized());
-//         mockMvc.perform(put(BASE + "/posters/" + id() + "/image").contentType(MediaType.MULTIPART_FORM_DATA))
-//                 .andExpect(status().isUnauthorized());
-//         mockMvc.perform(delete(BASE + "/posters/" + id())).andExpect(status().isUnauthorized());
-//         mockMvc.perform(get(BASE + "/events")).andExpect(status().isUnauthorized());
-//         mockMvc.perform(get(BASE + "/events/by-audience").param("audience", "BOTH"))
-//                 .andExpect(status().isUnauthorized());
-//         mockMvc.perform(get(BASE + "/events/" + id())).andExpect(status().isUnauthorized());
-//         mockMvc.perform(post(BASE + "/events").contentType(MediaType.APPLICATION_JSON).content("{}"))
-//                 .andExpect(status().isUnauthorized());
-//         mockMvc.perform(patch(BASE + "/events/" + id()).contentType(MediaType.APPLICATION_JSON).content("{}"))
-//                 .andExpect(status().isUnauthorized());
-//         mockMvc.perform(delete(BASE + "/events/" + id())).andExpect(status().isUnauthorized());
-//         mockMvc.perform(post(BASE + "/refresh")).andExpect(status().isUnauthorized());
-//     }
+    private void expectForbidden(MockHttpServletRequestBuilder request, Role role) throws Exception {
+        mockMvc.perform(request.with(TestAuthorities.as(role))).andExpect(status().isForbidden());
+    }
 
-//     // ==================== USER / ADMIN -> 403 ====================
+    /** Authorized means "not rejected by security" — the handler's own outcome is out of scope. */
+    private void expectAllowed(MockHttpServletRequestBuilder request, Role role) throws Exception {
+        mockMvc.perform(request.with(TestAuthorities.as(role))).andExpect(result -> {
+            int s = result.getResponse().getStatus();
+            if (s == 401 || s == 403) {
+                throw new AssertionError("Expected " + role + " to be authorized but got HTTP " + s);
+            }
+        });
+    }
 
-//     @ParameterizedTest
-//     @CsvSource({"USER", "ADMIN"})
-//     @WithMockUser
-//     void nonRootRolesAreForbidden(String role) throws Exception {
-//         runAllEndpoints(role, true);
-//     }
+    // ==================== Anonymous ====================
 
-//     // ==================== ROOT -> not 401/403 ====================
+    @Test
+    @WithAnonymousUser
+    void anonymousIsUnauthorized() throws Exception {
+        mockMvc.perform(get(BASE + "/posters")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get(BASE + "/configs")).andExpect(status().isUnauthorized());
+        mockMvc.perform(post(BASE + "/refresh")).andExpect(status().isUnauthorized());
+    }
 
-//     @Test
-//     @WithMockUser(roles = "ROOT")
-//     void rootIsAuthorized() throws Exception {
-//         runAllEndpoints("ROOT", false);
-//     }
+    // ==================== Viewer: reads yes, writes no ====================
 
-//     private void runAllEndpoints(String role, boolean expectForbidden) throws Exception {
-//         RequestPostProcessor user = SecurityMockMvcRequestPostProcessors.user("u").roles(role);
+    @Test
+    void viewerCanReadContentAndConfig() throws Exception {
+        expectAllowed(get(BASE + "/posters"), Role.BOARD_VIEWER);
+        expectAllowed(get(BASE + "/events"), Role.BOARD_VIEWER);
+        expectAllowed(get(BASE + "/weekly-content"), Role.BOARD_VIEWER);
+        expectAllowed(get(BASE + "/configs"), Role.BOARD_VIEWER);
+    }
 
-//         check(expectForbidden, mockMvc.perform(get(BASE + "/configs").with(user)));
-//         check(expectForbidden, mockMvc.perform(get(BASE + "/configs/" + id()).with(user)));
-//         check(expectForbidden, mockMvc.perform(put(BASE + "/configs/" + id()).with(user)
-//                 .contentType(MediaType.APPLICATION_JSON).content("{}")));
-//         check(expectForbidden, mockMvc.perform(patch(BASE + "/configs/" + id()).with(user)
-//                 .contentType(MediaType.APPLICATION_JSON).content("{}")));
-//         check(expectForbidden, mockMvc.perform(get(BASE + "/weekly-content").with(user)));
-//         check(expectForbidden, mockMvc.perform(get(BASE + "/weekly-content/year/2026").with(user)));
-//         check(expectForbidden, mockMvc.perform(get(BASE + "/weekly-content/2026/1").with(user)));
-//         check(expectForbidden, mockMvc.perform(put(BASE + "/weekly-content/2026/1").with(user)
-//                 .contentType(MediaType.APPLICATION_JSON).content("{}")));
-//         check(expectForbidden, mockMvc.perform(delete(BASE + "/weekly-content/2026/1").with(user)));
-//         check(expectForbidden, mockMvc.perform(get(BASE + "/posters").with(user)));
-//         check(expectForbidden, mockMvc.perform(get(BASE + "/posters/by-audience").with(user)
-//                 .param("audience", "BOTH")));
-//         check(expectForbidden, mockMvc.perform(get(BASE + "/posters/" + id()).with(user)));
-//         check(expectForbidden, mockMvc.perform(post(BASE + "/posters").with(user)
-//                 .contentType(MediaType.MULTIPART_FORM_DATA)));
-//         check(expectForbidden, mockMvc.perform(patch(BASE + "/posters/" + id()).with(user)
-//                 .contentType(MediaType.APPLICATION_JSON).content("{}")));
-//         check(expectForbidden, mockMvc.perform(put(BASE + "/posters/" + id() + "/image").with(user)
-//                 .contentType(MediaType.MULTIPART_FORM_DATA)));
-//         check(expectForbidden, mockMvc.perform(delete(BASE + "/posters/" + id()).with(user)));
-//         check(expectForbidden, mockMvc.perform(get(BASE + "/events").with(user)));
-//         check(expectForbidden, mockMvc.perform(get(BASE + "/events/by-audience").with(user)
-//                 .param("audience", "BOTH")));
-//         check(expectForbidden, mockMvc.perform(get(BASE + "/events/" + id()).with(user)));
-//         check(expectForbidden, mockMvc.perform(post(BASE + "/events").with(user)
-//                 .contentType(MediaType.APPLICATION_JSON).content("{}")));
-//         check(expectForbidden, mockMvc.perform(patch(BASE + "/events/" + id()).with(user)
-//                 .contentType(MediaType.APPLICATION_JSON).content("{}")));
-//         check(expectForbidden, mockMvc.perform(delete(BASE + "/events/" + id()).with(user)));
-//         check(expectForbidden, mockMvc.perform(post(BASE + "/refresh").with(user)));
-//     }
+    @Test
+    void viewerCannotWriteAnything() throws Exception {
+        expectForbidden(delete(BASE + "/posters/" + id()), Role.BOARD_VIEWER);
+        expectForbidden(delete(BASE + "/events/" + id()), Role.BOARD_VIEWER);
+        expectForbidden(put(BASE + "/weekly-content/2026/1")
+                .contentType(MediaType.APPLICATION_JSON).content("{}"), Role.BOARD_VIEWER);
+        expectForbidden(patch(BASE + "/configs/" + id())
+                .contentType(MediaType.APPLICATION_JSON).content("{}"), Role.BOARD_VIEWER);
+        expectForbidden(post(BASE + "/refresh"), Role.BOARD_VIEWER);
+    }
 
-//     private void check(boolean expectForbidden, ResultActions actions) throws Exception {
-//         if (expectForbidden) {
-//             assertForbiddenForRole(actions);
-//         } else {
-//             assertNotUnauthorizedOrForbidden(actions);
-//         }
-//     }
-// }
+    // ==================== Editor: content yes, board config no ====================
+
+    @Test
+    void editorCanWriteContent() throws Exception {
+        expectAllowed(delete(BASE + "/posters/" + id()), Role.BOARD_EDITOR);
+        expectAllowed(delete(BASE + "/events/" + id()), Role.BOARD_EDITOR);
+        expectAllowed(put(BASE + "/weekly-content/2026/1")
+                .contentType(MediaType.APPLICATION_JSON).content("{}"), Role.BOARD_EDITOR);
+        expectAllowed(post(BASE + "/refresh"), Role.BOARD_EDITOR);
+    }
+
+    /** The separation this redesign exists for: editing copy is not administering hardware. */
+    @Test
+    void editorCannotTouchBoardConfig() throws Exception {
+        expectForbidden(patch(BASE + "/configs/" + id())
+                .contentType(MediaType.APPLICATION_JSON).content("{}"), Role.BOARD_EDITOR);
+        expectForbidden(put(BASE + "/configs/" + id())
+                .contentType(MediaType.APPLICATION_JSON).content("{}"), Role.BOARD_EDITOR);
+    }
+
+    /** But the ticker is copy, so it has its own door. */
+    @Test
+    void editorCanWriteTheTickerWithoutConfigWrite() throws Exception {
+        expectAllowed(patch(BASE + "/configs/" + id() + "/ticker")
+                .contentType(MediaType.APPLICATION_JSON).content("{}"), Role.BOARD_EDITOR);
+    }
+
+    // ==================== Media roles have no board access ====================
+
+    @Test
+    void mediaAdminHasNoBoardAccess() throws Exception {
+        expectForbidden(get(BASE + "/posters"), Role.ADMIN);
+        expectForbidden(get(BASE + "/configs"), Role.ADMIN);
+        expectForbidden(delete(BASE + "/posters/" + id()), Role.ADMIN);
+    }
+
+    @Test
+    void plainUserHasNoBoardAccess() throws Exception {
+        expectForbidden(get(BASE + "/posters"), Role.USER);
+        expectForbidden(get(BASE + "/configs"), Role.USER);
+    }
+
+    // ==================== Root ====================
+
+    @Test
+    void rootIsAuthorizedEverywhere() throws Exception {
+        expectAllowed(get(BASE + "/posters"), Role.ROOT);
+        expectAllowed(get(BASE + "/configs"), Role.ROOT);
+        expectAllowed(patch(BASE + "/configs/" + id())
+                .contentType(MediaType.APPLICATION_JSON).content("{}"), Role.ROOT);
+        expectAllowed(delete(BASE + "/posters/" + id()), Role.ROOT);
+        expectAllowed(post(BASE + "/refresh"), Role.ROOT);
+    }
+}

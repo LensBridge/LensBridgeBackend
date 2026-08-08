@@ -1,8 +1,10 @@
 package com.ibrasoft.lensbridge.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ibrasoft.lensbridge.model.audit.AuditAction;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.Device;
+import com.ibrasoft.lensbridge.service.AdminAuditService;
 import com.ibrasoft.lensbridge.repository.sql.DeviceCommandRepository;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.service.agent.AgentSession;
@@ -13,10 +15,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.WebSocketSession;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -39,6 +43,7 @@ class DeviceAdminControllerTest {
         DeviceCommandRepository commandRepository = mock(DeviceCommandRepository.class);
         CommandDispatcher commandDispatcher = mock(CommandDispatcher.class);
         AgentSessionRegistry registry = new AgentSessionRegistry();
+        AdminAuditService auditService = mock(AdminAuditService.class);
 
         DeviceAdminController controller = new DeviceAdminController(
                 enrollmentTokenService,
@@ -46,7 +51,8 @@ class DeviceAdminControllerTest {
                 commandRepository,
                 commandDispatcher,
                 new ObjectMapper(),
-                registry);
+                registry,
+                auditService);
 
         UUID deviceId = UUID.randomUUID();
         Device device = Device.builder()
@@ -65,13 +71,51 @@ class DeviceAdminControllerTest {
 
         setCurrentUser();
 
-        controller.revoke(deviceId);
+        MockHttpServletRequest httpRequest = new MockHttpServletRequest();
+        httpRequest.setRemoteAddr("10.0.0.1");
+
+        controller.revoke(deviceId, httpRequest);
 
         assertNotNull(device.getRevokedAt());
         assertTrue(registry.get(deviceId).isEmpty());
         verify(transport).close(argThat(status ->
                 status.getCode() == CloseStatus.POLICY_VIOLATION.getCode()
                         && "device_revoked".equals(status.getReason())));
+        verify(auditService).logAuditEvent(
+                eq("root@example.com"), eq(AuditAction.REVOKE_DEVICE),
+                eq("Device"), eq(deviceId), eq("10.0.0.1"));
+    }
+
+    @Test
+    void revoke_isANoOpAndDoesNotReAuditWhenAlreadyRevoked() throws Exception {
+        DeviceRepository deviceRepository = mock(DeviceRepository.class);
+        AdminAuditService auditService = mock(AdminAuditService.class);
+
+        DeviceAdminController controller = new DeviceAdminController(
+                mock(EnrollmentTokenService.class),
+                deviceRepository,
+                mock(DeviceCommandRepository.class),
+                mock(CommandDispatcher.class),
+                new ObjectMapper(),
+                new AgentSessionRegistry(),
+                auditService);
+
+        UUID deviceId = UUID.randomUUID();
+        Instant revokedAt = Instant.now().minusSeconds(3600);
+        Device device = Device.builder()
+                .id(deviceId)
+                .displayName("Lobby board")
+                .audience(Audience.BOTH)
+                .revokedAt(revokedAt)
+                .build();
+        when(deviceRepository.findById(deviceId)).thenReturn(Optional.of(device));
+
+        setCurrentUser();
+        controller.revoke(deviceId, new MockHttpServletRequest());
+
+        assertEquals(revokedAt, device.getRevokedAt());
+        verify(deviceRepository, never()).save(any());
+        verifyNoInteractions(auditService);
     }
 
     private static void setCurrentUser() {

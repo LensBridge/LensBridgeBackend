@@ -38,9 +38,11 @@ import com.ibrasoft.lensbridge.dto.auth.response.TokenRefreshResponse;
 import com.ibrasoft.lensbridge.dto.auth.response.TokenValidationResponse;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
 import com.ibrasoft.lensbridge.exception.RefreshTokenException;
+import com.ibrasoft.lensbridge.model.auth.Permission;
 import com.ibrasoft.lensbridge.model.auth.RefreshToken;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.model.auth.User;
+import com.ibrasoft.lensbridge.security.services.AuthorityResolver;
 import com.ibrasoft.lensbridge.security.CurrentUser;
 import com.ibrasoft.lensbridge.security.LoginAttemptService;
 import com.ibrasoft.lensbridge.security.jwt.JwtUtils;
@@ -58,6 +60,7 @@ public class AuthController {
     private final JwtUtils jwtUtils;
     private final LoginAttemptService loginAttemptService;
     private final RefreshTokenService refreshTokenService;
+    private final AuthorityResolver authorityResolver;
 
     @Operation(operationId = "signIn", summary = "Authenticate with email and password")
     @ApiResponses({
@@ -92,8 +95,17 @@ public class AuthController {
             RefreshToken refreshToken = refreshTokenService.createRefreshToken(
                     user.getId(), request.getHeader("User-Agent"), getClientIpAddress(request));
 
-            List<String> roles = authentication.getAuthorities().stream()
+            // TODO: This is probably slow and should be fitted in the data model somewhere
+            // Replace with a more efficient way to get roles and permissions if performance becomes an issue
+            List<String> authorities = authentication.getAuthorities().stream()
                     .map(GrantedAuthority::getAuthority)
+                    .toList();
+            List<String> roles = authorities.stream()
+                    .filter(a -> a.startsWith("ROLE_"))
+                    .collect(Collectors.toList());
+            List<String> permissions = authorities.stream()
+                    .filter(a -> !a.startsWith("ROLE_"))
+                    .sorted()
                     .collect(Collectors.toList());
 
             return ResponseEntity.ok(new JwtResponse(jwt,
@@ -102,7 +114,8 @@ public class AuthController {
                     user.getLastName(),
                     user.getId(),
                     user.getEmail(),
-                    roles));
+                    roles,
+                    permissions));
         } catch (Exception e) {
             loginAttemptService.recordFailedAttempt(clientKey);
             throw e;
@@ -287,7 +300,9 @@ public class AuthController {
                 user.getLastName(),
                 user.getEmail(),
                 user.isVerified(),
-                user.getRoles().stream().map(Role::getAuthority).collect(Collectors.toList())
+                user.getRoles().stream().map(Role::getAuthority).collect(Collectors.toList()),
+                authorityResolver.resolvePermissions(user).stream()
+                        .map(Permission::getAuthority).sorted().collect(Collectors.toList())
         ));
     }
 

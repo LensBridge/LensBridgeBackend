@@ -3,6 +3,7 @@ package com.ibrasoft.lensbridge.service;
 import com.ibrasoft.lensbridge.dto.board.request.CreateCalendarEventRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateBoardConfigRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateCalendarEventRequest;
+import com.ibrasoft.lensbridge.dto.board.request.UpdateTickerRequest;
 import com.ibrasoft.lensbridge.dto.board.request.WeeklyContentRequest;
 import com.ibrasoft.lensbridge.dto.upload.response.ErrorResponse;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
@@ -76,6 +77,16 @@ public class BoardService {
         }
         DeviceConfig saved = boardConfigRepository.save(existing);
         log.info("Updated board config for device: {}", deviceId);
+        boardStream.configChanged(deviceId);
+        return saved;
+    }
+
+    public DeviceConfig updateTicker(UUID deviceId, UpdateTickerRequest request) {
+        DeviceConfig existing = getBoardConfigOrThrow(deviceId);
+        Patch.apply(request.getEnableScrollingMessage(), existing::setEnableScrollingMessage);
+        Patch.apply(request.getScrollingMessages(), existing::setScrollingMessages);
+        DeviceConfig saved = boardConfigRepository.save(existing);
+        log.info("Updated ticker for device: {}", deviceId);
         boardStream.configChanged(deviceId);
         return saved;
     }
@@ -161,14 +172,17 @@ public class BoardService {
         return saved;
     }
 
-    public void deleteWeeklyContent(int year, int weekNumber) {
+    /** @return the id of the deleted row, so callers can record what was destroyed. */
+    public UUID deleteWeeklyContent(int year, int weekNumber) {
         WeeklyContent content = weeklyContentRepository.findByYearAndWeekNumber(year, weekNumber)
                 .orElseThrow(() -> new ApiResponseException(
                         HttpStatus.NOT_FOUND,
                         ErrorResponse.of("Weekly content not found for week " + weekNumber + " of " + year)));
+        UUID deletedId = content.getId();
         weeklyContentRepository.delete(content);
         log.info("Deleted weekly content for week {} of {}", weekNumber, year);
         boardStream.contentChanged("weekly-content");
+        return deletedId;
     }
 
     // ==================== Events ====================

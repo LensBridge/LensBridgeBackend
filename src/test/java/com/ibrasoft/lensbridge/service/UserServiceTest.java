@@ -3,10 +3,12 @@ package com.ibrasoft.lensbridge.service;
 import com.ibrasoft.lensbridge.dto.auth.request.ChangePasswordRequest;
 import com.ibrasoft.lensbridge.dto.auth.request.SignupRequest;
 import com.ibrasoft.lensbridge.dto.auth.request.UpdateProfileRequest;
+import com.ibrasoft.lensbridge.model.auth.Permission;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.model.auth.User;
 import com.ibrasoft.lensbridge.model.auth.VerificationToken;
 import com.ibrasoft.lensbridge.repository.auth.UserRepository;
+import com.ibrasoft.lensbridge.security.services.AuthorityResolver;
 import com.ibrasoft.lensbridge.security.services.EmailService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,7 +17,10 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -41,6 +46,8 @@ class UserServiceTest {
     private VerificationTokenService verificationTokenService;
     @Mock
     private RefreshTokenService refreshTokenService;
+    @Mock
+    private AuthorityResolver authorityResolver;
 
     @InjectMocks
     private UserService userService;
@@ -154,50 +161,237 @@ class UserServiceTest {
                 .hasMessageContaining("not found");
     }
 
+    // ==================== Grants ====================
+
+    private static final String ROOT_EMAIL = "root@mail.utoronto.ca";
+
+    /** An acting user holding everything, and another id to keep IAM_ROLE_GRANT alive. */
+    private User rootActor() {
+        User root = new User("Root", "User", "9", ROOT_EMAIL, "p");
+        root.setId(UUID.randomUUID());
+        root.addRole(Role.ROOT);
+        lenient().when(userRepository.findByEmail(ROOT_EMAIL)).thenReturn(Optional.of(root));
+        lenient().when(authorityResolver.resolvePermissions(root))
+                .thenReturn(EnumSet.allOf(Permission.class));
+        return root;
+    }
+
+    private User target(UUID id) {
+        User user = new User("A", "B", "1", "a@b.ca", "p");
+        user.setId(id);
+        when(userRepository.findById(id)).thenReturn(Optional.of(user));
+        return user;
+    }
+
     @Test
     void addRoleRejectsDuplicateRole() {
+        rootActor();
         UUID id = UUID.randomUUID();
-        User user = new User("A", "B", "1", "a@b.ca", "p");
-        user.addRole(Role.ADMIN);
-        when(userRepository.findById(id)).thenReturn(Optional.of(user));
+        target(id).addRole(Role.ADMIN);
 
-        assertThatThrownBy(() -> userService.addRole(id, Role.ADMIN))
+        assertThatThrownBy(() -> userService.addRole(ROOT_EMAIL, id, Role.ADMIN))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("already has role");
     }
 
     @Test
     void addRoleAddsNewRole() {
+        rootActor();
         UUID id = UUID.randomUUID();
-        User user = new User("A", "B", "1", "a@b.ca", "p");
-        when(userRepository.findById(id)).thenReturn(Optional.of(user));
+        target(id);
 
-        User result = userService.addRole(id, Role.ADMIN);
+        User result = userService.addRole(ROOT_EMAIL, id, Role.ADMIN);
 
         assertThat(result.hasRole(Role.ADMIN)).isTrue();
     }
 
     @Test
     void removeRoleRejectsMissingRole() {
+        rootActor();
         UUID id = UUID.randomUUID();
-        User user = new User("A", "B", "1", "a@b.ca", "p");
-        when(userRepository.findById(id)).thenReturn(Optional.of(user));
+        target(id);
 
-        assertThatThrownBy(() -> userService.removeRole(id, Role.ADMIN))
+        assertThatThrownBy(() -> userService.removeRole(ROOT_EMAIL, id, Role.ADMIN))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("does not have role");
     }
 
     @Test
     void removeRoleRemovesExistingRole() {
+        rootActor();
         UUID id = UUID.randomUUID();
-        User user = new User("A", "B", "1", "a@b.ca", "p");
-        user.addRole(Role.ADMIN);
-        when(userRepository.findById(id)).thenReturn(Optional.of(user));
+        target(id).addRole(Role.ADMIN);
 
-        User result = userService.removeRole(id, Role.ADMIN);
+        User result = userService.removeRole(ROOT_EMAIL, id, Role.ADMIN);
 
         assertThat(result.hasRole(Role.ADMIN)).isFalse();
+    }
+
+    @Test
+    void addRoleRejectsSelfModification() {
+        User root = rootActor();
+        // The target lookup happens first, and when you target yourself it succeeds.
+        when(userRepository.findById(root.getId())).thenReturn(Optional.of(root));
+
+        assertThatThrownBy(() -> userService.addRole(ROOT_EMAIL, root.getId(), Role.ADMIN))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("your own roles");
+    }
+
+    @Test
+    void addRoleRejectsGrantingPermissionsTheActorDoesNotHold() {
+        User editor = new User("Ed", "Itor", "2", "editor@mail.utoronto.ca", "p");
+        editor.setId(UUID.randomUUID());
+        editor.addRole(Role.BOARD_EDITOR);
+        when(userRepository.findByEmail(editor.getEmail())).thenReturn(Optional.of(editor));
+        when(authorityResolver.resolvePermissions(editor))
+                .thenReturn(EnumSet.copyOf(Role.BOARD_EDITOR.getPermissions()));
+
+        UUID id = UUID.randomUUID();
+        target(id);
+
+        // BOARD_ADMIN confers device enrollment and screenshots; a plain editor holds neither.
+        assertThatThrownBy(() -> userService.addRole(editor.getEmail(), id, Role.BOARD_ADMIN))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("board:device:enroll");
+    }
+
+    @Test
+    void addRoleAllowsGrantingASubsetOfWhatTheActorHolds() {
+        User boardAdmin = new User("B", "A", "3", "boardadmin@mail.utoronto.ca", "p");
+        boardAdmin.setId(UUID.randomUUID());
+        boardAdmin.addRole(Role.BOARD_ADMIN);
+        when(userRepository.findByEmail(boardAdmin.getEmail())).thenReturn(Optional.of(boardAdmin));
+        when(authorityResolver.resolvePermissions(boardAdmin))
+                .thenReturn(EnumSet.copyOf(Role.BOARD_ADMIN.getPermissions()));
+
+        UUID id = UUID.randomUUID();
+        target(id);
+
+        User result = userService.addRole(boardAdmin.getEmail(), id, Role.BOARD_EDITOR);
+
+        assertThat(result.hasRole(Role.BOARD_EDITOR)).isTrue();
+    }
+
+    @Test
+    void removeRoleRefusesToStripTheLastGrantHolder() {
+        rootActor();
+        UUID id = UUID.randomUUID();
+        target(id).addRole(Role.ROOT);
+
+        // Only this user holds a role conferring iam:role:grant.
+        when(userRepository.findIdsByRoleIn(any())).thenReturn(new HashSet<>(Set.of(id)));
+        when(userRepository.findIdsByDirectPermission(Permission.IAM_ROLE_GRANT))
+                .thenReturn(new HashSet<>());
+
+        assertThatThrownBy(() -> userService.removeRole(ROOT_EMAIL, id, Role.ROOT))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("last user holding it");
+    }
+
+    @Test
+    void removeRoleAllowsStrippingRootWhenAnotherHolderRemains() {
+        User root = rootActor();
+        UUID id = UUID.randomUUID();
+        target(id).addRole(Role.ROOT);
+
+        when(userRepository.findIdsByRoleIn(any()))
+                .thenReturn(new HashSet<>(Set.of(id, root.getId())));
+        when(userRepository.findIdsByDirectPermission(Permission.IAM_ROLE_GRANT))
+                .thenReturn(new HashSet<>());
+
+        User result = userService.removeRole(ROOT_EMAIL, id, Role.ROOT);
+
+        assertThat(result.hasRole(Role.ROOT)).isFalse();
+    }
+
+    /**
+     * Demotion is an escalation path. Someone with a direct iam:role:grant must not be able
+     * to strip ROLE_ROOT off every root account and end as the only administrator left —
+     * the last-holder guard never fires, because their own direct grant keeps the set
+     * non-empty.
+     */
+    @Test
+    void removeRoleRejectsStrippingPermissionsTheActorDoesNotHold() {
+        User grantOnly = new User("G", "Only", "4", "grantonly@mail.utoronto.ca", "p");
+        grantOnly.setId(UUID.randomUUID());
+        grantOnly.addDirectPermission(Permission.IAM_ROLE_GRANT);
+        when(userRepository.findByEmail(grantOnly.getEmail())).thenReturn(Optional.of(grantOnly));
+        when(authorityResolver.resolvePermissions(grantOnly))
+                .thenReturn(EnumSet.of(Permission.IAM_ROLE_GRANT));
+
+        UUID victim = UUID.randomUUID();
+        target(victim).addRole(Role.ROOT);
+
+        assertThatThrownBy(() -> userService.removeRole(grantOnly.getEmail(), victim, Role.ROOT))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("cannot remove");
+    }
+
+    @Test
+    void revokePermissionRejectsRevokingWhatTheActorDoesNotHold() {
+        User editor = new User("Ed", "Itor", "5", "ed@mail.utoronto.ca", "p");
+        editor.setId(UUID.randomUUID());
+        editor.addRole(Role.BOARD_EDITOR);
+        editor.addDirectPermission(Permission.IAM_ROLE_GRANT);
+        when(userRepository.findByEmail(editor.getEmail())).thenReturn(Optional.of(editor));
+        Set<Permission> held = EnumSet.copyOf(Role.BOARD_EDITOR.getPermissions());
+        held.add(Permission.IAM_ROLE_GRANT);
+        when(authorityResolver.resolvePermissions(editor)).thenReturn(held);
+
+        UUID victim = UUID.randomUUID();
+        target(victim).addDirectPermission(Permission.BOARD_COMMAND_INSPECT);
+
+        assertThatThrownBy(() -> userService.revokePermission(
+                editor.getEmail(), victim, Permission.BOARD_COMMAND_INSPECT))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("board:command:inspect");
+    }
+
+    /**
+     * The lockout guard must look at what the target would actually be left holding. A ROOT
+     * who also carries a direct iam:role:grant keeps it after ROLE_ROOT comes off, so that
+     * removal is nobody's lockout and must not be refused.
+     */
+    @Test
+    void removeRoleIsAllowedWhenTheTargetKeepsGrantByAnotherPath() {
+        rootActor();
+        UUID id = UUID.randomUUID();
+        User victim = target(id);
+        victim.addRole(Role.ROOT);
+        when(userRepository.findDirectPermissions(id))
+                .thenReturn(Set.of(Permission.IAM_ROLE_GRANT));
+
+        User result = userService.removeRole(ROOT_EMAIL, id, Role.ROOT);
+
+        assertThat(result.hasRole(Role.ROOT)).isFalse();
+        // No holder counting at all: the target keeps the capability, so there is no
+        // lockout question to ask. Deliberately left unstubbed to assert that.
+        verify(userRepository, never()).findIdsByRoleIn(any());
+        verify(userRepository, never()).findIdsByDirectPermission(any());
+    }
+
+    @Test
+    void grantPermissionAddsADirectGrant() {
+        rootActor();
+        UUID id = UUID.randomUUID();
+        target(id);
+
+        User result = userService.grantPermission(ROOT_EMAIL, id, Permission.BOARD_COMMAND_INSPECT);
+
+        assertThat(result.hasDirectPermission(Permission.BOARD_COMMAND_INSPECT)).isTrue();
+    }
+
+    @Test
+    void revokePermissionRejectsAPermissionThatCameFromARole() {
+        rootActor();
+        UUID id = UUID.randomUUID();
+        target(id).addRole(Role.BOARD_EDITOR);
+
+        assertThatThrownBy(() ->
+                userService.revokePermission(ROOT_EMAIL, id, Permission.BOARD_POSTER_WRITE))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("removing the role");
     }
 
     @Test

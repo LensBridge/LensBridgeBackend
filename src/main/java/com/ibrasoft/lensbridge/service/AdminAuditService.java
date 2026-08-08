@@ -10,6 +10,7 @@ import com.ibrasoft.lensbridge.repository.auth.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -39,15 +40,31 @@ public class AdminAuditService {
     }
 
     public AuditEvent logAuditEvent(String adminEmail, AuditAction action, String entityType, UUID entityId, String IPAddress) {
+        return logAuditEvent(adminEmail, action, entityType, entityId, IPAddress, null);
+    }
+
+    /**
+     * @param details short free-text describing <em>what</em> was done, for actions where 
+     * the action name alone is ambiguous (e.g. the command kind on
+     * {@link AuditAction#ISSUE_DEVICE_COMMAND}). Truncated to the column width.
+     */
+    public AuditEvent logAuditEvent(String adminEmail, AuditAction action, String entityType, UUID entityId,
+                                    String IPAddress, String details) {
         AuditEvent event = AuditEvent.builder()
                 .admin(userRepository.findByEmail(adminEmail).orElseThrow(() -> new IllegalArgumentException("Admin user not found: " + adminEmail)))
                 .action(action)
                 .targetEntityType(toEntityType(entityType))
                 .targetEntityId(entityId)
                 .timestamp(Instant.now())
+                .details(truncate(details))
                 .ipAddress(IPAddress)
                 .build();
         return logAuditEvent(event);
+    }
+
+    private static String truncate(String details) {
+        if (details == null || details.length() <= AuditEvent.DETAILS_MAX) return details;
+        return details.substring(0, AuditEvent.DETAILS_MAX);
     }
 
     public Page<AuditEventDto> getAllAuditEvents(Pageable pageable) {
@@ -82,7 +99,7 @@ public class AdminAuditService {
         return new AuditEventDto(
                 event.getId(), event.getAction(), event.getTimestamp(),
                 adminId, adminName, adminEmail,
-                event.getTargetEntityType(), event.getTargetEntityId(),
+                event.getTargetEntityType(), event.getTargetEntityId(), event.getDetails(),
                 event.getIpAddress(), event.getUserAgent());
     }
 
@@ -100,7 +117,9 @@ public class AdminAuditService {
         return switch (entityType.toLowerCase()) {
             case "user" -> AuditEntityType.USER;
             case "upload" -> AuditEntityType.UPLOAD;
-            case "poster", "calendarevent", "boardevent", "musallah board" -> AuditEntityType.MUSALLAH_BOARD;
+            case "poster", "calendarevent", "boardevent", "musallah board",
+                 "boardconfig", "weeklycontent" -> AuditEntityType.MUSALLAH_BOARD;
+            case "device" -> AuditEntityType.DEVICE;
             default -> AuditEntityType.EVENT;
         };
     }

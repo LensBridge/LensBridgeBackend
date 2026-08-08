@@ -29,6 +29,8 @@ import java.util.UUID;
 @Entity
 @Table(name = "audit_events")
 public class AuditEvent {
+    public static final int DETAILS_MAX = 512;
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
@@ -49,6 +51,9 @@ public class AuditEvent {
     private AuditEntityType targetEntityType;
 
     private UUID targetEntityId;
+
+    @Column(length = DETAILS_MAX)
+    private String details;
 
     private String ipAddress;
     private String userAgent;

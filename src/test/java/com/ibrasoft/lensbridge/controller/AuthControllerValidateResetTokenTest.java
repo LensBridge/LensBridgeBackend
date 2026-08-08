@@ -47,7 +47,8 @@ class AuthControllerValidateResetTokenTest {
                 userService,
                 mock(JwtUtils.class),
                 mock(LoginAttemptService.class),
-                mock(RefreshTokenService.class));
+                mock(RefreshTokenService.class),
+                mock(com.ibrasoft.lensbridge.security.services.AuthorityResolver.class));
 
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();

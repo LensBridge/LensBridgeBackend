@@ -76,6 +76,14 @@ paths:
           - CREATE_POSTER
           - UPDATE_POSTER
           - DELETE_POSTER
+          - SAVE_WEEKLY_CONTENT
+          - DELETE_WEEKLY_CONTENT
+          - UPDATE_BOARD_CONFIG
+          - UPDATE_BOARD_TICKER
+          - REFRESH_BOARDS
+          - ISSUE_ENROLLMENT_TOKEN
+          - REVOKE_DEVICE
+          - ISSUE_DEVICE_COMMAND
           - PROMOTE_USER
           - DEMOTE_USER
           - DISABLE_USER
@@ -89,6 +97,8 @@ paths:
           - TRIGGER_PASSWORD_RESET_EMAIL
           - ADD_USER_ROLE
           - REMOVE_USER_ROLE
+          - GRANT_PERMISSION
+          - REVOKE_PERMISSION
           - ADD_USER
           - REMOVE_USER
           - UPDATE_USER
@@ -158,6 +168,14 @@ paths:
                   - CREATE_POSTER
                   - UPDATE_POSTER
                   - DELETE_POSTER
+                  - SAVE_WEEKLY_CONTENT
+                  - DELETE_WEEKLY_CONTENT
+                  - UPDATE_BOARD_CONFIG
+                  - UPDATE_BOARD_TICKER
+                  - REFRESH_BOARDS
+                  - ISSUE_ENROLLMENT_TOKEN
+                  - REVOKE_DEVICE
+                  - ISSUE_DEVICE_COMMAND
                   - PROMOTE_USER
                   - DEMOTE_USER
                   - DISABLE_USER
@@ -171,6 +189,8 @@ paths:
                   - TRIGGER_PASSWORD_RESET_EMAIL
                   - ADD_USER_ROLE
                   - REMOVE_USER_ROLE
+                  - GRANT_PERMISSION
+                  - REVOKE_PERMISSION
                   - ADD_USER
                   - REMOVE_USER
                   - UPDATE_USER
@@ -417,6 +437,38 @@ paths:
           description: Request failed; body carries a human-readable message
       tags:
       - board-admin-controller
+  /api/admin/board/configs/{deviceId}/ticker:
+    patch:
+      operationId: updateBoardTicker
+      parameters:
+      - in: path
+        name: deviceId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTickerRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceConfig"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      summary: Update a board's scrolling messages
+      tags:
+      - board-admin-controller
   /api/admin/board/devices:
     get:
       operationId: listDevices
@@ -524,8 +576,9 @@ paths:
       tags:
       - device-admin-controller
     post:
-      description: Returns as soon as the command is queued; delivery and execution
-        are reported asynchronously over the agent websocket.
+      description: "Returns as soon as the command is queued; delivery and execution\
+        \ are reported asynchronously over the agent websocket. The permission required\
+        \ depends on the command kind: board:command:benign, :disruptive, or :inspect."
       operationId: issueDeviceCommand
       parameters:
       - in: path
@@ -547,6 +600,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/CommandIssuedResponse"
           description: Command accepted and queued for delivery
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Caller lacks the permission for this command kind
         default:
           content:
             application/json:
@@ -1181,6 +1240,27 @@ paths:
           description: Request failed; body carries a human-readable message
       tags:
       - admin-controller
+  /api/admin/permissions:
+    get:
+      operationId: getAvailablePermissions
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PermissionResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      summary: "List every permission, for building a direct-grant picker"
+      tags:
+      - admin-controller
   /api/admin/roles:
     get:
       operationId: getAvailableRoles
@@ -1191,11 +1271,7 @@ paths:
               schema:
                 type: array
                 items:
-                  type: string
-                  enum:
-                  - USER
-                  - ADMIN
-                  - ROOT
+                  $ref: "#/components/schemas/RoleDefinitionResponse"
           description: OK
         default:
           content:
@@ -1203,7 +1279,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
           description: Request failed; body carries a human-readable message
-      summary: List the roles that can be assigned to a user
+      summary: List assignable roles with the permissions each one confers
       tags:
       - admin-controller
   /api/admin/upload/{uploadId}:
@@ -1548,6 +1624,9 @@ paths:
               enum:
               - USER
               - ADMIN
+              - BOARD_VIEWER
+              - BOARD_EDITOR
+              - BOARD_ADMIN
               - ROOT
         required: true
       responses:
@@ -1563,6 +1642,62 @@ paths:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
           description: Request failed; body carries a human-readable message
+      tags:
+      - admin-controller
+  /api/admin/user/{userId}/grant-permission:
+    post:
+      operationId: grantUserPermission
+      parameters:
+      - in: path
+        name: userId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: string
+              enum:
+              - MEDIA_UPLOAD_SELF
+              - MEDIA_UPLOAD_MODERATE
+              - MEDIA_UPLOAD_READ
+              - MEDIA_EVENT_WRITE
+              - BOARD_CONTENT_READ
+              - BOARD_POSTER_WRITE
+              - BOARD_EVENT_WRITE
+              - BOARD_WEEKLY_WRITE
+              - BOARD_TICKER_WRITE
+              - BOARD_CONFIG_READ
+              - BOARD_CONFIG_WRITE
+              - BOARD_REFRESH
+              - BOARD_DEVICE_READ
+              - BOARD_DEVICE_ENROLL
+              - BOARD_DEVICE_REVOKE
+              - BOARD_TELEMETRY_SUBSCRIBE
+              - BOARD_COMMAND_BENIGN
+              - BOARD_COMMAND_DISRUPTIVE
+              - BOARD_COMMAND_INSPECT
+              - IAM_USER_READ
+              - IAM_USER_WRITE
+              - IAM_ROLE_GRANT
+              - AUDIT_READ
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      summary: Grant a single permission directly to a user
       tags:
       - admin-controller
   /api/admin/user/{userId}/remove-role:
@@ -1583,6 +1718,9 @@ paths:
               enum:
               - USER
               - ADMIN
+              - BOARD_VIEWER
+              - BOARD_EDITOR
+              - BOARD_ADMIN
               - ROOT
         required: true
       responses:
@@ -1598,6 +1736,62 @@ paths:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
           description: Request failed; body carries a human-readable message
+      tags:
+      - admin-controller
+  /api/admin/user/{userId}/revoke-permission:
+    post:
+      operationId: revokeUserPermission
+      parameters:
+      - in: path
+        name: userId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: string
+              enum:
+              - MEDIA_UPLOAD_SELF
+              - MEDIA_UPLOAD_MODERATE
+              - MEDIA_UPLOAD_READ
+              - MEDIA_EVENT_WRITE
+              - BOARD_CONTENT_READ
+              - BOARD_POSTER_WRITE
+              - BOARD_EVENT_WRITE
+              - BOARD_WEEKLY_WRITE
+              - BOARD_TICKER_WRITE
+              - BOARD_CONFIG_READ
+              - BOARD_CONFIG_WRITE
+              - BOARD_REFRESH
+              - BOARD_DEVICE_READ
+              - BOARD_DEVICE_ENROLL
+              - BOARD_DEVICE_REVOKE
+              - BOARD_TELEMETRY_SUBSCRIBE
+              - BOARD_COMMAND_BENIGN
+              - BOARD_COMMAND_DISRUPTIVE
+              - BOARD_COMMAND_INSPECT
+              - IAM_USER_READ
+              - IAM_USER_WRITE
+              - IAM_ROLE_GRANT
+              - AUDIT_READ
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      summary: Revoke a directly-granted permission from a user
       tags:
       - admin-controller
   /api/admin/users:
@@ -2813,6 +3007,14 @@ components:
           - CREATE_POSTER
           - UPDATE_POSTER
           - DELETE_POSTER
+          - SAVE_WEEKLY_CONTENT
+          - DELETE_WEEKLY_CONTENT
+          - UPDATE_BOARD_CONFIG
+          - UPDATE_BOARD_TICKER
+          - REFRESH_BOARDS
+          - ISSUE_ENROLLMENT_TOKEN
+          - REVOKE_DEVICE
+          - ISSUE_DEVICE_COMMAND
           - PROMOTE_USER
           - DEMOTE_USER
           - DISABLE_USER
@@ -2826,6 +3028,8 @@ components:
           - TRIGGER_PASSWORD_RESET_EMAIL
           - ADD_USER_ROLE
           - REMOVE_USER_ROLE
+          - GRANT_PERMISSION
+          - REVOKE_PERMISSION
           - ADD_USER
           - REMOVE_USER
           - UPDATE_USER
@@ -2835,6 +3039,8 @@ components:
           type: string
           format: uuid
         adminName:
+          type: string
+        details:
           type: string
         id:
           type: string
@@ -2850,6 +3056,7 @@ components:
           - USER
           - UPLOAD
           - MUSALLAH_BOARD
+          - DEVICE
           - EVENT
         timestamp:
           type: string
@@ -3316,6 +3523,10 @@ components:
           format: uuid
         lastName:
           type: string
+        permissions:
+          type: array
+          items:
+            type: string
         refreshToken:
           type: string
         roles:
@@ -3578,6 +3789,15 @@ components:
           type: array
           items:
             type: string
+    PermissionResponse:
+      type: object
+      properties:
+        authority:
+          type: string
+        domain:
+          type: string
+        name:
+          type: string
     Poster:
       type: object
       properties:
@@ -3664,6 +3884,17 @@ components:
       required:
       - newPassword
       - token
+    RoleDefinitionResponse:
+      type: object
+      properties:
+        description:
+          type: string
+        name:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
     SignupRequest:
       type: object
       properties:
@@ -3734,6 +3965,10 @@ components:
           format: uuid
         lastName:
           type: string
+        permissions:
+          type: array
+          items:
+            type: string
         roles:
           type: array
           items:
@@ -3819,6 +4054,15 @@ components:
           type: string
           maxLength: 10
           minLength: 0
+    UpdateTickerRequest:
+      type: object
+      properties:
+        enableScrollingMessage:
+          type: boolean
+        scrollingMessages:
+          type: array
+          items:
+            type: string
     UploadCompletionResponse:
       type: object
       properties:
@@ -3905,6 +4149,14 @@ components:
     UserInfoResponse:
       type: object
       properties:
+        directPermissions:
+          type: array
+          items:
+            type: string
+        effectivePermissions:
+          type: array
+          items:
+            type: string
         email:
           type: string
         firstName:
@@ -3921,6 +4173,9 @@ components:
             enum:
             - USER
             - ADMIN
+            - BOARD_VIEWER
+            - BOARD_EDITOR
+            - BOARD_ADMIN
             - ROOT
           uniqueItems: true
         studentNumber:

@@ -25,7 +25,22 @@ public enum AuditAction {
     CREATE_POSTER("Create Poster"),
     UPDATE_POSTER("Update Poster"),
     DELETE_POSTER("Delete Poster"),
-    
+
+    // Board Content Actions (Musallah Board)
+    // SAVE_WEEKLY_CONTENT is the only record of who last changed a jummah time, since
+    // quotes and prayer times share one permission and one endpoint.
+    SAVE_WEEKLY_CONTENT("Save Weekly Content"),
+    DELETE_WEEKLY_CONTENT("Delete Weekly Content"),
+    UPDATE_BOARD_CONFIG("Update Board Config"),
+    UPDATE_BOARD_TICKER("Update Board Ticker"),
+    REFRESH_BOARDS("Refresh All Boards"),
+
+    // Device Fleet Actions (Musallah Board)
+    ISSUE_ENROLLMENT_TOKEN("Issue Device Enrollment Token"),
+    REVOKE_DEVICE("Revoke Device"),
+    ISSUE_DEVICE_COMMAND("Issue Device Command"),
+
+
     // User Management Actions
     PROMOTE_USER("Promote User to Admin"),
     DEMOTE_USER("Remove Admin Role"),
@@ -45,6 +60,8 @@ public enum AuditAction {
 
     ADD_USER_ROLE("Add User Role"),
     REMOVE_USER_ROLE("Remove User Role"),
+    GRANT_PERMISSION("Grant Direct Permission"),
+    REVOKE_PERMISSION("Revoke Direct Permission"),
 
     ADD_USER("Add User"),
     REMOVE_USER("Remove User"),
