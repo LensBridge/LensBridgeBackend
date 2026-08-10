@@ -3,6 +3,7 @@ package com.ibrasoft.lensbridge.service;
 import com.ibrasoft.lensbridge.dto.board.request.CreateCalendarEventRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateBoardConfigRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateCalendarEventRequest;
+import com.ibrasoft.lensbridge.dto.board.request.UpdateDeviceRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateTickerRequest;
 import com.ibrasoft.lensbridge.dto.board.request.WeeklyContentRequest;
 import com.ibrasoft.lensbridge.dto.upload.response.ErrorResponse;
@@ -247,4 +248,18 @@ public class BoardService {
         log.info("Deleted event: id={}", eventId);
         boardStream.contentChanged("events");
     }
+
+    // ================== Device Management Changes ====================
+
+    public Device updateDevice(UUID deviceId, UpdateDeviceRequest request) {
+        Device existing = deviceRepository.findById(deviceId)
+                .orElseThrow(() -> new ApiResponseException(
+                        HttpStatus.NOT_FOUND,
+                        ErrorResponse.of("Device not found: " + deviceId)));
+        Patch.apply(request.getDisplayName(), existing::setDisplayName);
+        Patch.apply(request.getAudience(), existing::setAudience);
+        log.info("Updated device: id={}", deviceId);
+        return deviceRepository.save(existing);
+    }
+
 }

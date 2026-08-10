@@ -4,14 +4,17 @@ import com.ibrasoft.lensbridge.dto.board.request.CreateCalendarEventRequest;
 import com.ibrasoft.lensbridge.dto.board.request.CreatePosterRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateBoardConfigRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateCalendarEventRequest;
+import com.ibrasoft.lensbridge.dto.board.request.UpdateDeviceRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdatePosterRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateTickerRequest;
 import com.ibrasoft.lensbridge.dto.board.request.WeeklyContentRequest;
+import com.ibrasoft.lensbridge.dto.board.response.DeviceSummary;
 import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
 import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
 import com.ibrasoft.lensbridge.model.audit.AuditAction;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.BoardEvent;
+import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
 import com.ibrasoft.lensbridge.model.board.Poster;
 import com.ibrasoft.lensbridge.model.board.WeeklyContent;
@@ -33,7 +36,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import io.swagger.v3.oas.annotations.Operation;
@@ -359,6 +361,21 @@ public class BoardAdminController {
                 "Musallah Board", null, request.getRemoteAddr());
 
         return ResponseEntity.ok(new MessageResponse("Refresh sent to all MusallahBoard instances"));
+    }
+
+    @PatchMapping("/devices/{deviceId}")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_CONFIG_WRITE + "')")
+    public ResponseEntity<DeviceSummary> updateDevice(
+            @PathVariable UUID deviceId,
+            @Valid @RequestBody UpdateDeviceRequest updateRequest,
+            HttpServletRequest request) {
+
+        log.info("Admin updating device: {}", deviceId);
+        Device updated = boardService.updateDevice(deviceId, updateRequest);
+        boardStream.configChanged(deviceId);
+        auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.UPDATE_BOARD_CONFIG, "Device", deviceId, request.getRemoteAddr());
+        
+        return ResponseEntity.ok(DeviceSummary.of(updated));
     }
 
     private String getCurrentUserEmail() {
