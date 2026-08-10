@@ -1,22 +1,32 @@
-package com.ibrasoft.lensbridge.service.board.transformer;
+package com.ibrasoft.lensbridge.service.board.producer;
 
 import com.ibrasoft.lensbridge.model.board.Poster;
 import com.ibrasoft.lensbridge.model.board.frames.FrameDefinition;
-import com.ibrasoft.lensbridge.model.board.frames.FrameSlot;
 import com.ibrasoft.lensbridge.model.board.frames.FrameType;
 import com.ibrasoft.lensbridge.model.board.frames.PosterFrameConfig;
+import com.ibrasoft.lensbridge.service.PosterService;
 import com.ibrasoft.lensbridge.service.board.BoardContext;
+import lombok.RequiredArgsConstructor;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 @Component
-public class PosterFrameTransformer implements FrameTransformer<Poster> {
+@RequiredArgsConstructor
+@Order(3)
+public class PosterFrameProducer implements FrameProducer {
+
+    private final PosterService posterService;
 
     @Override
-    public FrameType supports() {
-        return FrameType.POSTER;
+    public List<FrameDefinition> produce(BoardContext ctx) {
+        List<Poster> posters =
+                posterService.getActivePosterFramesForAudience(ctx.getDevice().getAudience());
+        return posters.stream().map(p -> transform(p, ctx)).collect(Collectors.toList());
     }
 
-    @Override
     public FrameDefinition transform(Poster poster, BoardContext ctx) {
         PosterFrameConfig config = PosterFrameConfig.builder()
                 .posterUrl(poster.getImage())
@@ -25,11 +35,10 @@ public class PosterFrameTransformer implements FrameTransformer<Poster> {
                 .build();
 
         return FrameDefinition.builder()
+                .frameId("poster:" + poster.getId())
                 .frameType(FrameType.POSTER)
                 .durationInSeconds(poster.getDuration())
                 .frameConfig(config)
-                .slot(FrameSlot.PRIMARY)
-                .priority(null)
                 .build();
     }
 }

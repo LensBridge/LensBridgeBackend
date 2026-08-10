@@ -1,14 +1,16 @@
-package com.ibrasoft.lensbridge.service.board.transformer;
+package com.ibrasoft.lensbridge.service.board.producer;
 
 import com.ibrasoft.lensbridge.model.board.IslamicQuote;
 import com.ibrasoft.lensbridge.model.board.JummahPrayer;
 import com.ibrasoft.lensbridge.model.board.WeeklyContent;
 import com.ibrasoft.lensbridge.model.board.frames.FrameDefinition;
-import com.ibrasoft.lensbridge.model.board.frames.FrameSlot;
 import com.ibrasoft.lensbridge.model.board.frames.FrameType;
 import com.ibrasoft.lensbridge.model.board.frames.IslamicQuoteFrameConfig;
 import com.ibrasoft.lensbridge.model.board.frames.JummahFrameConfig;
+import com.ibrasoft.lensbridge.service.BoardService;
 import com.ibrasoft.lensbridge.service.board.BoardContext;
+import lombok.RequiredArgsConstructor;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -19,11 +21,25 @@ import java.util.stream.Collectors;
  * Transforms a WeeklyContent entity into FrameDefinitions:
  * one per quote (VERSE/HADITH kind) and one for jummah prayer info.
  *
- * This transformer intentionally does NOT implement FrameTransformer<T> because
- * one source expands to multiple frames. The assembler injects it by concrete class.
+ * This intentionally does NOT implement FrameTransformer<T> because one source expands
+ * to multiple frames — but it does implement {@link FrameProducer}, since that interface
+ * already returns a List<FrameDefinition>.
  */
 @Component
-public class WeeklyContentFrameTransformer {
+@RequiredArgsConstructor
+@Order(6)
+public class WeeklyContentFrameProducer implements FrameProducer {
+
+    private final BoardService boardService;
+
+    private final static String JUMUAH_FRAME_ID = "jumuah";
+    private final static String QUOTE_FRAME_ID = "quote:";
+
+    @Override
+    public List<FrameDefinition> produce(BoardContext ctx) {
+        WeeklyContent content = boardService.getWeeklyContentFor(ctx.today()).orElse(null);
+        return transform(content, ctx);
+    }
 
     public List<FrameDefinition> transform(WeeklyContent content, BoardContext ctx) {
         List<FrameDefinition> out = new ArrayList<>();
@@ -53,11 +69,10 @@ public class WeeklyContentFrameTransformer {
                 .build();
 
         return FrameDefinition.builder()
+                .frameId(QUOTE_FRAME_ID + quote.getId())
                 .frameType(FrameType.ISLAMIC_QUOTE)
                 .durationInSeconds(null)
                 .frameConfig(config)
-                .slot(FrameSlot.PRIMARY)
-                .priority(null)
                 .build();
     }
 
@@ -75,11 +90,10 @@ public class WeeklyContentFrameTransformer {
                 .build();
 
         return FrameDefinition.builder()
+                .frameId(JUMUAH_FRAME_ID)
                 .frameType(FrameType.JUMMAH)
                 .durationInSeconds(null)
                 .frameConfig(config)
-                .slot(FrameSlot.PRIMARY)
-                .priority(null)
                 .build();
     }
 }

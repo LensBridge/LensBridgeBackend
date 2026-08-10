@@ -7,9 +7,11 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
  * Base class for frame-specific configuration.
  * Uses Jackson annotations for polymorphic serialization.
  * <p>
- * {@link FrameType#NEXT_PRAYER} deliberately has no subtype here: the backend holds no
- * prayer-time source, so the board computes that frame itself from
- * {@code deviceConfig.location}.
+ * {@link FrameType#NEXT_PRAYER} and {@link FrameType#INSTAGRAM} use empty marker configs
+ * ({@link NextPrayerFrameConfig}, {@link InstagramFrameConfig}) — the backend has no data to
+ * contribute to either (prayer times and the QR destination are both resolved client-side), but
+ * the frame still needs a real position and {@code durationInSeconds} in the sequence rather
+ * than being synthesized outside the API contract.
  */
 @JsonTypeInfo(
     use = JsonTypeInfo.Id.NAME,
@@ -18,10 +20,11 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 )
 @JsonSubTypes({
     @JsonSubTypes.Type(value = PosterFrameConfig.class,        name = "poster"),
-    @JsonSubTypes.Type(value = EventListFrameConfig.class,     name = "event_list"),
-    @JsonSubTypes.Type(value = DailyScheduleFrameConfig.class, name = "daily_schedule"),
     @JsonSubTypes.Type(value = JummahFrameConfig.class,        name = "jummah"),
-    @JsonSubTypes.Type(value = IslamicQuoteFrameConfig.class,  name = "islamic_quote")
+    @JsonSubTypes.Type(value = IslamicQuoteFrameConfig.class,  name = "islamic_quote"),
+    @JsonSubTypes.Type(value = NextPrayerFrameConfig.class,    name = "next_prayer"),
+    @JsonSubTypes.Type(value = AgendaFrameConfig.class,        name = "agenda"),
+    @JsonSubTypes.Type(value = InstagramFrameConfig.class,     name = "instagram")
 })
 public abstract class FrameConfig {
 

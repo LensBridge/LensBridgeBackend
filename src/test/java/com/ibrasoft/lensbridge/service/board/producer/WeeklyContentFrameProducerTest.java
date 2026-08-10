@@ -1,13 +1,13 @@
-package com.ibrasoft.lensbridge.service.board.transformer;
+package com.ibrasoft.lensbridge.service.board.producer;
 
 import com.ibrasoft.lensbridge.model.board.IslamicQuote;
 import com.ibrasoft.lensbridge.model.board.JummahPrayer;
 import com.ibrasoft.lensbridge.model.board.WeeklyContent;
 import com.ibrasoft.lensbridge.model.board.frames.FrameDefinition;
-import com.ibrasoft.lensbridge.model.board.frames.FrameSlot;
 import com.ibrasoft.lensbridge.model.board.frames.FrameType;
 import com.ibrasoft.lensbridge.model.board.frames.IslamicQuoteFrameConfig;
 import com.ibrasoft.lensbridge.model.board.frames.JummahFrameConfig;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -16,17 +16,19 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @ExtendWith(MockitoExtension.class)
-class WeeklyContentFrameTransformerTest {
+class WeeklyContentFrameProducerTest {
 
     @InjectMocks
-    private WeeklyContentFrameTransformer transformer;
+    private WeeklyContentFrameProducer transformer;
 
     private IslamicQuote quote(IslamicQuote.Kind kind, String ref) {
         return IslamicQuote.builder()
+                .id(UUID.randomUUID())
                 .kind(kind)
                 .arabic("arabic-" + ref)
                 .transliteration("translit-" + ref)
@@ -57,18 +59,18 @@ class WeeklyContentFrameTransformerTest {
 
     @Test
     void verseQuoteMapsToVerseKindFrame() {
+        IslamicQuote q = quote(IslamicQuote.Kind.VERSE, "2:255");
         WeeklyContent content = WeeklyContent.builder()
-                .quotes(List.of(quote(IslamicQuote.Kind.VERSE, "2:255")))
+                .quotes(List.of(q))
                 .build();
 
         List<FrameDefinition> frames = transformer.transform(content, null);
 
         assertThat(frames).hasSize(1);
         FrameDefinition def = frames.get(0);
+        assertThat(def.getFrameId()).isEqualTo("quote:" + q.getId());
         assertThat(def.getFrameType()).isEqualTo(FrameType.ISLAMIC_QUOTE);
-        assertThat(def.getSlot()).isEqualTo(FrameSlot.PRIMARY);
         assertThat(def.getDurationInSeconds()).isNull();
-        assertThat(def.getPriority()).isNull();
 
         IslamicQuoteFrameConfig config = (IslamicQuoteFrameConfig) def.getFrameConfig();
         assertThat(config.getKind()).isEqualTo(IslamicQuoteFrameConfig.Kind.VERSE);
@@ -129,8 +131,9 @@ class WeeklyContentFrameTransformerTest {
 
         assertThat(frames).hasSize(1);
         FrameDefinition def = frames.get(0);
+        // NB: the frameId transliterates as "jumuah" while the frame *type* is "jummah".
+        assertThat(def.getFrameId()).isEqualTo("jumuah");
         assertThat(def.getFrameType()).isEqualTo(FrameType.JUMMAH);
-        assertThat(def.getSlot()).isEqualTo(FrameSlot.PRIMARY);
 
         JummahFrameConfig config = (JummahFrameConfig) def.getFrameConfig();
         assertThat(config.getPrayers()).hasSize(2);
