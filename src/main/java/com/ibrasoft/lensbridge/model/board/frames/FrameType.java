@@ -23,7 +23,8 @@ public enum FrameType {
     AGENDA("agenda"),
     INSTAGRAM("instagram"),
     JUMMAH("jummah"),
-    ISLAMIC_QUOTE("islamic_quote");
+    ISLAMIC_QUOTE("islamic_quote"),
+    SOCIALS("socials");
 
     private final String typeName;
     FrameType(String typeName) {

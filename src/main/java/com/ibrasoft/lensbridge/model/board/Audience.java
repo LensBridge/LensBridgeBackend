@@ -6,6 +6,11 @@ import com.fasterxml.jackson.annotation.JsonValue;
 import java.util.Arrays;
 import java.util.Optional;
 
+// TECH DEBT:
+// Eventually I would like to have tenancy-defined audiences and allow audience meshing rather than a binary
+// brothers/sisters/everyone (i.e: more than 3 audiences)
+// This is sufficient for a version 1 prototype, though
+
 public enum Audience {
     BROTHERS("brothers"),
     SISTERS("sisters"),
