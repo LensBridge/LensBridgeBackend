@@ -18,6 +18,8 @@ import java.util.stream.Collectors;
 @Order(3)
 public class PosterFrameProducer implements FrameProducer {
 
+    private static final String POSTER_FRAME_ID = "poster:";
+
     private final PosterService posterService;
 
     @Override
@@ -35,7 +37,7 @@ public class PosterFrameProducer implements FrameProducer {
                 .build();
 
         return FrameDefinition.builder()
-                .frameId("poster:" + poster.getId())
+                .frameId(POSTER_FRAME_ID + poster.getId())
                 .frameType(FrameType.POSTER)
                 .durationInSeconds(poster.getDuration())
                 .frameConfig(config)

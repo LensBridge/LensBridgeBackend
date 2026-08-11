@@ -20,10 +20,12 @@ import java.util.List;
 @Order(1)
 public class NextPrayerFrameProducer implements FrameProducer {
 
+    public static final String FRAME_ID = "next_prayer";
+
     @Override
     public List<FrameDefinition> produce(BoardContext ctx) {
         return List.of(FrameDefinition.builder()
-                .frameId("next_prayer")
+                .frameId(FRAME_ID)
                 .frameType(FrameType.NEXT_PRAYER)
                 .durationInSeconds(configuredDuration(ctx))
                 .frameConfig(new NextPrayerFrameConfig())
