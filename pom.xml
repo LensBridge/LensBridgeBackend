@@ -6,7 +6,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.5.14</version>
+        <version>3.5.16</version>
         <relativePath />
     </parent>
     <groupId>com.ibrasoft</groupId>
@@ -29,10 +29,8 @@
     </scm>
     <properties>
         <java.version>21</java.version>
-        <springdoc.version>2.8.8</springdoc.version>
+        <springdoc.version>2.9.0</springdoc.version>
         <springdoc-maven-plugin.version>1.4</springdoc-maven-plugin.version>
-        <!-- Deliberately not 8080: spec generation must not collide with a
-             running dev server, locally or on a shared CI runner. -->
         <openapi.gen.port>8089</openapi.gen.port>
         <openapi.gen.jmxPort>9011</openapi.gen.jmxPort>
     </properties>
