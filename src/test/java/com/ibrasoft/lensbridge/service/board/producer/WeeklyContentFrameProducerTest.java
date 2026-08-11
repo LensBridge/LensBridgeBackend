@@ -131,8 +131,7 @@ class WeeklyContentFrameProducerTest {
 
         assertThat(frames).hasSize(1);
         FrameDefinition def = frames.get(0);
-        // NB: the frameId transliterates as "jumuah" while the frame *type* is "jummah".
-        assertThat(def.getFrameId()).isEqualTo("jumuah");
+        assertThat(def.getFrameId()).isEqualTo("jummah");
         assertThat(def.getFrameType()).isEqualTo(FrameType.JUMMAH);
 
         JummahFrameConfig config = (JummahFrameConfig) def.getFrameConfig();

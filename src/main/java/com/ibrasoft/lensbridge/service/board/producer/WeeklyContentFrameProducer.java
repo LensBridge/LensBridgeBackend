@@ -32,7 +32,7 @@ public class WeeklyContentFrameProducer implements FrameProducer {
 
     private final BoardService boardService;
 
-    private final static String JUMUAH_FRAME_ID = "jumuah";
+    private final static String JUMMAH_FRAME_ID = "jummah";
     private final static String QUOTE_FRAME_ID = "quote:";
 
     @Override
@@ -90,7 +90,7 @@ public class WeeklyContentFrameProducer implements FrameProducer {
                 .build();
 
         return FrameDefinition.builder()
-                .frameId(JUMUAH_FRAME_ID)
+                .frameId(JUMMAH_FRAME_ID)
                 .frameType(FrameType.JUMMAH)
                 .durationInSeconds(null)
                 .frameConfig(config)
