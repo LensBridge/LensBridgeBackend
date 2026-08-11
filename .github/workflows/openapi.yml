@@ -7,7 +7,7 @@ name: OpenAPI contract
 
 on:
   push:
-    branches: [main, master]
+    branches: [master, develop]
   pull_request:
   workflow_dispatch:
 
