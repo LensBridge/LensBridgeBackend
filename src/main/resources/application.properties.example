@@ -20,7 +20,14 @@ spring.jpa.open-in-view=false
 # prod is Postgres; see docs/MIGRATIONS.md.
 spring.jpa.hibernate.ddl-auto=validate
 spring.flyway.enabled=true
-spring.flyway.locations=classpath:db/migration/{vendor}
+# Set explicitly per profile below -- classpath:db/migration/postgresql for prod,
+# classpath:db/migration/sqlite for dev. Spring Boot's {vendor} placeholder
+# (classpath:db/migration/{vendor}) looks like it should pick this automatically from the
+# JDBC URL, but inside this project's repackaged jar (Spring Boot 3.2+ nested-jar layout)
+# Flyway's classpath scan doesn't restrict to the resolved subdirectory -- it scans both
+# db/migration/sqlite and db/migration/postgresql and fails startup with "Found more than
+# one migration with version 1". Confirmed against prod on 2026-08-10; see docs/MIGRATIONS.md.
+# spring.flyway.locations=classpath:db/migration/postgresql
 
 # Allowed CORS origins
 frontend.baseurl=http://localhost:5173

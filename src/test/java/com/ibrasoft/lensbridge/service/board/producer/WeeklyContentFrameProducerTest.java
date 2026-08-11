@@ -27,6 +27,10 @@ class WeeklyContentFrameProducerTest {
     private WeeklyContentFrameProducer transformer;
 
     private IslamicQuote quote(IslamicQuote.Kind kind, String ref) {
+        return quote(kind, ref, null);
+    }
+
+    private IslamicQuote quote(IslamicQuote.Kind kind, String ref, Integer durationSeconds) {
         return IslamicQuote.builder()
                 .id(UUID.randomUUID())
                 .kind(kind)
@@ -34,6 +38,7 @@ class WeeklyContentFrameProducerTest {
                 .transliteration("translit-" + ref)
                 .translation("translation-" + ref)
                 .reference(ref)
+                .durationSeconds(durationSeconds)
                 .build();
     }
 
@@ -102,6 +107,17 @@ class WeeklyContentFrameProducerTest {
 
         IslamicQuoteFrameConfig config = (IslamicQuoteFrameConfig) frames.get(0).getFrameConfig();
         assertThat(config.getKind()).isEqualTo(IslamicQuoteFrameConfig.Kind.HADITH);
+    }
+
+    @Test
+    void quoteDurationIsCarriedOntoTheFrame() {
+        WeeklyContent content = WeeklyContent.builder()
+                .quotes(List.of(quote(IslamicQuote.Kind.HADITH, "Muslim 1", 45)))
+                .build();
+
+        List<FrameDefinition> frames = transformer.transform(content, null);
+
+        assertThat(frames.get(0).getDurationInSeconds()).isEqualTo(45);
     }
 
     @Test

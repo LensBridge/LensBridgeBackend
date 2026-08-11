@@ -71,7 +71,7 @@ public class WeeklyContentFrameProducer implements FrameProducer {
         return FrameDefinition.builder()
                 .frameId(QUOTE_FRAME_ID + quote.getId())
                 .frameType(FrameType.ISLAMIC_QUOTE)
-                .durationInSeconds(null)
+                .durationInSeconds(quote.getDurationSeconds())
                 .frameConfig(config)
                 .build();
     }

@@ -3410,6 +3410,7 @@ components:
         duration:
           type: integer
           format: int32
+          minimum: 0
         endTime:
           type: string
           format: date-time
@@ -3418,6 +3419,7 @@ components:
           format: binary
         signupUrl:
           type: string
+          pattern: ""
         startTime:
           type: string
           format: date-time
@@ -3442,6 +3444,7 @@ components:
         duration:
           type: integer
           format: int32
+          minimum: 0
         footerText:
           type: string
           minLength: 1
@@ -3467,6 +3470,7 @@ components:
         url:
           type: string
           minLength: 1
+          pattern: ""
       required:
       - audience
       - footerText
@@ -3480,6 +3484,7 @@ components:
       properties:
         email:
           type: string
+          format: email
           maxLength: 50
           minLength: 0
         firstName:
@@ -3652,6 +3657,9 @@ components:
       properties:
         arabic:
           type: string
+        durationSeconds:
+          type: integer
+          format: int32
         id:
           type: string
           format: uuid
@@ -3690,6 +3698,7 @@ components:
         deadlineMs:
           type: integer
           format: int32
+          minimum: 0
         kind:
           type: string
           minLength: 1
@@ -3699,6 +3708,7 @@ components:
         ttlSeconds:
           type: integer
           format: int32
+          minimum: 0
       required:
       - kind
     IssueEnrollmentTokenRequest:
@@ -3716,6 +3726,7 @@ components:
         expiresInMinutes:
           type: integer
           format: int32
+          minimum: 0
       required:
       - audience
       - displayName
@@ -3824,6 +3835,7 @@ components:
       properties:
         email:
           type: string
+          format: email
           minLength: 1
         password:
           type: string
@@ -4171,6 +4183,11 @@ components:
       properties:
         arabic:
           type: string
+        durationSeconds:
+          type: integer
+          format: int32
+          maximum: 120
+          minimum: 5
         kind:
           type: string
           enum:
@@ -4211,6 +4228,7 @@ components:
       properties:
         email:
           type: string
+          format: email
           maxLength: 50
           minLength: 0
           pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]*\\.utoronto\\.ca$"
@@ -4360,6 +4378,7 @@ components:
         duration:
           type: integer
           format: int32
+          minimum: 0
         endTime:
           type: string
           format: date-time
@@ -4399,6 +4418,7 @@ components:
         duration:
           type: integer
           format: int32
+          minimum: 0
         footerText:
           type: string
         handle:
@@ -4419,6 +4439,7 @@ components:
           - other
         url:
           type: string
+          pattern: ""
     UpdateTickerRequest:
       type: object
       properties:

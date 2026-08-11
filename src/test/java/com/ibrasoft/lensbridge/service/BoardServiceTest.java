@@ -193,7 +193,7 @@ class BoardServiceTest {
 
         WeeklyContentRequest request = WeeklyContentRequest.builder()
                 .quotes(List.of(new WeeklyContentRequest.QuoteEntry(
-                        IslamicQuote.Kind.VERSE, "ar", "tr", "en", "Quran 1:1")))
+                        IslamicQuote.Kind.VERSE, "ar", "tr", "en", "Quran 1:1", 30)))
                 .jummahPrayers(List.of(new WeeklyContentRequest.JummahSlot("13:30", "Imam", "Hall")))
                 .build();
 
@@ -203,6 +203,7 @@ class BoardServiceTest {
         assertThat(saved.getWeekNumber()).isEqualTo(20);
         assertThat(saved.getQuotes()).hasSize(1);
         assertThat(saved.getQuotes().get(0).getKind()).isEqualTo(IslamicQuote.Kind.VERSE);
+        assertThat(saved.getQuotes().get(0).getDurationSeconds()).isEqualTo(30);
         assertThat(saved.getJummahPrayers()).hasSize(1);
         assertThat(saved.getJummahPrayers().get(0).getKhatib()).isEqualTo("Imam");
         assertThat(saved.getJummahPrayers().get(0).getPrayerTime().toString()).isEqualTo("13:30");
@@ -219,7 +220,7 @@ class BoardServiceTest {
 
         WeeklyContentRequest request = WeeklyContentRequest.builder()
                 .quotes(List.of(new WeeklyContentRequest.QuoteEntry(
-                        IslamicQuote.Kind.HADITH, "a", "t", "e", "ref")))
+                        IslamicQuote.Kind.HADITH, "a", "t", "e", "ref", null)))
                 .build();
 
         WeeklyContent saved = service.saveWeeklyContent(2026, 20, request);

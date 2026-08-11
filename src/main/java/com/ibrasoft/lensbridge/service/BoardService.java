@@ -163,6 +163,7 @@ public class BoardService {
                         .transliteration(entry.transliteration())
                         .translation(entry.translation())
                         .reference(entry.reference())
+                        .durationSeconds(entry.durationSeconds())
                         .build();
                 content.getQuotes().add(quote);
             }
