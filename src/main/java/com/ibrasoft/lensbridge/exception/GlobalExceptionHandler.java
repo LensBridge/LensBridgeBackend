@@ -151,10 +151,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         body.put("status", HttpStatus.PAYLOAD_TOO_LARGE.value());
         return new ResponseEntity<>(body, headers, HttpStatus.PAYLOAD_TOO_LARGE);
     }
-
+    
     @ExceptionHandler(ApiResponseException.class)
     public ResponseEntity<Object> handleApiResponseException(ApiResponseException ex) {
-        return ResponseEntity.status(ex.getStatus()).body(ex.getBody());
+        Object body = ex.getBody() instanceof ErrorResponse error
+                ? new MessageResponse(error.getError())
+                : ex.getBody();
+        return ResponseEntity.status(ex.getStatus()).body(body);
     }
 
     @ExceptionHandler(RefreshTokenException.class)

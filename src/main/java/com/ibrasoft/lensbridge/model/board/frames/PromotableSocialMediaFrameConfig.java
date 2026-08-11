@@ -1,16 +1,24 @@
 package com.ibrasoft.lensbridge.model.board.frames;
 
 import com.ibrasoft.lensbridge.model.board.SocialType;
-import jakarta.persistence.Column;
-import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
 
-@AllArgsConstructor
-@Builder
+/**
+ * One promoted social account, as the board renders it: platform, QR destination, and the copy
+ * around them. All of it comes from a {@link com.ibrasoft.lensbridge.model.board.PromotableSocialMedia}
+ * row, so an operator can add or reword an account without a frontend deploy.
+ */
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@EqualsAndHashCode(callSuper = true)
 public class PromotableSocialMediaFrameConfig extends FrameConfig {
+
     private SocialType socialType;
 
     private String url;

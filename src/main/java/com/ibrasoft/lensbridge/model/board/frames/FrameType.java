@@ -21,7 +21,6 @@ public enum FrameType {
     POSTER("poster"),
     NEXT_PRAYER("next_prayer"),
     AGENDA("agenda"),
-    INSTAGRAM("instagram"),
     JUMMAH("jummah"),
     ISLAMIC_QUOTE("islamic_quote"),
     SOCIALS("socials");

@@ -8,6 +8,7 @@ import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.service.AdminAuditService;
 import com.ibrasoft.lensbridge.service.BoardService;
 import com.ibrasoft.lensbridge.service.PosterService;
+import com.ibrasoft.lensbridge.service.PromotableSocialMediaService;
 import com.ibrasoft.lensbridge.service.UserService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,6 +51,8 @@ class BoardAdminControllerUpdateDeviceTest {
     private BoardService boardService;
     @MockitoBean
     private PosterService posterService;
+    @MockitoBean
+    private PromotableSocialMediaService socialMediaService;
     @MockitoBean
     private AdminAuditService auditService;
     @MockitoBean

@@ -16,18 +16,11 @@ public class UpdateBoardConfigRequest {
     private List<String> scrollingMessages;
 
     /**
-     * Destination for the "Stay Connected" QR code on the board's closing slide
-     * Typically a social media page, but could be any URL
-     */
-    private String socialUrl;
-
-    /**
      * Seconds to pin the agenda slide for, or {@code 0} to hand the decision back to the board
      * ("auto").
      *
      * Zero rather than null carries that meaning because this endpoint patches by skipping
-     * nulls — null already means "leave it alone", so it cannot also mean "clear it". Same
-     * reason {@link #socialUrl} treats the empty string as a clear.
+     * nulls — null already means "leave it alone", so it cannot also mean "clear it".
      *
      * The 1–4 gap is rejected in {@code BoardService}: bean validation cannot express
      * "zero or at least five" without a custom constraint that would leak a bogus property

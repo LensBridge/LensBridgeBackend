@@ -5,6 +5,7 @@ import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.service.AdminAuditService;
 import com.ibrasoft.lensbridge.service.BoardService;
 import com.ibrasoft.lensbridge.service.PosterService;
+import com.ibrasoft.lensbridge.service.PromotableSocialMediaService;
 import com.ibrasoft.lensbridge.service.UserService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,6 +44,8 @@ class BoardAdminControllerPermissionTest {
 
     @MockitoBean
     private PosterService posterService;
+    @MockitoBean
+    private PromotableSocialMediaService socialMediaService;
     @MockitoBean
     private BoardService boardService;
     @MockitoBean
@@ -91,6 +94,7 @@ class BoardAdminControllerPermissionTest {
     void viewerCanReadContentAndConfig() throws Exception {
         expectAllowed(get(BASE + "/posters"), Role.BOARD_VIEWER);
         expectAllowed(get(BASE + "/events"), Role.BOARD_VIEWER);
+        expectAllowed(get(BASE + "/socials"), Role.BOARD_VIEWER);
         expectAllowed(get(BASE + "/weekly-content"), Role.BOARD_VIEWER);
         expectAllowed(get(BASE + "/configs"), Role.BOARD_VIEWER);
     }
@@ -99,6 +103,7 @@ class BoardAdminControllerPermissionTest {
     void viewerCannotWriteAnything() throws Exception {
         expectForbidden(delete(BASE + "/posters/" + id()), Role.BOARD_VIEWER);
         expectForbidden(delete(BASE + "/events/" + id()), Role.BOARD_VIEWER);
+        expectForbidden(delete(BASE + "/socials/" + id()), Role.BOARD_VIEWER);
         expectForbidden(put(BASE + "/weekly-content/2026/1")
                 .contentType(MediaType.APPLICATION_JSON).content("{}"), Role.BOARD_VIEWER);
         expectForbidden(patch(BASE + "/configs/" + id())
@@ -112,6 +117,7 @@ class BoardAdminControllerPermissionTest {
     void editorCanWriteContent() throws Exception {
         expectAllowed(delete(BASE + "/posters/" + id()), Role.BOARD_EDITOR);
         expectAllowed(delete(BASE + "/events/" + id()), Role.BOARD_EDITOR);
+        expectAllowed(delete(BASE + "/socials/" + id()), Role.BOARD_EDITOR);
         expectAllowed(put(BASE + "/weekly-content/2026/1")
                 .contentType(MediaType.APPLICATION_JSON).content("{}"), Role.BOARD_EDITOR);
         expectAllowed(post(BASE + "/refresh"), Role.BOARD_EDITOR);
@@ -157,6 +163,7 @@ class BoardAdminControllerPermissionTest {
         expectAllowed(patch(BASE + "/configs/" + id())
                 .contentType(MediaType.APPLICATION_JSON).content("{}"), Role.ROOT);
         expectAllowed(delete(BASE + "/posters/" + id()), Role.ROOT);
+        expectAllowed(delete(BASE + "/socials/" + id()), Role.ROOT);
         expectAllowed(post(BASE + "/refresh"), Role.ROOT);
     }
 }

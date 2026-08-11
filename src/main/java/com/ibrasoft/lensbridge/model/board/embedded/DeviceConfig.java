@@ -33,18 +33,6 @@ public class DeviceConfig {
     @Column(name = "message")
     private List<String> scrollingMessages;
 
-    /**
-     * Destination for the "Stay Connected" QR code on the closing slide. Optional:
-     * a board with no socialUrl renders that slide without a QR.
-     *
-     * Deliberately nullable. NOT NULL could not be satisfied here -- devices are
-     * enrolled with a default config that does not set this
-     * (DeviceEnrollmentService), and rows created before the column exists have
-     * no value to backfill from.
-     */
-    @Column(name = "social_url")
-    private String socialUrl;
-
     /** Shortest and longest a slide may be pinned for. A 2s slide cannot be read; a 5m one is a hang. */
     public static final int MIN_SLIDE_SECONDS = 5;
     public static final int MAX_SLIDE_SECONDS = 120;
