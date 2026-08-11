@@ -1,28 +1,30 @@
-package com.ibrasoft.lensbridge.service.board.transformer;
+package com.ibrasoft.lensbridge.service.board.producer;
 
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.Poster;
 import com.ibrasoft.lensbridge.model.board.frames.FrameDefinition;
-import com.ibrasoft.lensbridge.model.board.frames.FrameSlot;
 import com.ibrasoft.lensbridge.model.board.frames.FrameType;
 import com.ibrasoft.lensbridge.model.board.frames.PosterFrameConfig;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @ExtendWith(MockitoExtension.class)
-class PosterFrameTransformerTest {
+class PosterFrameProducerTest {
 
     @InjectMocks
-    private PosterFrameTransformer transformer;
+    private PosterFrameProducer transformer;
 
     private Poster poster(String title, String image, int duration) {
         return Poster.builder()
+                .id(UUID.randomUUID())
                 .title(title)
                 .image(image)
                 .duration(duration)
@@ -33,17 +35,12 @@ class PosterFrameTransformerTest {
     }
 
     @Test
-    void supportsReturnsPoster() {
-        assertThat(transformer.supports()).isEqualTo(FrameType.POSTER);
-    }
-
-    @Test
     void transformMapsPosterFieldsAndDuration() {
-        FrameDefinition def = transformer.transform(poster("Ramadan", "https://img/r.png", 15), null);
+        Poster p = poster("Ramadan", "https://img/r.png", 15);
+        FrameDefinition def = transformer.transform(p, null);
 
+        assertThat(def.getFrameId()).isEqualTo("poster:" + p.getId());
         assertThat(def.getFrameType()).isEqualTo(FrameType.POSTER);
-        assertThat(def.getSlot()).isEqualTo(FrameSlot.PRIMARY);
-        assertThat(def.getPriority()).isNull();
         assertThat(def.getDurationInSeconds()).isEqualTo(15);
         assertThat(def.getFrameConfig()).isInstanceOf(PosterFrameConfig.class);
 

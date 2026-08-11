@@ -76,6 +76,9 @@ paths:
           - CREATE_POSTER
           - UPDATE_POSTER
           - DELETE_POSTER
+          - CREATE_SOCIAL
+          - UPDATE_SOCIAL
+          - DELETE_SOCIAL
           - SAVE_WEEKLY_CONTENT
           - DELETE_WEEKLY_CONTENT
           - UPDATE_BOARD_CONFIG
@@ -168,6 +171,9 @@ paths:
                   - CREATE_POSTER
                   - UPDATE_POSTER
                   - DELETE_POSTER
+                  - CREATE_SOCIAL
+                  - UPDATE_SOCIAL
+                  - DELETE_SOCIAL
                   - SAVE_WEEKLY_CONTENT
                   - DELETE_WEEKLY_CONTENT
                   - UPDATE_BOARD_CONFIG
@@ -547,6 +553,36 @@ paths:
       summary: Fetch a single board device
       tags:
       - device-admin-controller
+    patch:
+      operationId: updateDevice
+      parameters:
+      - in: path
+        name: deviceId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDeviceRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceSummary"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - board-admin-controller
   /api/admin/board/devices/{deviceId}/commands:
     get:
       operationId: listDeviceCommands
@@ -1000,6 +1036,158 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - board-admin-controller
+  /api/admin/board/socials:
+    get:
+      operationId: getAllSocials
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PromotableSocialMedia"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - board-admin-controller
+    post:
+      operationId: createSocial
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePromotableSocialMediaRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromotableSocialMedia"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - board-admin-controller
+  /api/admin/board/socials/by-audience:
+    get:
+      operationId: getSocialsForAudience
+      parameters:
+      - in: query
+        name: audience
+        required: true
+        schema:
+          type: string
+          enum:
+          - brothers
+          - sisters
+          - both
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PromotableSocialMedia"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - board-admin-controller
+  /api/admin/board/socials/{socialId}:
+    delete:
+      operationId: deleteSocial
+      parameters:
+      - in: path
+        name: socialId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - board-admin-controller
+    get:
+      operationId: getSocialById
+      parameters:
+      - in: path
+        name: socialId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromotableSocialMedia"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - board-admin-controller
+    patch:
+      operationId: updateSocial
+      parameters:
+      - in: path
+        name: socialId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePromotableSocialMediaRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromotableSocialMedia"
           description: OK
         default:
           content:
@@ -1673,6 +1861,7 @@ paths:
               - BOARD_CONTENT_READ
               - BOARD_POSTER_WRITE
               - BOARD_EVENT_WRITE
+              - BOARD_SOCIAL_WRITE
               - BOARD_WEEKLY_WRITE
               - BOARD_TICKER_WRITE
               - BOARD_CONFIG_READ
@@ -1767,6 +1956,7 @@ paths:
               - BOARD_CONTENT_READ
               - BOARD_POSTER_WRITE
               - BOARD_EVENT_WRITE
+              - BOARD_SOCIAL_WRITE
               - BOARD_WEEKLY_WRITE
               - BOARD_TICKER_WRITE
               - BOARD_CONFIG_READ
@@ -2495,36 +2685,6 @@ paths:
           description: Request failed; body carries a human-readable message
       tags:
       - musallah-board-controller
-  /api/musallah/posters:
-    get:
-      operationId: getActivePosterFrames
-      parameters:
-      - in: query
-        name: audience
-        required: true
-        schema:
-          type: string
-          enum:
-          - brothers
-          - sisters
-          - both
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/FrameDefinition"
-          description: OK
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: Request failed; body carries a human-readable message
-      tags:
-      - musallah-board-controller
   /api/musallah/weekly-content:
     get:
       operationId: getCurrentWeeklyContent
@@ -2965,6 +3125,17 @@ components:
         uuid:
           type: string
           format: uuid
+    AgendaFrameConfig:
+      allOf:
+      - $ref: "#/components/schemas/FrameConfig"
+      - type: object
+        properties:
+          days:
+            type: array
+            items:
+              $ref: "#/components/schemas/DayBucket"
+          heading:
+            type: string
     AgentEnrollRequest:
       type: object
       properties:
@@ -3013,6 +3184,9 @@ components:
           - CREATE_POSTER
           - UPDATE_POSTER
           - DELETE_POSTER
+          - CREATE_SOCIAL
+          - UPDATE_SOCIAL
+          - DELETE_SOCIAL
           - SAVE_WEEKLY_CONTENT
           - DELETE_WEEKLY_CONTENT
           - UPDATE_BOARD_CONFIG
@@ -3256,6 +3430,51 @@ components:
       - imageFile
       - startTime
       - title
+    CreatePromotableSocialMediaRequest:
+      type: object
+      properties:
+        audience:
+          type: string
+          enum:
+          - brothers
+          - sisters
+          - both
+        duration:
+          type: integer
+          format: int32
+        footerText:
+          type: string
+          minLength: 1
+        handle:
+          type: string
+        headerText:
+          type: string
+          minLength: 1
+        heroText:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+        type:
+          type: string
+          enum:
+          - instagram
+          - youtube
+          - tiktok
+          - whatsapp
+          - other
+        url:
+          type: string
+          minLength: 1
+      required:
+      - audience
+      - footerText
+      - headerText
+      - heroText
+      - name
+      - type
+      - url
     CreateUserRequest:
       type: object
       properties:
@@ -3289,20 +3508,22 @@ components:
       - firstName
       - lastName
       - studentNumber
-    DailyScheduleFrameConfig:
-      allOf:
-      - $ref: "#/components/schemas/FrameConfig"
-      - type: object
-        properties:
-          events:
-            type: array
-            items:
-              $ref: "#/components/schemas/EventView"
-          heading:
-            type: string
+    DayBucket:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/EventView"
     DeviceConfig:
       type: object
       properties:
+        agendaDurationSeconds:
+          type: integer
+          format: int32
         darkModeAfterIsha:
           type: boolean
         enableScrollingMessage:
@@ -3312,12 +3533,13 @@ components:
           format: uuid
         location:
           $ref: "#/components/schemas/Location"
+        nextPrayerDurationSeconds:
+          type: integer
+          format: int32
         scrollingMessages:
           type: array
           items:
             type: string
-        socialUrl:
-          type: string
     DeviceSummary:
       type: object
       properties:
@@ -3347,17 +3569,6 @@ components:
         revokedAt:
           type: string
           format: date-time
-    EventListFrameConfig:
-      allOf:
-      - $ref: "#/components/schemas/FrameConfig"
-      - type: object
-        properties:
-          events:
-            type: array
-            items:
-              $ref: "#/components/schemas/EventView"
-          heading:
-            type: string
     EventView:
       type: object
       properties:
@@ -3377,6 +3588,13 @@ components:
           format: date-time
     FrameConfig:
       discriminator:
+        mapping:
+          agenda: "#/components/schemas/AgendaFrameConfig"
+          islamic_quote: "#/components/schemas/IslamicQuoteFrameConfig"
+          jummah: "#/components/schemas/JummahFrameConfig"
+          next_prayer: "#/components/schemas/NextPrayerFrameConfig"
+          poster: "#/components/schemas/PosterFrameConfig"
+          socials: "#/components/schemas/PromotableSocialMediaFrameConfig"
         propertyName: type
       properties:
         type:
@@ -3391,30 +3609,23 @@ components:
           format: int32
         frameConfig:
           oneOf:
-          - $ref: "#/components/schemas/DailyScheduleFrameConfig"
-          - $ref: "#/components/schemas/EventListFrameConfig"
+          - $ref: "#/components/schemas/AgendaFrameConfig"
           - $ref: "#/components/schemas/IslamicQuoteFrameConfig"
           - $ref: "#/components/schemas/JummahFrameConfig"
+          - $ref: "#/components/schemas/NextPrayerFrameConfig"
           - $ref: "#/components/schemas/PosterFrameConfig"
+          - $ref: "#/components/schemas/PromotableSocialMediaFrameConfig"
+        frameId:
+          type: string
         frameType:
           type: string
           enum:
           - poster
-          - event_list
-          - daily_schedule
           - next_prayer
+          - agenda
           - jummah
           - islamic_quote
-        priority:
-          type: integer
-          format: int32
-        slot:
-          type: string
-          enum:
-          - PRIMARY
-          - TICKER
-          - SIDEBAR
-          - OVERLAY
+          - socials
     GalleryItemDto:
       type: object
       properties:
@@ -3653,6 +3864,9 @@ components:
             $ref: "#/components/schemas/FrameDefinition"
         weather:
           $ref: "#/components/schemas/JsonNode"
+    NextPrayerFrameConfig:
+      allOf:
+      - $ref: "#/components/schemas/FrameConfig"
     PageAdminUploadDto:
       type: object
       properties:
@@ -3894,6 +4108,64 @@ components:
           type: string
         uploadUrl:
           type: string
+    PromotableSocialMedia:
+      type: object
+      properties:
+        audience:
+          type: string
+          enum:
+          - brothers
+          - sisters
+          - both
+        duration:
+          type: integer
+          format: int32
+        footerText:
+          type: string
+        handle:
+          type: string
+        headerText:
+          type: string
+        heroText:
+          type: string
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          type: string
+          enum:
+          - instagram
+          - youtube
+          - tiktok
+          - whatsapp
+          - other
+        url:
+          type: string
+    PromotableSocialMediaFrameConfig:
+      allOf:
+      - $ref: "#/components/schemas/FrameConfig"
+      - type: object
+        properties:
+          footerText:
+            type: string
+          handle:
+            type: string
+          headerText:
+            type: string
+          heroText:
+            type: string
+          socialType:
+            type: string
+            enum:
+            - instagram
+            - youtube
+            - tiktok
+            - whatsapp
+            - other
+          url:
+            type: string
     QuoteEntry:
       type: object
       properties:
@@ -4019,18 +4291,26 @@ components:
     UpdateBoardConfigRequest:
       type: object
       properties:
+        agendaDurationSeconds:
+          type: integer
+          format: int32
+          maximum: 120
+          minimum: 0
         darkModeAfterIsha:
           type: boolean
         enableScrollingMessage:
           type: boolean
         location:
           $ref: "#/components/schemas/Location"
+        nextPrayerDurationSeconds:
+          type: integer
+          format: int32
+          maximum: 120
+          minimum: 5
         scrollingMessages:
           type: array
           items:
             type: string
-        socialUrl:
-          type: string
     UpdateCalendarEventRequest:
       type: object
       properties:
@@ -4054,6 +4334,20 @@ components:
         startTime:
           type: string
           format: date-time
+    UpdateDeviceRequest:
+      type: object
+      properties:
+        audience:
+          type: string
+          enum:
+          - brothers
+          - sisters
+          - both
+        displayName:
+          type: string
+          maxLength: 255
+          minLength: 0
+          pattern: .*\S.*
     UpdatePosterRequest:
       type: object
       properties:
@@ -4093,6 +4387,38 @@ components:
           type: string
           maxLength: 10
           minLength: 0
+    UpdatePromotableSocialMediaRequest:
+      type: object
+      properties:
+        audience:
+          type: string
+          enum:
+          - brothers
+          - sisters
+          - both
+        duration:
+          type: integer
+          format: int32
+        footerText:
+          type: string
+        handle:
+          type: string
+        headerText:
+          type: string
+        heroText:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum:
+          - instagram
+          - youtube
+          - tiktok
+          - whatsapp
+          - other
+        url:
+          type: string
     UpdateTickerRequest:
       type: object
       properties:

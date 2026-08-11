@@ -49,6 +49,7 @@ final class RolePermissions {
         Set<Permission> boardEditor = union(boardViewer, EnumSet.of(
                 Permission.BOARD_POSTER_WRITE,
                 Permission.BOARD_EVENT_WRITE,
+                Permission.BOARD_SOCIAL_WRITE,
                 Permission.BOARD_WEEKLY_WRITE,
                 Permission.BOARD_TICKER_WRITE,
                 Permission.BOARD_REFRESH));

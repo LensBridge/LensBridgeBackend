@@ -26,6 +26,11 @@ public enum AuditAction {
     UPDATE_POSTER("Update Poster"),
     DELETE_POSTER("Delete Poster"),
 
+    // Promotable Social Media Actions
+    CREATE_SOCIAL("Create Promotable Social Media"),
+    UPDATE_SOCIAL("Update Promotable Social Media"),
+    DELETE_SOCIAL("Delete Promotable Social Media"),
+
     // Board Content Actions (Musallah Board)
     // SAVE_WEEKLY_CONTENT is the only record of who last changed a jummah time, since
     // quotes and prayer times share one permission and one endpoint.

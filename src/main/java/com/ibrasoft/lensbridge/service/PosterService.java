@@ -8,8 +8,6 @@ import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.Poster;
 import java.time.Instant;
-import com.ibrasoft.lensbridge.service.board.BoardContext;
-import com.ibrasoft.lensbridge.service.board.transformer.PosterFrameTransformer;
 import com.ibrasoft.lensbridge.util.Patch;
 import com.ibrasoft.lensbridge.repository.sql.PosterRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,7 +20,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -31,7 +28,6 @@ public class PosterService {
 
     private final PosterRepository posterRepository;
     private final R2StorageService r2StorageService;
-    private final PosterFrameTransformer posterFrameTransformer;
     private final BoardStreamHandler boardStream;
 
     @Value("${cloudflare.r2.public-url}")
@@ -212,28 +208,6 @@ public class PosterService {
         posterRepository.delete(poster);
         log.info("Deleted poster: id={}", posterId);
         boardStream.contentChanged("posters");
-    }
-
-    // ==================== Musallah Board Methods ====================
-
-    /**
-     * Get active posters as FrameDefinitions for display on the musallah board.
-     * Returns only posters that are currently active and match the board's audience.
-     * Sorted by startDate descending (newest first).
-     */
-    public List<com.ibrasoft.lensbridge.model.board.frames.FrameDefinition> getActivePosterFrameDefinitions(Audience audience) {
-        return posterRepository.findActivePostersForAudienceAt(Instant.now(), audience)
-                .stream()
-                .map(this::toFrameDefinition)
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * Convert a Poster to a FrameDefinition for the musallah board.
-     * Delegates to PosterFrameTransformer — single source of truth.
-     */
-    private com.ibrasoft.lensbridge.model.board.frames.FrameDefinition toFrameDefinition(Poster poster) {
-        return posterFrameTransformer.transform(poster, null);
     }
 
     // ==================== Helper Methods ====================

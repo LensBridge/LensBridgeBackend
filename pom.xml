@@ -6,7 +6,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.5.14</version>
+        <version>3.5.16</version>
         <relativePath />
     </parent>
     <groupId>com.ibrasoft</groupId>
@@ -29,13 +29,26 @@
     </scm>
     <properties>
         <java.version>21</java.version>
-        <springdoc.version>2.8.8</springdoc.version>
+        <springdoc.version>2.9.0</springdoc.version>
         <springdoc-maven-plugin.version>1.4</springdoc-maven-plugin.version>
-        <!-- Deliberately not 8080: spec generation must not collide with a
-             running dev server, locally or on a shared CI runner. -->
         <openapi.gen.port>8089</openapi.gen.port>
         <openapi.gen.jmxPort>9011</openapi.gen.jmxPort>
     </properties>
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.nimbusds</groupId>
+                <artifactId>nimbus-jose-jwt</artifactId>
+                <version>9.37.4</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-lang3</artifactId>
+                <version>3.20.0</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -172,6 +185,27 @@
             <groupId>org.xerial</groupId>
             <artifactId>sqlite-jdbc</artifactId>
             <version>3.47.1.0</version>
+        </dependency>
+
+        <!--
+            Schema migrations, for both databases this app runs on.
+
+            Flyway 11 keeps only a few databases in flyway-core — sqlite and h2 — and ships the
+            rest as separate modules. So dev (SQLite) needs nothing extra, but prod (Postgres)
+            fails at *startup* with "no database plugin" if flyway-database-postgresql is
+            absent. There is no build-time error for the missing one, which is why it is called
+            out here: the environment that breaks is the one you cannot test locally.
+
+            Versions come from the Spring Boot parent's BOM. Do not pin them — an engine and a
+            database plugin built against different versions is its own class of startup failure.
+        -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
         </dependency>
 
         <dependency>

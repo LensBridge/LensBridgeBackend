@@ -27,8 +27,7 @@ class FrameTypeJsonTest {
     @Test
     void serialisesAsLowercase() throws Exception {
         assertEquals("\"poster\"", mapper.writeValueAsString(FrameType.POSTER));
-        assertEquals("\"event_list\"", mapper.writeValueAsString(FrameType.EVENT_LIST));
-        assertEquals("\"daily_schedule\"", mapper.writeValueAsString(FrameType.DAILY_SCHEDULE));
+        assertEquals("\"agenda\"", mapper.writeValueAsString(FrameType.AGENDA));
         assertEquals("\"next_prayer\"", mapper.writeValueAsString(FrameType.NEXT_PRAYER));
         assertEquals("\"jummah\"", mapper.writeValueAsString(FrameType.JUMMAH));
         assertEquals("\"islamic_quote\"", mapper.writeValueAsString(FrameType.ISLAMIC_QUOTE));
@@ -37,7 +36,7 @@ class FrameTypeJsonTest {
     @Test
     void readsTheDocumentedLowercaseForm() throws Exception {
         assertEquals(FrameType.POSTER, mapper.readValue("\"poster\"", FrameType.class));
-        assertEquals(FrameType.EVENT_LIST, mapper.readValue("\"event_list\"", FrameType.class));
+        assertEquals(FrameType.ISLAMIC_QUOTE, mapper.readValue("\"islamic_quote\"", FrameType.class));
     }
 
     /** Consumers written against the previous uppercase behaviour must keep working. */

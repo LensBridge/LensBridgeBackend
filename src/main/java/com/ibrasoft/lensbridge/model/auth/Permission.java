@@ -31,6 +31,8 @@ public enum Permission implements GrantedAuthority {
     BOARD_CONTENT_READ(Authority.BOARD_CONTENT_READ),
     BOARD_POSTER_WRITE(Authority.BOARD_POSTER_WRITE),
     BOARD_EVENT_WRITE(Authority.BOARD_EVENT_WRITE),
+    /** The social accounts promoted to a board. Carries a QR destination, so it publishes a link. */
+    BOARD_SOCIAL_WRITE(Authority.BOARD_SOCIAL_WRITE),
     /** Quotes and jummah times together — they share one endpoint. See docs/PERMISSIONS.md §3. */
     BOARD_WEEKLY_WRITE(Authority.BOARD_WEEKLY_WRITE),
     /** Ticker copy only. Deliberately not BOARD_CONFIG_WRITE, which can move the board's coordinates. */
@@ -92,6 +94,7 @@ public enum Permission implements GrantedAuthority {
         String BOARD_CONTENT_READ = "board:content:read";
         String BOARD_POSTER_WRITE = "board:poster:write";
         String BOARD_EVENT_WRITE = "board:event:write";
+        String BOARD_SOCIAL_WRITE = "board:social:write";
         String BOARD_WEEKLY_WRITE = "board:weekly:write";
         String BOARD_TICKER_WRITE = "board:ticker:write";
 

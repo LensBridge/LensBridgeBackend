@@ -6,10 +6,7 @@ import com.ibrasoft.lensbridge.exception.ApiResponseException;
 import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.Poster;
-import com.ibrasoft.lensbridge.model.board.frames.FrameDefinition;
-import com.ibrasoft.lensbridge.model.board.frames.FrameType;
 import com.ibrasoft.lensbridge.repository.sql.PosterRepository;
-import com.ibrasoft.lensbridge.service.board.transformer.PosterFrameTransformer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -44,8 +41,6 @@ class PosterServiceTest {
     @Mock
     private R2StorageService r2StorageService;
 
-    @Mock
-    private PosterFrameTransformer posterFrameTransformer;
     @Mock
     private BoardStreamHandler boardStream;
 
@@ -125,19 +120,6 @@ class PosterServiceTest {
         when(posterRepository.findActivePostersAt(any(Instant.class))).thenReturn(expected);
 
         assertThat(service.getActivePosters()).isEqualTo(expected);
-    }
-
-    @Test
-    void getActivePosterFrameDefinitionsMapsThroughTransformer() {
-        Poster p = poster("a");
-        FrameDefinition frame = FrameDefinition.builder().frameType(FrameType.POSTER).build();
-        when(posterRepository.findActivePostersForAudienceAt(any(Instant.class), any(Audience.class)))
-                .thenReturn(List.of(p));
-        when(posterFrameTransformer.transform(p, null)).thenReturn(frame);
-
-        List<FrameDefinition> result = service.getActivePosterFrameDefinitions(Audience.BOTH);
-
-        assertThat(result).containsExactly(frame);
     }
 
     // ==================== createPoster ====================

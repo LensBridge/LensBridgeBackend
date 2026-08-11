@@ -2,23 +2,30 @@ package com.ibrasoft.lensbridge.controller;
 
 import com.ibrasoft.lensbridge.dto.board.request.CreateCalendarEventRequest;
 import com.ibrasoft.lensbridge.dto.board.request.CreatePosterRequest;
+import com.ibrasoft.lensbridge.dto.board.request.CreatePromotableSocialMediaRequest;
+import com.ibrasoft.lensbridge.dto.board.request.UpdatePromotableSocialMediaRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateBoardConfigRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateCalendarEventRequest;
+import com.ibrasoft.lensbridge.dto.board.request.UpdateDeviceRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdatePosterRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateTickerRequest;
 import com.ibrasoft.lensbridge.dto.board.request.WeeklyContentRequest;
+import com.ibrasoft.lensbridge.dto.board.response.DeviceSummary;
 import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
 import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
 import com.ibrasoft.lensbridge.model.audit.AuditAction;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.BoardEvent;
+import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
 import com.ibrasoft.lensbridge.model.board.Poster;
+import com.ibrasoft.lensbridge.model.board.PromotableSocialMedia;
 import com.ibrasoft.lensbridge.model.board.WeeklyContent;
 import com.ibrasoft.lensbridge.model.auth.Permission;
 import com.ibrasoft.lensbridge.service.AdminAuditService;
 import com.ibrasoft.lensbridge.service.BoardService;
 import com.ibrasoft.lensbridge.service.PosterService;
+import com.ibrasoft.lensbridge.service.PromotableSocialMediaService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -33,7 +40,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import io.swagger.v3.oas.annotations.Operation;
@@ -54,6 +60,7 @@ import io.swagger.v3.oas.annotations.Operation;
 public class BoardAdminController {
 
     private final PosterService posterService;
+    private final PromotableSocialMediaService socialMediaService;
     private final BoardService boardService;
     private final AdminAuditService auditService;
     private final BoardStreamHandler boardStream;
@@ -281,6 +288,74 @@ public class BoardAdminController {
         return ResponseEntity.ok(new MessageResponse("Poster deleted successfully"));
     }
 
+    // ==================== Promotable Social Media Endpoints ====================
+
+    @GetMapping("/socials")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_CONTENT_READ + "')")
+    public ResponseEntity<List<PromotableSocialMedia>> getAllSocials() {
+        log.debug("Admin fetching all promotable social media");
+        return ResponseEntity.ok(socialMediaService.getAll());
+    }
+
+    @GetMapping("/socials/by-audience")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_CONTENT_READ + "')")
+    public ResponseEntity<List<PromotableSocialMedia>> getSocialsForAudience(@RequestParam Audience audience) {
+        log.debug("Admin fetching promotable social media for audience: {}", audience);
+        return ResponseEntity.ok(socialMediaService.getForAudience(audience));
+    }
+
+    @GetMapping("/socials/{socialId}")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_CONTENT_READ + "')")
+    public ResponseEntity<PromotableSocialMedia> getSocialById(@PathVariable UUID socialId) {
+        log.debug("Admin fetching promotable social media: {}", socialId);
+        return ResponseEntity.ok(socialMediaService.getById(socialId));
+    }
+
+    @PostMapping("/socials")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_SOCIAL_WRITE + "')")
+    public ResponseEntity<PromotableSocialMedia> createSocial(
+            @Valid @RequestBody CreatePromotableSocialMediaRequest createRequest,
+            HttpServletRequest request) {
+
+        log.info("Admin creating promotable social media: type={}, name={}",
+                createRequest.getType(), createRequest.getName());
+
+        PromotableSocialMedia response = socialMediaService.create(createRequest);
+
+        auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.CREATE_SOCIAL, "PromotableSocialMedia", response.getId(), request.getRemoteAddr());
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PatchMapping("/socials/{socialId}")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_SOCIAL_WRITE + "')")
+    public ResponseEntity<PromotableSocialMedia> updateSocial(
+            @PathVariable UUID socialId,
+            @Valid @RequestBody UpdatePromotableSocialMediaRequest updateRequest,
+            HttpServletRequest request) {
+
+        log.info("Admin updating promotable social media: {}", socialId);
+        PromotableSocialMedia response = socialMediaService.update(socialId, updateRequest);
+
+        auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.UPDATE_SOCIAL, "PromotableSocialMedia", socialId, request.getRemoteAddr());
+
+        return ResponseEntity.ok(response);
+    }
+
+    @DeleteMapping("/socials/{socialId}")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_SOCIAL_WRITE + "')")
+    public ResponseEntity<MessageResponse> deleteSocial(
+            @PathVariable UUID socialId,
+            HttpServletRequest request) {
+
+        log.info("Admin deleting promotable social media: {}", socialId);
+        socialMediaService.delete(socialId);
+
+        auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.DELETE_SOCIAL, "PromotableSocialMedia", socialId, request.getRemoteAddr());
+
+        return ResponseEntity.ok(new MessageResponse("Promotable social media deleted successfully"));
+    }
+
     // ==================== Calendar Event Endpoints ====================
 
     @GetMapping("/events")
@@ -359,6 +434,21 @@ public class BoardAdminController {
                 "Musallah Board", null, request.getRemoteAddr());
 
         return ResponseEntity.ok(new MessageResponse("Refresh sent to all MusallahBoard instances"));
+    }
+
+    @PatchMapping("/devices/{deviceId}")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_CONFIG_WRITE + "')")
+    public ResponseEntity<DeviceSummary> updateDevice(
+            @PathVariable UUID deviceId,
+            @Valid @RequestBody UpdateDeviceRequest updateRequest,
+            HttpServletRequest request) {
+
+        log.info("Admin updating device: {}", deviceId);
+        Device updated = boardService.updateDevice(deviceId, updateRequest);
+        boardStream.configChanged(deviceId);
+        auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.UPDATE_BOARD_CONFIG, "Device", deviceId, request.getRemoteAddr());
+        
+        return ResponseEntity.ok(DeviceSummary.of(updated));
     }
 
     private String getCurrentUserEmail() {

@@ -3,6 +3,7 @@ package com.ibrasoft.lensbridge.service;
 import com.ibrasoft.lensbridge.dto.board.request.CreateCalendarEventRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateBoardConfigRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateCalendarEventRequest;
+import com.ibrasoft.lensbridge.dto.board.request.UpdateDeviceRequest;
 import com.ibrasoft.lensbridge.dto.board.request.WeeklyContentRequest;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
 import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
@@ -385,5 +386,130 @@ class BoardServiceTest {
         ArgumentCaptor<DeviceConfig> captor = ArgumentCaptor.forClass(DeviceConfig.class);
         verify(boardConfigRepository).save(captor.capture());
         assertThat(captor.getValue().getLocation()).isSameAs(loc);
+    }
+
+    // ==================== slide durations ====================
+
+    private DeviceConfig configForDurationTest(UUID id) {
+        DeviceConfig existing = config(id);
+        when(boardConfigRepository.findById(id)).thenReturn(Optional.of(existing));
+        when(boardConfigRepository.save(any(DeviceConfig.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        return existing;
+    }
+
+    @Test
+    void updateBoardConfigPinsTheAgendaDuration() {
+        UUID id = UUID.randomUUID();
+        configForDurationTest(id);
+
+        DeviceConfig saved = service.updateBoardConfig(
+                id, UpdateBoardConfigRequest.builder().agendaDurationSeconds(35).build());
+
+        assertThat(saved.getAgendaDurationSeconds()).isEqualTo(35);
+    }
+
+    /** Zero is the only way to say "clear it" — Patch skips null, so null means "leave it". */
+    @Test
+    void updateBoardConfigTreatsZeroAgendaDurationAsAuto() {
+        UUID id = UUID.randomUUID();
+        DeviceConfig existing = configForDurationTest(id);
+        existing.setAgendaDurationSeconds(35);
+
+        DeviceConfig saved = service.updateBoardConfig(
+                id, UpdateBoardConfigRequest.builder().agendaDurationSeconds(0).build());
+
+        assertThat(saved.getAgendaDurationSeconds()).isNull();
+    }
+
+    @Test
+    void updateBoardConfigLeavesAgendaDurationAloneWhenOmitted() {
+        UUID id = UUID.randomUUID();
+        DeviceConfig existing = configForDurationTest(id);
+        existing.setAgendaDurationSeconds(35);
+
+        DeviceConfig saved = service.updateBoardConfig(
+                id, UpdateBoardConfigRequest.builder().darkModeAfterIsha(true).build());
+
+        assertThat(saved.getAgendaDurationSeconds()).isEqualTo(35);
+    }
+
+    /** The 1–4 gap the DTO's @Min(0) cannot express. */
+    @Test
+    void updateBoardConfigRejectsAnAgendaDurationBetweenZeroAndTheMinimum() {
+        UUID id = UUID.randomUUID();
+        when(boardConfigRepository.findById(id)).thenReturn(Optional.of(config(id)));
+
+        assertThatThrownBy(() -> service.updateBoardConfig(
+                id, UpdateBoardConfigRequest.builder().agendaDurationSeconds(3).build()))
+                .isInstanceOf(ApiResponseException.class);
+
+        verify(boardConfigRepository, never()).save(any(DeviceConfig.class));
+    }
+
+    @Test
+    void updateBoardConfigPinsTheNextPrayerDuration() {
+        UUID id = UUID.randomUUID();
+        configForDurationTest(id);
+
+        DeviceConfig saved = service.updateBoardConfig(
+                id, UpdateBoardConfigRequest.builder().nextPrayerDurationSeconds(25).build());
+
+        assertThat(saved.getNextPrayerDurationSeconds()).isEqualTo(25);
+    }
+
+    /** Unset means the default, never null — the payload always carries a concrete number. */
+    @Test
+    void nextPrayerDurationDefaultsWhenNothingIsStored() {
+        assertThat(DeviceConfig.builder().build().getNextPrayerDurationSeconds())
+                .isEqualTo(DeviceConfig.DEFAULT_NEXT_PRAYER_DURATION_SECONDS);
+    }
+
+    // ==================== updateDevice ====================
+
+    /**
+     * Validation rejects a name that is <em>only</em> whitespace; this covers the padded
+     * one it lets through. " Musallah A " and "Musallah A" are the same board to anyone
+     * reading the admin list, and only one of them sorts where you expect.
+     */
+    @Test
+    void updateDeviceTrimsTheDisplayName() {
+        UUID id = UUID.randomUUID();
+        Device existing = Device.builder().id(id).displayName("Old").audience(Audience.BOTH).build();
+        when(deviceRepository.findById(id)).thenReturn(Optional.of(existing));
+        when(deviceRepository.save(any(Device.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Device updated = service.updateDevice(
+                id, UpdateDeviceRequest.builder().displayName("  Musallah A  ").build());
+
+        assertThat(updated.getDisplayName()).isEqualTo("Musallah A");
+    }
+
+    /** A PATCH omitting a field must leave it alone rather than nulling it. */
+    @Test
+    void updateDeviceLeavesOmittedFieldsUntouched() {
+        UUID id = UUID.randomUUID();
+        Device existing = Device.builder().id(id).displayName("Musallah A")
+                .audience(Audience.BROTHERS).build();
+        when(deviceRepository.findById(id)).thenReturn(Optional.of(existing));
+        when(deviceRepository.save(any(Device.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Device updated = service.updateDevice(
+                id, UpdateDeviceRequest.builder().audience(Audience.SISTERS).build());
+
+        assertThat(updated.getDisplayName()).isEqualTo("Musallah A");
+        assertThat(updated.getAudience()).isEqualTo(Audience.SISTERS);
+    }
+
+    @Test
+    void updateDeviceRejectsAnUnknownDevice() {
+        UUID id = UUID.randomUUID();
+        when(deviceRepository.findById(id)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.updateDevice(
+                id, UpdateDeviceRequest.builder().displayName("X").build()))
+                .isInstanceOf(ApiResponseException.class);
+
+        verify(deviceRepository, never()).save(any(Device.class));
     }
 }

@@ -10,10 +10,17 @@ spring.datasource.url=jdbc:sqlite:lensbridge-dev.db
 spring.datasource.driver-class-name=org.sqlite.JDBC
 spring.datasource.username=
 spring.datasource.password=
-spring.jpa.hibernate.ddl-auto=update
 spring.jpa.properties.hibernate.dialect=org.hibernate.community.dialect.SQLiteDialect
 spring.jpa.properties.hibernate.connection.foreign_keys=true
 spring.jpa.open-in-view=false
+
+# Schema is owned by Flyway; Hibernate only validates against it. Do not set ddl-auto=update
+# here -- it would let Hibernate patch a schema Flyway believes it controls, and the two would
+# disagree about what has been applied. Migrations are per-vendor because dev is SQLite and
+# prod is Postgres; see docs/MIGRATIONS.md.
+spring.jpa.hibernate.ddl-auto=validate
+spring.flyway.enabled=true
+spring.flyway.locations=classpath:db/migration/{vendor}
 
 # Allowed CORS origins
 frontend.baseurl=http://localhost:5173

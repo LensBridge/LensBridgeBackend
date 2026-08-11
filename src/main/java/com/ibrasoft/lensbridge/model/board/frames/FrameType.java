@@ -19,11 +19,11 @@ import java.util.Optional;
  */
 public enum FrameType {
     POSTER("poster"),
-    EVENT_LIST("event_list"),
-    DAILY_SCHEDULE("daily_schedule"),
     NEXT_PRAYER("next_prayer"),
+    AGENDA("agenda"),
     JUMMAH("jummah"),
-    ISLAMIC_QUOTE("islamic_quote");
+    ISLAMIC_QUOTE("islamic_quote"),
+    SOCIALS("socials");
 
     private final String typeName;
     FrameType(String typeName) {

@@ -33,15 +33,38 @@ public class DeviceConfig {
     @Column(name = "message")
     private List<String> scrollingMessages;
 
+    /** Shortest and longest a slide may be pinned for. A 2s slide cannot be read; a 5m one is a hang. */
+    public static final int MIN_SLIDE_SECONDS = 5;
+    public static final int MAX_SLIDE_SECONDS = 120;
+
+    /** Used whenever {@link #nextPrayerDurationSeconds} has no stored value. */
+    public static final int DEFAULT_NEXT_PRAYER_DURATION_SECONDS = 12;
+
     /**
-     * Destination for the "Stay Connected" QR code on the closing slide. Optional:
-     * a board with no socialUrl renders that slide without a QR.
+     * How long the agenda slide is pinned for, or null for "auto" — the board then grows the
+     * duration with the number of events it is actually showing.
      *
-     * Deliberately nullable. NOT NULL could not be satisfied here -- devices are
-     * enrolled with a default config that does not set this
-     * (DeviceEnrollmentService), and rows created before the column exists have
-     * no value to backfill from.
+     * The one genuinely nullable duration: an agenda with two events and one with a full week
+     * do not deserve the same dwell time, and only the board knows which it is rendering.
      */
-    @Column(name = "social_url")
-    private String socialUrl;
+    @Column(name = "agenda_duration_seconds")
+    private Integer agendaDurationSeconds;
+
+    /**
+     * How long the next-prayer countdown is pinned for. Never null to a caller — see the getter.
+     *
+     * The column stays nullable even though the API contract does not, because {@code
+     * ddl-auto=update} cannot add a NOT NULL column to a table that already has rows: Hibernate
+     * logs the failure and continues, leaving the column absent and every read broken. Nullable
+     * plus a defaulting getter reaches the same place without a migration.
+     */
+    @Column(name = "next_prayer_duration_seconds")
+    private Integer nextPrayerDurationSeconds;
+
+    /** Never returns null, so the payload always carries a concrete duration for this frame. */
+    public int getNextPrayerDurationSeconds() {
+        return nextPrayerDurationSeconds == null
+                ? DEFAULT_NEXT_PRAYER_DURATION_SECONDS
+                : nextPrayerDurationSeconds;
+    }
 }

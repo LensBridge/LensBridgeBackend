@@ -5,9 +5,7 @@ import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.BoardEvent;
 import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
 import com.ibrasoft.lensbridge.model.board.WeeklyContent;
-import com.ibrasoft.lensbridge.model.board.frames.FrameDefinition;
 import com.ibrasoft.lensbridge.service.BoardService;
-import com.ibrasoft.lensbridge.service.PosterService;
 import com.ibrasoft.lensbridge.service.board.BoardPayloadAssembler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,7 +23,6 @@ import io.swagger.v3.oas.annotations.Operation;
 @Slf4j
 public class MusallahBoardController {
 
-    private final PosterService posterService;
     private final BoardService boardService;
     private final BoardPayloadAssembler payloadAssembler;
 
@@ -59,15 +56,6 @@ public class MusallahBoardController {
         return boardService.getWeeklyContent(year, weekNumber)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
-    }
-
-    // ==================== Poster Frames ====================
-
-    @GetMapping("/posters")
-    public ResponseEntity<List<FrameDefinition>> getActivePosterFrames(@RequestParam Audience audience) {
-        log.debug("Musallah board fetching active poster frames for audience: {}", audience);
-        List<FrameDefinition> frames = posterService.getActivePosterFrameDefinitions(audience);
-        return ResponseEntity.ok(frames);
     }
 
     // ==================== Calendar Events ====================

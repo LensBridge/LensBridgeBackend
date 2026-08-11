@@ -3,6 +3,7 @@ package com.ibrasoft.lensbridge.service;
 import com.ibrasoft.lensbridge.dto.board.request.CreateCalendarEventRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateBoardConfigRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateCalendarEventRequest;
+import com.ibrasoft.lensbridge.dto.board.request.UpdateDeviceRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateTickerRequest;
 import com.ibrasoft.lensbridge.dto.board.request.WeeklyContentRequest;
 import com.ibrasoft.lensbridge.dto.upload.response.ErrorResponse;
@@ -70,15 +71,31 @@ public class BoardService {
         Patch.apply(request.getDarkModeAfterIsha(), existing::setDarkModeAfterIsha);
         Patch.apply(request.getEnableScrollingMessage(), existing::setEnableScrollingMessage);
         Patch.apply(request.getScrollingMessages(), existing::setScrollingMessages);
-        // Empty string clears the link, which drops the QR from the closing slide.
-        if (request.getSocialUrl() != null) {
-            String socialUrl = request.getSocialUrl().trim();
-            existing.setSocialUrl(socialUrl.isEmpty() ? null : socialUrl);
-        }
+        applyAgendaDuration(existing, request.getAgendaDurationSeconds());
+        Patch.apply(request.getNextPrayerDurationSeconds(), existing::setNextPrayerDurationSeconds);
         DeviceConfig saved = boardConfigRepository.save(existing);
         log.info("Updated board config for device: {}", deviceId);
         boardStream.configChanged(deviceId);
         return saved;
+    }
+
+    /**
+     * Stores the agenda duration, translating the {@code 0} sentinel back into null ("auto").
+     * <p>
+     * The 1–4 second gap is rejected here rather than on the DTO: expressing "zero or at least
+     * five" in bean validation needs an {@code @AssertTrue} method, which Jackson and springdoc
+     * would both surface as a phantom boolean property on the request schema.
+     */
+    private void applyAgendaDuration(DeviceConfig existing, Integer requested) {
+        if (requested == null) return; // omitted — leave whatever is stored
+        if (requested != 0 && requested < DeviceConfig.MIN_SLIDE_SECONDS) {
+            throw new ApiResponseException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorResponse.of("agendaDurationSeconds must be 0 (auto) or between "
+                            + DeviceConfig.MIN_SLIDE_SECONDS + " and "
+                            + DeviceConfig.MAX_SLIDE_SECONDS + " seconds"));
+        }
+        existing.setAgendaDurationSeconds(requested == 0 ? null : requested);
     }
 
     public DeviceConfig updateTicker(UUID deviceId, UpdateTickerRequest request) {
@@ -247,4 +264,18 @@ public class BoardService {
         log.info("Deleted event: id={}", eventId);
         boardStream.contentChanged("events");
     }
+
+    // ================== Device Management Changes ====================
+
+    public Device updateDevice(UUID deviceId, UpdateDeviceRequest request) {
+        Device existing = deviceRepository.findById(deviceId)
+                .orElseThrow(() -> new ApiResponseException(
+                        HttpStatus.NOT_FOUND,
+                        ErrorResponse.of("Device not found: " + deviceId)));
+        Patch.apply(request.getDisplayName(), name -> existing.setDisplayName(name.trim()));
+        Patch.apply(request.getAudience(), existing::setAudience);
+        log.info("Updated device: id={}", deviceId);
+        return deviceRepository.save(existing);
+    }
+
 }
