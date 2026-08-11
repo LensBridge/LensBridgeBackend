@@ -40,7 +40,7 @@ public class AgendaFrameProducer implements FrameProducer {
 
         // An agenda reading "nothing scheduled" for seven straight days is worse than no agenda
         // at all. Both frames this replaced skipped themselves when empty; so does this one.
-        if (events.isEmpty()) return List.of();
+//        if (events.isEmpty()) return List.of();
 
         return List.of(transform(events, ctx));
     }
