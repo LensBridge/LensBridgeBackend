@@ -68,10 +68,20 @@ class BoardAdminControllerPermissionTest {
         mockMvc.perform(request.with(TestAuthorities.as(role))).andExpect(status().isForbidden());
     }
 
-    /** Authorized means "not rejected by security" — the handler's own outcome is out of scope. */
+    /**
+     * Authorized means "not rejected by security" — the handler's own outcome is out of scope.
+     * <p>
+     * 429 is rejected explicitly. It is not an authorization verdict, so an allow-assertion that
+     * only looked for 401/403 would pass on a throttled request that never reached the security
+     * layer, hiding the fact that the test proved nothing.
+     */
     private void expectAllowed(MockHttpServletRequestBuilder request, Role role) throws Exception {
         mockMvc.perform(request.with(TestAuthorities.as(role))).andExpect(result -> {
             int s = result.getResponse().getStatus();
+            if (s == 429) {
+                throw new AssertionError("Request was rate limited (HTTP 429), so authorization for "
+                        + role + " was never exercised");
+            }
             if (s == 401 || s == 403) {
                 throw new AssertionError("Expected " + role + " to be authorized but got HTTP " + s);
             }

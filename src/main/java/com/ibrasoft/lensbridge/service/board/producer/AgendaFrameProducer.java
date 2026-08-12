@@ -38,10 +38,9 @@ public class AgendaFrameProducer implements FrameProducer {
         List<BoardEvent> events = boardService.getEventsForAudienceInRange(
                 ctx.getDevice().getAudience(), ctx.currentDayStart(), ctx.rollingWindowEnd());
 
-        // An agenda reading "nothing scheduled" for seven straight days is worse than no agenda
-        // at all. Both frames this replaced skipped themselves when empty; so does this one.
-//        if (events.isEmpty()) return List.of();
-
+        // Emitted even when the window is empty. The frames this replaced skipped themselves in
+        // that case, which left the board with a gap and no explanation; a frame reading "nothing
+        // scheduled" is the more honest slide. The board decides how to render an empty agenda.
         return List.of(transform(events, ctx));
     }
 

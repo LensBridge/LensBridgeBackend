@@ -200,10 +200,24 @@ class AgendaFrameProducerTest {
         assertThat(producer.produce(pinned).get(0).getDurationInSeconds()).isEqualTo(35);
     }
 
+    /**
+     * An empty window still emits the frame. The board needs a slide that says "nothing scheduled"
+     * rather than silently dropping the agenda out of the rotation, so the shell is always present
+     * and every day in the window gets its (empty) bucket.
+     */
     @Test
-    void emitsNoFrameWhenTheWholeWindowIsEmpty() {
+    void emitsTheFrameWithEmptyBucketsWhenTheWholeWindowIsEmpty() {
         when(boardService.getEventsForAudienceInRange(any(), any(), any())).thenReturn(List.of());
 
-        assertThat(producer.produce(ctx())).isEmpty();
+        List<FrameDefinition> frames = producer.produce(ctx());
+
+        assertThat(frames).hasSize(1);
+        assertThat(frames.get(0).getFrameType()).isEqualTo(FrameType.AGENDA);
+
+        AgendaFrameConfig config = (AgendaFrameConfig) frames.get(0).getFrameConfig();
+        assertThat(config.getDays()).hasSize(7);
+        assertThat(config.getDays()).allSatisfy(day -> assertThat(day.getEvents()).isEmpty());
+        assertThat(config.getDays().get(0).getDate()).isEqualTo(LocalDate.of(2026, 5, 13));
+        assertThat(config.getDays().get(6).getDate()).isEqualTo(LocalDate.of(2026, 5, 19));
     }
 }
