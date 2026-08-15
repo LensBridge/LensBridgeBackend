@@ -1,7 +1,7 @@
 create table prayer_spaces (
     capacity integer,
     walk_time_minutes integer,
-    id varchar(36) not null,
+    id blob not null,
     audience varchar(255) not null check (audience in ('BROTHERS','SISTERS','BOTH')),
     building varchar(255) not null,
     entrance_description varchar(255),
@@ -17,14 +17,14 @@ create table prayer_spaces (
 
 create table prayer_space_amenities (
     sort_order integer not null,
-    prayer_space_id varchar(36) not null,
+    prayer_space_id blob not null,
     amenity varchar(255) not null
 );
 
 create table prayer_space_steps (
     step_order integer not null,
-    id varchar(36) not null,
-    prayer_space_id varchar(36) not null,
+    id blob not null,
+    prayer_space_id blob not null,
     instruction varchar(255) not null,
     subtext varchar(255),
     primary key (id)
@@ -32,6 +32,6 @@ create table prayer_space_steps (
 
 create table prayer_space_tips (
     sort_order integer not null,
-    prayer_space_id varchar(36) not null,
+    prayer_space_id blob not null,
     tip varchar(255) not null
 );
