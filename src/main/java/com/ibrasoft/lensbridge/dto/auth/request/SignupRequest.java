@@ -1,5 +1,6 @@
 package com.ibrasoft.lensbridge.dto.auth.request;
 
+import com.ibrasoft.lensbridge.model.board.Audience;
 import lombok.Data;
 import jakarta.validation.constraints.*;
 
@@ -25,6 +26,9 @@ public class SignupRequest {
   @NotBlank
   @Size(min = 6, max = 40, message = "Password must be between 6 and 40 characters long")
   private String password;
+
+  @NotNull
+  private Audience audience;
 
   public void setEmail(String email){
     this.email = email.toLowerCase();

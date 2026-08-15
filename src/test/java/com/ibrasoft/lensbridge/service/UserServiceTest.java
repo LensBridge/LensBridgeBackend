@@ -64,7 +64,6 @@ class UserServiceTest {
         SignupRequest req = new SignupRequest();
         req.setFirstName("Jane");
         req.setLastName("Doe");
-        req.setStudentNumber("1000001");
         req.setEmail("jane@mail.utoronto.ca");
         req.setPassword("password1");
         return req;

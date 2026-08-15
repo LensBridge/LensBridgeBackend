@@ -86,10 +86,6 @@ public class UserService {
         return userRepository.existsByEmail(email);
     }
 
-    public boolean existsByStudentNumber(String studentNumber) {
-        return userRepository.existsByStudentNumber(studentNumber);
-    }
-
     public User saveUser(User user) {
         return userRepository.save(user);
     }
@@ -101,6 +97,7 @@ public class UserService {
                 signUpRequest.getFirstName(),
                 signUpRequest.getLastName(),
                 signUpRequest.getEmail(),
+                signUpRequest.getAudience(),
                 () -> signUpRequest.getPassword() == null ? null : passwordEncoder.encode(signUpRequest.getPassword())
         );
 
