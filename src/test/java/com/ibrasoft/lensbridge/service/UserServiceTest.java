@@ -120,21 +120,10 @@ class UserServiceTest {
         verify(userRepository, never()).save(any());
     }
 
-    @Test
-    void createUserRejectsDuplicateStudentNumber() {
-        SignupRequest req = signup();
-        when(userRepository.existsByEmail(anyString())).thenReturn(false);
-        when(userRepository.existsByStudentNumber("1000001")).thenReturn(true);
-
-        assertThatThrownBy(() -> userService.createUser(req, false))
-                .isInstanceOf(IllegalArgumentException.class);
-    }
-
     private CreateUserRequest adminCreate() {
         CreateUserRequest req = new CreateUserRequest();
         req.setFirstName("Jane");
         req.setLastName("Doe");
-        req.setStudentNumber("1000001");
         req.setEmail("jane@mail.utoronto.ca");
         return req;
     }
@@ -205,7 +194,7 @@ class UserServiceTest {
     @Test
     void verifyDirectlySetsVerifiedAt() {
         UUID id = UUID.randomUUID();
-        User user = new User("A", "B", "1", "a@b.ca", "p");
+        User user = new User("A", "B", "a@b.ca", "p");
         when(userRepository.findById(id)).thenReturn(Optional.of(user));
 
         User result = userService.verifyDirectly(id);
@@ -217,7 +206,7 @@ class UserServiceTest {
     @Test
     void verifyDirectlyRejectsAlreadyVerifiedUser() {
         UUID id = UUID.randomUUID();
-        User user = new User("A", "B", "1", "a@b.ca", "p");
+        User user = new User("A", "B", "a@b.ca", "p");
         user.setVerifiedAt(java.time.Instant.now());
         when(userRepository.findById(id)).thenReturn(Optional.of(user));
 
@@ -242,7 +231,7 @@ class UserServiceTest {
 
     /** An acting user holding everything, and another id to keep IAM_ROLE_GRANT alive. */
     private User rootActor() {
-        User root = new User("Root", "User", "9", ROOT_EMAIL, "p");
+        User root = new User("Root", "User", ROOT_EMAIL, "p");
         root.setId(UUID.randomUUID());
         root.addRole(Role.ROOT);
         lenient().when(userRepository.findByEmail(ROOT_EMAIL)).thenReturn(Optional.of(root));
@@ -252,7 +241,7 @@ class UserServiceTest {
     }
 
     private User target(UUID id) {
-        User user = new User("A", "B", "1", "a@b.ca", "p");
+        User user = new User("A", "B", "a@b.ca", "p");
         user.setId(id);
         when(userRepository.findById(id)).thenReturn(Optional.of(user));
         return user;
@@ -315,7 +304,7 @@ class UserServiceTest {
 
     @Test
     void addRoleRejectsGrantingPermissionsTheActorDoesNotHold() {
-        User editor = new User("Ed", "Itor", "2", "editor@mail.utoronto.ca", "p");
+        User editor = new User("Ed", "Itor", "editor@mail.utoronto.ca", "p");
         editor.setId(UUID.randomUUID());
         editor.addRole(Role.BOARD_EDITOR);
         when(userRepository.findByEmail(editor.getEmail())).thenReturn(Optional.of(editor));
@@ -333,7 +322,7 @@ class UserServiceTest {
 
     @Test
     void addRoleAllowsGrantingASubsetOfWhatTheActorHolds() {
-        User boardAdmin = new User("B", "A", "3", "boardadmin@mail.utoronto.ca", "p");
+        User boardAdmin = new User("B", "A", "boardadmin@mail.utoronto.ca", "p");
         boardAdmin.setId(UUID.randomUUID());
         boardAdmin.addRole(Role.BOARD_ADMIN);
         when(userRepository.findByEmail(boardAdmin.getEmail())).thenReturn(Optional.of(boardAdmin));
@@ -388,7 +377,7 @@ class UserServiceTest {
      */
     @Test
     void removeRoleRejectsStrippingPermissionsTheActorDoesNotHold() {
-        User grantOnly = new User("G", "Only", "4", "grantonly@mail.utoronto.ca", "p");
+        User grantOnly = new User("G", "Only", "grantonly@mail.utoronto.ca", "p");
         grantOnly.setId(UUID.randomUUID());
         grantOnly.addDirectPermission(Permission.IAM_ROLE_GRANT);
         when(userRepository.findByEmail(grantOnly.getEmail())).thenReturn(Optional.of(grantOnly));
@@ -405,7 +394,7 @@ class UserServiceTest {
 
     @Test
     void revokePermissionRejectsRevokingWhatTheActorDoesNotHold() {
-        User editor = new User("Ed", "Itor", "5", "ed@mail.utoronto.ca", "p");
+        User editor = new User("Ed", "Itor", "ed@mail.utoronto.ca", "p");
         editor.setId(UUID.randomUUID());
         editor.addRole(Role.BOARD_EDITOR);
         editor.addDirectPermission(Permission.IAM_ROLE_GRANT);
@@ -471,7 +460,7 @@ class UserServiceTest {
 
     @Test
     void requestPasswordResetSendsEmailWhenUserExists() {
-        User user = new User("A", "B", "1", "a@b.ca", "p");
+        User user = new User("A", "B", "a@b.ca", "p");
         when(userRepository.findByEmail("a@b.ca")).thenReturn(Optional.of(user));
         when(verificationTokenService.generatePasswordResetToken(user)).thenReturn("rtok");
 
@@ -493,7 +482,7 @@ class UserServiceTest {
 
     @Test
     void resetPasswordEncodesNewPasswordAndRevokesTokens() {
-        User user = new User("A", "B", "1", "a@b.ca", "old");
+        User user = new User("A", "B", "a@b.ca", "old");
         UUID userId = UUID.randomUUID();
         user.setId(userId);
         VerificationToken vt = VerificationToken.builder().user(user).build();
@@ -509,7 +498,7 @@ class UserServiceTest {
     @Test
     void resetPasswordEnablesAStillUnverifiedAccount() {
         // The admin-invite path: without this the invitee sets a password and is still disabled.
-        User user = new User("A", "B", "1", "a@b.ca", "unusable");
+        User user = new User("A", "B", "a@b.ca", "unusable");
         user.setId(UUID.randomUUID());
         VerificationToken vt = VerificationToken.builder().user(user).build();
         when(verificationTokenService.consumePasswordReset("ptok")).thenReturn(vt);
@@ -522,7 +511,7 @@ class UserServiceTest {
 
     @Test
     void resetPasswordLeavesAnExistingVerificationTimestampAlone() {
-        User user = new User("A", "B", "1", "a@b.ca", "old");
+        User user = new User("A", "B", "a@b.ca", "old");
         user.setId(UUID.randomUUID());
         Instant verifiedAt = Instant.now().minusSeconds(86400);
         user.setVerifiedAt(verifiedAt);
@@ -537,7 +526,7 @@ class UserServiceTest {
 
     @Test
     void changePasswordRejectsWrongCurrentPassword() {
-        User user = new User("A", "B", "1", "a@b.ca", "hash");
+        User user = new User("A", "B", "a@b.ca", "hash");
         ChangePasswordRequest req = new ChangePasswordRequest();
         req.setCurrentPassword("wrong");
         req.setNewPassword("brandnew");
@@ -550,7 +539,7 @@ class UserServiceTest {
 
     @Test
     void changePasswordRejectsShortNewPassword() {
-        User user = new User("A", "B", "1", "a@b.ca", "hash");
+        User user = new User("A", "B", "a@b.ca", "hash");
         ChangePasswordRequest req = new ChangePasswordRequest();
         req.setCurrentPassword("right");
         req.setNewPassword("12345");
@@ -563,7 +552,7 @@ class UserServiceTest {
 
     @Test
     void changePasswordUpdatesHashOnSuccess() {
-        User user = new User("A", "B", "1", "a@b.ca", "hash");
+        User user = new User("A", "B","a@b.ca", "hash");
         ChangePasswordRequest req = new ChangePasswordRequest();
         req.setCurrentPassword("right");
         req.setNewPassword("longenough");
@@ -578,7 +567,7 @@ class UserServiceTest {
     @Test
     void updateProfileTrimsAndUpdatesFields() {
         UUID id = UUID.randomUUID();
-        User user = new User("Old", "Name", "1000001", "a@b.ca", "p");
+        User user = new User("Old", "Name", "a@b.ca", "p");
         when(userRepository.findById(id)).thenReturn(Optional.of(user));
         UpdateProfileRequest req = new UpdateProfileRequest();
         req.setFirstName("  New  ");
@@ -593,7 +582,7 @@ class UserServiceTest {
     @Test
     void updateProfileIgnoresBlankFields() {
         UUID id = UUID.randomUUID();
-        User user = new User("Old", "Name", "1000001", "a@b.ca", "p");
+        User user = new User("Old", "Name", "a@b.ca", "p");
         when(userRepository.findById(id)).thenReturn(Optional.of(user));
         UpdateProfileRequest req = new UpdateProfileRequest();
         req.setFirstName("   ");
@@ -601,33 +590,5 @@ class UserServiceTest {
         User result = userService.updateProfile(id, req);
 
         assertThat(result.getFirstName()).isEqualTo("Old");
-    }
-
-    @Test
-    void updateProfileRejectsTakenStudentNumber() {
-        UUID id = UUID.randomUUID();
-        User user = new User("Old", "Name", "1000001", "a@b.ca", "p");
-        when(userRepository.findById(id)).thenReturn(Optional.of(user));
-        when(userRepository.existsByStudentNumber("9999999")).thenReturn(true);
-        UpdateProfileRequest req = new UpdateProfileRequest();
-        req.setStudentNumber("9999999");
-
-        assertThatThrownBy(() -> userService.updateProfile(id, req))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("already taken");
-    }
-
-    @Test
-    void updateProfileAllowsSameStudentNumberWithoutUniquenessCheck() {
-        UUID id = UUID.randomUUID();
-        User user = new User("Old", "Name", "1000001", "a@b.ca", "p");
-        when(userRepository.findById(id)).thenReturn(Optional.of(user));
-        UpdateProfileRequest req = new UpdateProfileRequest();
-        req.setStudentNumber("1000001");
-
-        User result = userService.updateProfile(id, req);
-
-        assertThat(result.getStudentNumber()).isEqualTo("1000001");
-        verify(userRepository, never()).existsByStudentNumber(anyString());
     }
 }

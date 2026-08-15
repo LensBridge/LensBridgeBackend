@@ -1,0 +1,40 @@
+create table prayer_spaces (
+    capacity integer,
+    walk_time_minutes integer,
+    id uuid not null,
+    audience varchar(255) not null check (audience in ('BROTHERS','SISTERS','BOTH')),
+    building varchar(255) not null,
+    entrance_description varchar(255),
+    entrance_name varchar(255),
+    floor varchar(255),
+    location varchar(255),
+    maps_url varchar(255),
+    name varchar(255) not null,
+    starting_point varchar(255),
+    tag varchar(255) not null,
+    primary key (id)
+);
+
+create table prayer_space_amenities (
+    sort_order integer not null,
+    prayer_space_id uuid not null,
+    amenity varchar(255) not null,
+    constraint fk_prayer_space_amenities_prayer_space_id foreign key (prayer_space_id) references prayer_spaces
+);
+
+create table prayer_space_steps (
+    step_order integer not null,
+    id uuid not null,
+    prayer_space_id uuid not null,
+    instruction varchar(255) not null,
+    subtext varchar(255),
+    primary key (id),
+    constraint fk_prayer_space_steps_prayer_space_id foreign key (prayer_space_id) references prayer_spaces
+);
+
+create table prayer_space_tips (
+    sort_order integer not null,
+    prayer_space_id uuid not null,
+    tip varchar(255) not null,
+    constraint fk_prayer_space_tips_prayer_space_id foreign key (prayer_space_id) references prayer_spaces
+);

@@ -17,10 +17,6 @@ public class SignupRequest {
   private String lastName;
 
   @NotBlank
-  @Size(max = 10)
-  private String studentNumber;
-
-  @NotBlank
   @Size(max = 50)
   @Email
   @Pattern(regexp = "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]*\\.utoronto\\.ca$", message = "Email must be a valid University of Toronto email address (*.utoronto.ca)")

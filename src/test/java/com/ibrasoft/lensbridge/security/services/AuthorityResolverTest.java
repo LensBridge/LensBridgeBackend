@@ -30,7 +30,7 @@ class AuthorityResolverTest {
     }
 
     private User user(Role... roles) {
-        User user = new User("A", "B", "1", "a@b.ca", "p");
+        User user = new User("A", "B", "a@b.ca", "p");
         user.setId(UUID.randomUUID());
         for (Role role : roles) {
             user.addRole(role);
@@ -83,7 +83,7 @@ class AuthorityResolverTest {
     /** Unsaved entities appear in tests and in the signup path; they must not blow up. */
     @Test
     void aUserWithNoIdResolvesWithoutHittingTheRepository() {
-        User unsaved = new User("A", "B", "1", "a@b.ca", "p");
+        User unsaved = new User("A", "B", "a@b.ca", "p");
         unsaved.addRole(Role.USER);
 
         assertThat(resolver.resolvePermissions(unsaved))

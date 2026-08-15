@@ -14,6 +14,8 @@ import java.util.UUID;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import com.ibrasoft.lensbridge.model.board.Audience;
+import com.ibrasoft.lensbridge.util.Patch;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -56,8 +58,6 @@ public class UserService {
 
     public Page<UserInfoResponse> getAllUsers(Pageable pageable) {
         return userRepository.findAll(pageable).map(u -> {
-            // Fetched once and used for both lists. Going through AuthorityResolver here
-            // would re-query the same direct grants, making a 50-row page 101 queries.
             Set<Permission> direct = userRepository.findDirectPermissions(u.getId());
 
             Set<Permission> effective = EnumSet.noneOf(Permission.class);
@@ -66,10 +66,7 @@ public class UserService {
             }
             effective.addAll(direct);
 
-            return new UserInfoResponse(
-                    u.getId(), u.getFirstName(), u.getLastName(),
-                    u.getEmail(), u.getStudentNumber(), u.isVerified(), u.getRoles(),
-                    authorities(direct), authorities(effective));
+            return UserInfoResponse.of(u, authorities(effective), authorities(direct));
         });
     }
 
@@ -103,7 +100,6 @@ public class UserService {
         User savedUser = register(
                 signUpRequest.getFirstName(),
                 signUpRequest.getLastName(),
-                signUpRequest.getStudentNumber(),
                 signUpRequest.getEmail(),
                 () -> signUpRequest.getPassword() == null ? null : passwordEncoder.encode(signUpRequest.getPassword())
         );
@@ -143,8 +139,8 @@ public class UserService {
         User user = register(
                 request.getFirstName(),
                 request.getLastName(),
-                request.getStudentNumber(),
                 request.getEmail(),
+                request.getAudience(),
                 () -> request.hasPassword() ? passwordEncoder.encode(request.getPassword()) : unusablePassword()
         );
 
@@ -166,14 +162,15 @@ public class UserService {
      * @param passwordHash supplied lazily so a rejected duplicate does not pay for a bcrypt round
      *                     first — and so the check cannot be reordered after it by accident
      */
-    private User register(String firstName, String lastName, String studentNumber, String email,
+    private User register(String firstName, String lastName, String email, Audience audience,
                          Supplier<String> passwordHash) {
-        if (existsByEmail(email) || existsByStudentNumber(studentNumber)) {
+        if (existsByEmail(email)) {
             throw new IllegalArgumentException("User with this email or student number already exists");
         }
 
-        User user = new User(firstName, lastName, studentNumber, email, passwordHash.get());
+        User user = new User(firstName, lastName, email, passwordHash.get());
         user.setRoles(new HashSet<>());
+        user.setAudience(audience);
         user.addRole(Role.USER);
 
         return saveUser(user);
@@ -477,13 +474,6 @@ public class UserService {
         }
         if (updateRequest.getLastName() != null && !updateRequest.getLastName().isBlank()) {
             user.setLastName(updateRequest.getLastName().trim());
-        }
-        if (updateRequest.getStudentNumber() != null && !updateRequest.getStudentNumber().isBlank()) {
-            String newNum = updateRequest.getStudentNumber().trim();
-            if (!newNum.equals(user.getStudentNumber()) && existsByStudentNumber(newNum)) {
-                throw new IllegalArgumentException("Student number is already taken");
-            }
-            user.setStudentNumber(newNum);
         }
 
         return saveUser(user);

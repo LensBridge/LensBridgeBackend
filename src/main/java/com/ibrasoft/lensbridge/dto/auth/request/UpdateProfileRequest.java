@@ -16,7 +16,4 @@ public class UpdateProfileRequest {
     @Pattern(regexp = "^[A-Za-z]+([ '-][A-Za-z]+)*$", message = 
         "Last name can only contain letters, spaces, hyphens, and apostrophes")
     private String lastName;
-    
-    @Size(max = 10)
-    private String studentNumber;
 }

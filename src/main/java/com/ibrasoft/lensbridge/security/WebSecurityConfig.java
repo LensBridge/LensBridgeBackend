@@ -40,6 +40,9 @@ public class WebSecurityConfig {
   @Value("${musallahboard.baseurl}")
   private String musallahBoardBaseUrl;
 
+  @Value("${minbar.baseurl}")
+  private String minbarBaseUrl;
+
   @Bean
   public AuthTokenFilter authenticationJwtTokenFilter() {
     return new AuthTokenFilter();
@@ -66,7 +69,7 @@ public class WebSecurityConfig {
   @Bean
   public CorsConfigurationSource corsConfigurationSource() {
     CorsConfiguration configuration = new CorsConfiguration();
-    configuration.setAllowedOrigins(Arrays.asList(frontendBaseUrl, musallahBoardBaseUrl));
+    configuration.setAllowedOrigins(Arrays.asList(frontendBaseUrl, musallahBoardBaseUrl, minbarBaseUrl));
     configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
     configuration.setAllowedHeaders(Arrays.asList("*"));
     configuration.setAllowCredentials(true);
@@ -87,6 +90,7 @@ public class WebSecurityConfig {
             .requestMatchers("/api/auth/**").permitAll()
             .requestMatchers("/api/events/**").permitAll()
             .requestMatchers("/api/musallah/**").permitAll()
+            .requestMatchers("/api/minbar/**").permitAll()
             .requestMatchers("/api/refresh-musallahboard").permitAll()
             .requestMatchers("/api/agent/enroll").permitAll()
             .requestMatchers("/api/agent/ws").permitAll()

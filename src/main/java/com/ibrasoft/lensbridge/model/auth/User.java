@@ -5,6 +5,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
+import com.ibrasoft.lensbridge.model.board.Audience;
 import jakarta.persistence.Id;
 
 import jakarta.persistence.CollectionTable;
@@ -50,11 +51,6 @@ public class User {
   private String lastName;
 
   @NotBlank
-  @Size(max = 10)
-  @Column(unique = true, nullable = false)
-  private String studentNumber;
-
-  @NotBlank
   @Size(max = 254)
   @Email
   @Column(nullable = false, unique = true)
@@ -77,15 +73,19 @@ public class User {
   @Column(name = "permission", nullable = false)
   private Set<Permission> directPermissions = new HashSet<>();
 
-  @Column(nullable = true)
+  @Column()
   private Instant verifiedAt;
 
-  public User(String firstName, String lastName, String studentNumber, String email, String passwordHash) {
+  @Column()
+  @Enumerated(EnumType.STRING)
+  private Audience audience;
+
+  public User(String firstName, String lastName, String email, String passwordHash) {
     this.firstName = firstName;
     this.lastName = lastName;
-    this.studentNumber = studentNumber;
     this.email = email;
     this.passwordHash = passwordHash;
+    this.audience = Audience.BROTHERS;
     this.roles = new HashSet<>();
     this.directPermissions = new HashSet<>();
   }

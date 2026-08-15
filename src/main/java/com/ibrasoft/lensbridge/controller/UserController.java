@@ -38,9 +38,7 @@ public class UserController {
     @GetMapping("/profile")
     @PreAuthorize("hasRole('" + Role.Authority.USER + "')")
     public ResponseEntity<UserInfoResponse> getUserProfile(@CurrentUser User user) {
-        return ResponseEntity.ok(new UserInfoResponse(
-                user.getId(), user.getFirstName(), user.getLastName(),
-                user.getEmail(), user.getStudentNumber(), user.isVerified(), user.getRoles()));
+        return ResponseEntity.ok(UserInfoResponse.of(user));
     }
 
     @PatchMapping("/profile")
@@ -49,9 +47,7 @@ public class UserController {
             @Valid @RequestBody UpdateProfileRequest updateRequest,
             @CurrentUser User user) {
         User updated = userService.updateProfile(user.getId(), updateRequest);
-        return ResponseEntity.ok(new UserInfoResponse(
-                updated.getId(), updated.getFirstName(), updated.getLastName(),
-                updated.getEmail(), updated.getStudentNumber(), updated.isVerified(), updated.getRoles()));
+        return ResponseEntity.ok(UserInfoResponse.of(updated));
     }
 
     @GetMapping("/stats")

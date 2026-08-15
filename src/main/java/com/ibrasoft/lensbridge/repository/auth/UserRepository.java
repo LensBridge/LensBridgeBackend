@@ -36,6 +36,4 @@ public interface UserRepository extends JpaRepository<User, UUID> {
   Set<UUID> findIdsByDirectPermission(@Param("permission") Permission permission);
 
   Boolean existsByEmail(String email);
-
-  Boolean existsByStudentNumber(String studentNumber);
 }

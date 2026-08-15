@@ -186,19 +186,6 @@
             <artifactId>sqlite-jdbc</artifactId>
             <version>3.47.1.0</version>
         </dependency>
-
-        <!--
-            Schema migrations, for both databases this app runs on.
-
-            Flyway 11 keeps only a few databases in flyway-core — sqlite and h2 — and ships the
-            rest as separate modules. So dev (SQLite) needs nothing extra, but prod (Postgres)
-            fails at *startup* with "no database plugin" if flyway-database-postgresql is
-            absent. There is no build-time error for the missing one, which is why it is called
-            out here: the environment that breaks is the one you cannot test locally.
-
-            Versions come from the Spring Boot parent's BOM. Do not pin them — an engine and a
-            database plugin built against different versions is its own class of startup failure.
-        -->
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
@@ -219,8 +206,11 @@
             <scope>runtime</scope>
         </dependency>
 
-
-
+        <dependency>
+            <groupId>com.ibrasoft</groupId>
+            <artifactId>tcketmanage-core</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
 
     </dependencies>
 
@@ -258,18 +248,6 @@
     </build>
 
     <profiles>
-        <!--
-            Generates openapi.yaml, the contract consumed by LensBridgeFrontend,
-            MusallahBoard/frontend and the Go agent. The file is committed so that
-            any change to a response shape shows up as a reviewable spec diff.
-
-            Run with: ./mvnw verify -P openapi
-
-            The spec is produced by starting the app and scraping /v3/api-docs.yaml,
-            so this needs a bootable context: the dev profile supplies fallbacks for
-            every external credential, and SPRINGDOC_API_DOCS_ENABLED is forced on
-            because the prod profile disables it.
-        -->
         <profile>
             <id>openapi</id>
             <build>

@@ -48,7 +48,7 @@ class RefreshTokenServiceTest {
         ReflectionTestUtils.setField(service, "refreshTokenDurationMs", 604_800_000L);
         ReflectionTestUtils.setField(service, "maxRefreshTokensPerUser", 5);
         userId = UUID.randomUUID();
-        user = new User("A", "B", "1", "a@b.ca", "p");
+        user = new User("A", "B", "a@b.ca", "p");
         user.setId(userId);
         lenient().when(refreshTokenRepository.save(any(RefreshToken.class)))
                 .thenAnswer(inv -> inv.getArgument(0));

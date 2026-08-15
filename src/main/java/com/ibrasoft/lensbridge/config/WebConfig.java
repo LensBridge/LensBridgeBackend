@@ -22,6 +22,9 @@ public class WebConfig implements WebMvcConfigurer {
     @Value("${musallahboard.baseurl}")
     String musallahBoardBaseUrl;
 
+    @Value("${minbar.baseurl}")
+    String minbarBaseUrl;
+
     @Autowired
     private RateLimitingFilter rateLimitingFilter;
 
@@ -45,7 +48,7 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(@NonNull CorsRegistry registry) {
         registry.addMapping("/api/**")
-                .allowedOrigins(frontendBaseUrl, musallahBoardBaseUrl)
+                .allowedOrigins(frontendBaseUrl, musallahBoardBaseUrl, minbarBaseUrl)
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true); 

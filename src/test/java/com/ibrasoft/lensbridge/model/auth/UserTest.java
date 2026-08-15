@@ -10,7 +10,7 @@ class UserTest {
 
     @Test
     void convenienceConstructorInitializesEmptyRoleSet() {
-        User user = new User("Jane", "Doe", "1234567890", "jane@example.com", "hash");
+        User user = new User("Jane", "Doe", "jane@example.com", "hash");
 
         assertThat(user.getRoles()).isNotNull().isEmpty();
         assertThat(user.getFirstName()).isEqualTo("Jane");

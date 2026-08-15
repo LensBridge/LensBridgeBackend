@@ -43,7 +43,7 @@ class VerificationTokenServiceTest {
 
     @BeforeEach
     void setUp() {
-        user = new User("A", "B", "1", "a@b.ca", "p");
+        user = new User("A", "B", "a@b.ca", "p");
         lenient().when(tokenRepository.save(any(VerificationToken.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
         lenient().when(userRepository.save(any(User.class)))

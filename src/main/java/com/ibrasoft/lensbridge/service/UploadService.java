@@ -273,7 +273,6 @@ public class UploadService {
             dto.setUploaderFirstName(u.getFirstName());
             dto.setUploaderLastName(u.getLastName());
             dto.setUploaderEmail(u.getEmail());
-            dto.setUploaderStudentNumber(u.getStudentNumber());
         }
 
         if (upload.getMediaEvent() != null) {
