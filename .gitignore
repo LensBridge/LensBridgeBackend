@@ -50,3 +50,8 @@ lensbridge-dev.db
 docker/nginx/certs/*
 !docker/nginx/certs/.gitkeep
 .claude/worktrees/*
+
+# Ticket-signing key material for tcketmanage-core. Never commit a private key —
+# each environment generates its own (see tcketmanage.crypto.* in application-dev.properties).
+**/keys/private.pem
+**/keys/public.pem

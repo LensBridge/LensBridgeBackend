@@ -62,6 +62,19 @@ public enum Permission implements GrantedAuthority {
     /** Data egress: chrome.screenshot returns an image of a screen in a prayer space; logs.tail leaks internals. */
     BOARD_COMMAND_INSPECT(Authority.BOARD_COMMAND_INSPECT),
 
+    // ==================== Ticketing (tcketmanage-core) ====================
+    // Deliberately their own namespace rather than reusing media:event:write or
+    // board:event:write. Those name a media event and a MusallahBoard calendar event
+    // respectively -- neither is a ticketed event, and mapping ticketing onto either would
+    // hand ticket issuance and payment settlement to every board editor and media moderator.
+
+    /** Scan and validate tickets at the door, and read scan history. */
+    TCKET_SCAN(Authority.TCKET_SCAN),
+    /** Set up events, issue tickets, manage the roster, read the order book. */
+    TCKET_MANAGE(Authority.TCKET_MANAGE),
+    /** Destructive deletes and manual payment settlement. */
+    TCKET_ADMIN(Authority.TCKET_ADMIN),
+
     // ==================== Identity and audit ====================
 
     IAM_USER_READ(Authority.IAM_USER_READ),
@@ -110,6 +123,10 @@ public enum Permission implements GrantedAuthority {
         String BOARD_COMMAND_BENIGN = "board:command:benign";
         String BOARD_COMMAND_DISRUPTIVE = "board:command:disruptive";
         String BOARD_COMMAND_INSPECT = "board:command:inspect";
+
+        String TCKET_SCAN = "tcket:scan";
+        String TCKET_MANAGE = "tcket:manage";
+        String TCKET_ADMIN = "tcket:admin";
 
         String IAM_USER_READ = "iam:user:read";
         String IAM_USER_WRITE = "iam:user:write";

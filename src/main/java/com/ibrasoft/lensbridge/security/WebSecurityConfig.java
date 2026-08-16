@@ -19,6 +19,9 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import com.ibrasoft.tcketmanage.autoconfigure.TcketManagePaths;
+import org.springframework.http.HttpMethod;
+
 import com.ibrasoft.lensbridge.security.jwt.AuthEntryPointJwt;
 import com.ibrasoft.lensbridge.security.jwt.AuthTokenFilter;
 import com.ibrasoft.lensbridge.security.services.UserDetailsServiceImpl;
@@ -80,7 +83,7 @@ public class WebSecurityConfig {
   }
 
   @Bean
-  public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+  public SecurityFilterChain filterChain(HttpSecurity http, TcketManagePaths tcket) throws Exception {
     http.cors(cors -> cors.configurationSource(corsConfigurationSource())) 
         .csrf(csrf -> csrf.disable())
         .exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizedHandler))
@@ -98,6 +101,13 @@ public class WebSecurityConfig {
             // Disable these endpoints in production; they are only for local dev and CI.
             .requestMatchers("/swagger-ui/**", "/swagger-ui.html",
                 "/v3/api-docs", "/v3/api-docs.yaml", "/v3/api-docs/**").permitAll()
+            // tcketmanage-core publishes the patterns that must stay reachable without a login:
+            // public event browsing, guest checkout, buyer self-service and payment webhooks.
+            // These are not unprotected -- GET /orders/{id}, POST /orders/{id}/cancel and
+            // GET /tickets/{id} enforce ownership per entity via OrderAccessPolicy, which a URL
+            // rule cannot express. Everything else under the mount point needs authentication.
+            .requestMatchers(HttpMethod.GET, tcket.publicGetPatterns()).permitAll()
+            .requestMatchers(HttpMethod.POST, tcket.publicPostPatterns()).permitAll()
             .anyRequest().authenticated());
 
     http.authenticationProvider(authenticationProvider());

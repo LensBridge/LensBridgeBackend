@@ -25,6 +25,11 @@ public enum Role implements GrantedAuthority {
     BOARD_EDITOR("Create and edit everything that appears on a board"),
     BOARD_ADMIN("Full control of boards and devices, including enrollment and remote commands"),
 
+    // ---------- Ticketing ----------
+    TCKET_SCANNER("Scan and validate tickets at the door"),
+    TCKET_MANAGER("Run ticketed events: setup, ticket issuance, roster and order book"),
+    TCKET_ADMIN("Full control of ticketing, including deletes and manual payment settlement"),
+
     // ---------- Everything ----------
     ROOT("Unrestricted, including granting roles to other users");
 

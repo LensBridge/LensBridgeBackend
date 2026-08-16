@@ -66,11 +66,32 @@ final class RolePermissions {
                 Permission.BOARD_COMMAND_INSPECT,
                 Permission.AUDIT_READ));
 
+        // ---------- Ticketing ----------
+
+        // The door shift. Scan-only on purpose: a volunteer checking people in needs to
+        // validate a QR and nothing else -- not the attendee roster, not the order book.
+        Set<Permission> tcketScanner = EnumSet.of(
+                Permission.TCKET_SCAN);
+
+        // Runs an event end to end. Scans too, because whoever organises the event
+        // inevitably ends up working the door.
+        Set<Permission> tcketManager = union(tcketScanner, EnumSet.of(
+                Permission.TCKET_MANAGE));
+
+        // Owns the ticketing product. TCKET_ADMIN is separated from TCKET_MANAGE because it
+        // covers settling payments by hand and deleting sold tickets -- money and
+        // irreversibility, which is not the same trust as running an event.
+        Set<Permission> tcketAdmin = union(tcketManager, EnumSet.of(
+                Permission.TCKET_ADMIN));
+
         BUNDLES.put(Role.USER, user);
         BUNDLES.put(Role.ADMIN, admin);
         BUNDLES.put(Role.BOARD_VIEWER, boardViewer);
         BUNDLES.put(Role.BOARD_EDITOR, boardEditor);
         BUNDLES.put(Role.BOARD_ADMIN, boardAdmin);
+        BUNDLES.put(Role.TCKET_SCANNER, tcketScanner);
+        BUNDLES.put(Role.TCKET_MANAGER, tcketManager);
+        BUNDLES.put(Role.TCKET_ADMIN, tcketAdmin);
 
         // ROOT is allOf rather than an explicit list so a newly added permission is held by
         // root on deploy. For a single-org deployment that is correct: the alternative locks
