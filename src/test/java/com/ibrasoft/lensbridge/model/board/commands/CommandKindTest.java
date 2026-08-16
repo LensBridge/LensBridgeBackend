@@ -2,6 +2,9 @@ package com.ibrasoft.lensbridge.model.board.commands;
 
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.ibrasoft.lensbridge.model.auth.Permission;
+import com.ibrasoft.lensbridge.model.minbar.board.commands.CommandKind;
+import com.ibrasoft.lensbridge.model.minbar.board.commands.CommandPayload;
+import com.ibrasoft.lensbridge.model.minbar.board.commands.CommandRisk;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;

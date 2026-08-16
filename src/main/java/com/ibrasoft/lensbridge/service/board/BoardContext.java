@@ -1,7 +1,8 @@
 package com.ibrasoft.lensbridge.service.board;
 
-import com.ibrasoft.lensbridge.model.board.Device;
-import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
+import com.ibrasoft.lensbridge.model.minbar.board.Device;
+import com.ibrasoft.lensbridge.model.minbar.board.WeekId;
+import com.ibrasoft.lensbridge.model.minbar.board.embedded.DeviceConfig;
 import lombok.Builder;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
@@ -21,7 +22,7 @@ import java.time.temporal.TemporalAdjusters;
  * All boundaries are computed in the device's own timezone, never the server's. A board in
  * Toronto and a backend container running UTC must agree on which events are "today".
  * <p>
- * Weeks run <b>Monday to Sunday</b>, matching {@link com.ibrasoft.lensbridge.model.board.WeekId},
+ * Weeks run <b>Monday to Sunday</b>, matching {@link WeekId},
  * which keys the {@code weekly_content} table. The two used to disagree — events were
  * bucketed Sunday–Saturday — so on Sundays a board showed next week's events next to last
  * week's jummah times.

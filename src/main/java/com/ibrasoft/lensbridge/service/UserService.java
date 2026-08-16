@@ -14,8 +14,7 @@ import java.util.UUID;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import com.ibrasoft.lensbridge.model.board.Audience;
-import com.ibrasoft.lensbridge.util.Patch;
+import com.ibrasoft.lensbridge.model.minbar.Audience;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

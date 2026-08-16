@@ -2,10 +2,10 @@ package com.ibrasoft.lensbridge.service.board.producer;
 
 import com.ibrasoft.lensbridge.dto.board.response.frames.DayBucket;
 import com.ibrasoft.lensbridge.dto.board.response.frames.EventView;
-import com.ibrasoft.lensbridge.model.board.BoardEvent;
-import com.ibrasoft.lensbridge.model.board.frames.AgendaFrameConfig;
-import com.ibrasoft.lensbridge.model.board.frames.FrameDefinition;
-import com.ibrasoft.lensbridge.model.board.frames.FrameType;
+import com.ibrasoft.lensbridge.model.minbar.BoardEvent;
+import com.ibrasoft.lensbridge.model.minbar.board.frames.AgendaFrameConfig;
+import com.ibrasoft.lensbridge.model.minbar.board.frames.FrameDefinition;
+import com.ibrasoft.lensbridge.model.minbar.board.frames.FrameType;
 import com.ibrasoft.lensbridge.service.BoardService;
 import com.ibrasoft.lensbridge.service.board.BoardContext;
 import lombok.RequiredArgsConstructor;

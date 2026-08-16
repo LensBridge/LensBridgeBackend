@@ -1,6 +1,5 @@
 package com.ibrasoft.lensbridge.model.minbar;
 
-import com.ibrasoft.lensbridge.model.board.Audience;
 import jakarta.persistence.*;
 import lombok.*;
 

@@ -10,8 +10,9 @@ import com.ibrasoft.lensbridge.dto.board.response.IssueEnrollmentTokenResponse;
 import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
 import com.ibrasoft.lensbridge.model.audit.AuditAction;
 import com.ibrasoft.lensbridge.model.auth.Permission;
-import com.ibrasoft.lensbridge.model.board.Device;
-import com.ibrasoft.lensbridge.model.board.commands.CommandKind;
+import com.ibrasoft.lensbridge.model.minbar.board.Device;
+import com.ibrasoft.lensbridge.model.minbar.board.commands.CommandKind;
+import com.ibrasoft.lensbridge.model.minbar.board.commands.CommandRisk;
 import com.ibrasoft.lensbridge.repository.sql.DeviceCommandRepository;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.service.AdminAuditService;
@@ -149,7 +150,7 @@ public class DeviceAdminController {
      * The required permission depends on the command's blast radius, which is only knowable
      * once the body is bound - hence the authorizer bean rather than a {@code hasAuthority}
      * expression. {@code chrome.reload} and {@code chrome.screenshot} are not the same
-     * privilege; see {@link com.ibrasoft.lensbridge.model.board.commands.CommandRisk}.
+     * privilege; see {@link CommandRisk}.
      */
     @Operation(operationId = "issueDeviceCommand",
             summary = "Queue a command for a device",

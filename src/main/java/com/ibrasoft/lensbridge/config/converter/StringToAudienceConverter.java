@@ -1,6 +1,6 @@
 package com.ibrasoft.lensbridge.config.converter;
 
-import com.ibrasoft.lensbridge.model.board.Audience;
+import com.ibrasoft.lensbridge.model.minbar.Audience;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;

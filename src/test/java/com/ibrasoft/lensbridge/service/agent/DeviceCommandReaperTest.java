@@ -1,8 +1,8 @@
 package com.ibrasoft.lensbridge.service.agent;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ibrasoft.lensbridge.model.board.DeviceCommand;
-import com.ibrasoft.lensbridge.model.board.DeviceCommandStatus;
+import com.ibrasoft.lensbridge.model.minbar.board.DeviceCommand;
+import com.ibrasoft.lensbridge.model.minbar.board.DeviceCommandStatus;
 import com.ibrasoft.lensbridge.repository.sql.DeviceCommandRepository;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.service.agent.events.DeviceEventPublisher;

@@ -1,6 +1,6 @@
 package com.ibrasoft.lensbridge.repository.sql;
 
-import com.ibrasoft.lensbridge.model.board.DeviceTelemetry;
+import com.ibrasoft.lensbridge.model.minbar.board.DeviceTelemetry;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;

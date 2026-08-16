@@ -1,11 +1,11 @@
 package com.ibrasoft.lensbridge.service.board.producer;
 
-import com.ibrasoft.lensbridge.model.board.frames.FrameDefinition;
-import com.ibrasoft.lensbridge.model.board.frames.FrameType;
-import com.ibrasoft.lensbridge.model.board.frames.NextPrayerFrameConfig;
-import com.ibrasoft.lensbridge.model.board.Audience;
-import com.ibrasoft.lensbridge.model.board.Device;
-import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
+import com.ibrasoft.lensbridge.model.minbar.board.frames.FrameDefinition;
+import com.ibrasoft.lensbridge.model.minbar.board.frames.FrameType;
+import com.ibrasoft.lensbridge.model.minbar.board.frames.NextPrayerFrameConfig;
+import com.ibrasoft.lensbridge.model.minbar.Audience;
+import com.ibrasoft.lensbridge.model.minbar.board.Device;
+import com.ibrasoft.lensbridge.model.minbar.board.embedded.DeviceConfig;
 import com.ibrasoft.lensbridge.service.board.BoardContext;
 
 import org.junit.jupiter.api.Test;

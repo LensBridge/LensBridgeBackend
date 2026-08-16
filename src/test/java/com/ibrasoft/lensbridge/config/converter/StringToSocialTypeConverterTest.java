@@ -1,6 +1,6 @@
 package com.ibrasoft.lensbridge.config.converter;
 
-import com.ibrasoft.lensbridge.model.board.SocialType;
+import com.ibrasoft.lensbridge.model.minbar.board.SocialType;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;

@@ -1,6 +1,7 @@
 package com.ibrasoft.lensbridge.model.board.frames;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ibrasoft.lensbridge.model.minbar.board.frames.FrameType;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

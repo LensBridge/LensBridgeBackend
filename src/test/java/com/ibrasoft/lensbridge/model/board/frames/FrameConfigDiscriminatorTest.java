@@ -2,6 +2,8 @@ package com.ibrasoft.lensbridge.model.board.frames;
 
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ibrasoft.lensbridge.model.minbar.board.frames.FrameConfig;
+import com.ibrasoft.lensbridge.model.minbar.board.frames.PromotableSocialMediaFrameConfig;
 import io.swagger.v3.oas.annotations.media.DiscriminatorMapping;
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.junit.jupiter.api.Test;

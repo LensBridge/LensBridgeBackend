@@ -1,7 +1,7 @@
 package com.ibrasoft.lensbridge.service.agent;
 
-import com.ibrasoft.lensbridge.model.board.Audience;
-import com.ibrasoft.lensbridge.model.board.EnrollmentToken;
+import com.ibrasoft.lensbridge.model.minbar.Audience;
+import com.ibrasoft.lensbridge.model.minbar.board.EnrollmentToken;
 import com.ibrasoft.lensbridge.repository.sql.EnrollmentTokenRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;

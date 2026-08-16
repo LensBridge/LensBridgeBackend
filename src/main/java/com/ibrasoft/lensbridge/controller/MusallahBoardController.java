@@ -1,10 +1,10 @@
 package com.ibrasoft.lensbridge.controller;
 
 import com.ibrasoft.lensbridge.dto.board.response.MusallahBoardPayload;
-import com.ibrasoft.lensbridge.model.board.Audience;
-import com.ibrasoft.lensbridge.model.board.BoardEvent;
-import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
-import com.ibrasoft.lensbridge.model.board.WeeklyContent;
+import com.ibrasoft.lensbridge.model.minbar.Audience;
+import com.ibrasoft.lensbridge.model.minbar.BoardEvent;
+import com.ibrasoft.lensbridge.model.minbar.board.embedded.DeviceConfig;
+import com.ibrasoft.lensbridge.model.minbar.board.WeeklyContent;
 import com.ibrasoft.lensbridge.service.BoardService;
 import com.ibrasoft.lensbridge.service.board.BoardPayloadAssembler;
 import lombok.RequiredArgsConstructor;

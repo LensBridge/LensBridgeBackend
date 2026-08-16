@@ -1,7 +1,7 @@
 package com.ibrasoft.lensbridge.dto.board.request;
 
-import com.ibrasoft.lensbridge.model.board.Location;
-import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
+import com.ibrasoft.lensbridge.model.minbar.board.Location;
+import com.ibrasoft.lensbridge.model.minbar.board.embedded.DeviceConfig;
 
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;

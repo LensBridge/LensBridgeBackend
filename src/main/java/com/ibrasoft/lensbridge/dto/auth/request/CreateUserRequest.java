@@ -1,6 +1,6 @@
 package com.ibrasoft.lensbridge.dto.auth.request;
 
-import com.ibrasoft.lensbridge.model.board.Audience;
+import com.ibrasoft.lensbridge.model.minbar.Audience;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.*;
 import lombok.Data;

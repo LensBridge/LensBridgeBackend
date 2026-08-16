@@ -8,7 +8,7 @@ import com.ibrasoft.lensbridge.dto.board.agent.CommandResultFrame;
 import com.ibrasoft.lensbridge.dto.board.agent.HeartbeatFrame;
 import com.ibrasoft.lensbridge.dto.board.agent.IncomingAgentFrame;
 import com.ibrasoft.lensbridge.dto.board.agent.OutgoingAgentFrame;
-import com.ibrasoft.lensbridge.model.board.Device;
+import com.ibrasoft.lensbridge.model.minbar.board.Device;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.service.agent.AgentSession;
 import com.ibrasoft.lensbridge.service.agent.AgentSessionRegistry;
@@ -28,7 +28,6 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Optional;
-import java.util.UUID;
 
 /**
  * Lifecycle of one agent WebSocket:

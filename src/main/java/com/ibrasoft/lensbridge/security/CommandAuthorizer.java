@@ -2,7 +2,7 @@ package com.ibrasoft.lensbridge.security;
 
 import com.ibrasoft.lensbridge.dto.board.request.IssueCommandRequest;
 import com.ibrasoft.lensbridge.model.auth.Permission;
-import com.ibrasoft.lensbridge.model.board.commands.CommandKind;
+import com.ibrasoft.lensbridge.model.minbar.board.commands.CommandKind;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;

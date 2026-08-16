@@ -1,7 +1,7 @@
 package com.ibrasoft.lensbridge.controller;
 
 import com.ibrasoft.lensbridge.dto.board.response.frames.EventView;
-import com.ibrasoft.lensbridge.model.board.Audience;
+import com.ibrasoft.lensbridge.model.minbar.Audience;
 import com.ibrasoft.lensbridge.model.minbar.PrayerSpace;
 import com.ibrasoft.lensbridge.repository.sql.PrayerSpaceRepository;
 import com.ibrasoft.lensbridge.service.BoardService;

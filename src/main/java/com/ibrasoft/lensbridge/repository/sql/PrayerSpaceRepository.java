@@ -1,6 +1,6 @@
 package com.ibrasoft.lensbridge.repository.sql;
 
-import com.ibrasoft.lensbridge.model.board.Audience;
+import com.ibrasoft.lensbridge.model.minbar.Audience;
 import com.ibrasoft.lensbridge.model.minbar.PrayerSpace;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -13,6 +13,6 @@ import java.util.UUID;
 @Repository
 public interface PrayerSpaceRepository extends JpaRepository<PrayerSpace, UUID> {
 
-    @Query("SELECT ps FROM PrayerSpace ps WHERE ps.audience = :aud OR ps.audience = com.ibrasoft.lensbridge.model.board.Audience.BOTH ORDER BY ps.name ASC")
+    @Query("SELECT ps FROM PrayerSpace ps WHERE ps.audience = :aud OR ps.audience = com.ibrasoft.lensbridge.model.minbar.Audience.BOTH ORDER BY ps.name ASC")
     List<PrayerSpace> findByAudienceOrBoth(@Param("aud") Audience audience);
 }

@@ -2,7 +2,7 @@ package com.ibrasoft.lensbridge.handler;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ibrasoft.lensbridge.model.board.Device;
+import com.ibrasoft.lensbridge.model.minbar.board.Device;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

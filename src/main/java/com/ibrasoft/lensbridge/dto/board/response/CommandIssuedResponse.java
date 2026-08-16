@@ -1,6 +1,6 @@
 package com.ibrasoft.lensbridge.dto.board.response;
 
-import com.ibrasoft.lensbridge.model.board.DeviceCommandStatus;
+import com.ibrasoft.lensbridge.model.minbar.board.DeviceCommandStatus;
 
 import java.time.Instant;
 import java.util.UUID;

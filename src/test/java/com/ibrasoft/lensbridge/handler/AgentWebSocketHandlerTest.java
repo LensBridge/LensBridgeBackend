@@ -2,9 +2,9 @@ package com.ibrasoft.lensbridge.handler;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ibrasoft.lensbridge.model.board.Audience;
+import com.ibrasoft.lensbridge.model.minbar.Audience;
 import com.ibrasoft.lensbridge.dto.board.agent.HeartbeatFrame;
-import com.ibrasoft.lensbridge.model.board.Device;
+import com.ibrasoft.lensbridge.model.minbar.board.Device;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.service.agent.AgentSessionRegistry;
 import com.ibrasoft.lensbridge.service.agent.CommandDispatcher;

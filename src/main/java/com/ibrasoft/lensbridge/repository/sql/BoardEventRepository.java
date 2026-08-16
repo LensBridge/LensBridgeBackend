@@ -1,7 +1,7 @@
 package com.ibrasoft.lensbridge.repository.sql;
 
-import com.ibrasoft.lensbridge.model.board.Audience;
-import com.ibrasoft.lensbridge.model.board.BoardEvent;
+import com.ibrasoft.lensbridge.model.minbar.Audience;
+import com.ibrasoft.lensbridge.model.minbar.BoardEvent;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -16,12 +16,12 @@ public interface BoardEventRepository extends JpaRepository<BoardEvent, UUID> {
 
     List<BoardEvent> findAllByOrderByStartTimeAsc();
 
-    @Query("SELECT e FROM BoardEvent e WHERE (e.audience = :aud OR e.audience = com.ibrasoft.lensbridge.model.board.Audience.BOTH) ORDER BY e.startTime ASC")
+    @Query("SELECT e FROM BoardEvent e WHERE (e.audience = :aud OR e.audience = com.ibrasoft.lensbridge.model.minbar.Audience.BOTH) ORDER BY e.startTime ASC")
     List<BoardEvent> findByAudienceOrBoth(@Param("aud") Audience audience);
 
-    @Query("SELECT e FROM BoardEvent e WHERE (e.audience = :aud OR e.audience = com.ibrasoft.lensbridge.model.board.Audience.BOTH) AND e.startTime >= :now ORDER BY e.startTime ASC")
+    @Query("SELECT e FROM BoardEvent e WHERE (e.audience = :aud OR e.audience = com.ibrasoft.lensbridge.model.minbar.Audience.BOTH) AND e.startTime >= :now ORDER BY e.startTime ASC")
     List<BoardEvent> findUpcomingByAudienceOrBoth(@Param("aud") Audience audience, @Param("now") Instant now);
 
-    @Query("SELECT e FROM BoardEvent e WHERE (e.audience = :aud OR e.audience = com.ibrasoft.lensbridge.model.board.Audience.BOTH) AND e.startTime <= :rangeEnd AND e.endTime >= :rangeStart ORDER BY e.startTime ASC")
+    @Query("SELECT e FROM BoardEvent e WHERE (e.audience = :aud OR e.audience = com.ibrasoft.lensbridge.model.minbar.Audience.BOTH) AND e.startTime <= :rangeEnd AND e.endTime >= :rangeStart ORDER BY e.startTime ASC")
     List<BoardEvent> findOverlappingForAudienceOrBoth(@Param("aud") Audience audience, @Param("rangeStart") Instant rangeStart, @Param("rangeEnd") Instant rangeEnd);
 }

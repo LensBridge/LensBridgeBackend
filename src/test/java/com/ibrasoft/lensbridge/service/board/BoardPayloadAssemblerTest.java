@@ -2,10 +2,10 @@ package com.ibrasoft.lensbridge.service.board;
 
 import com.ibrasoft.lensbridge.dto.board.response.MusallahBoardPayload;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
-import com.ibrasoft.lensbridge.model.board.Audience;
-import com.ibrasoft.lensbridge.model.board.Device;
-import com.ibrasoft.lensbridge.model.board.frames.FrameDefinition;
-import com.ibrasoft.lensbridge.model.board.frames.FrameType;
+import com.ibrasoft.lensbridge.model.minbar.Audience;
+import com.ibrasoft.lensbridge.model.minbar.board.Device;
+import com.ibrasoft.lensbridge.model.minbar.board.frames.FrameDefinition;
+import com.ibrasoft.lensbridge.model.minbar.board.frames.FrameType;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.service.OpenWeatherService;
 import com.ibrasoft.lensbridge.service.board.producer.FrameProducer;

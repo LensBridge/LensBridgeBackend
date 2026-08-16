@@ -1,9 +1,9 @@
 package com.ibrasoft.lensbridge.service.board.producer;
 
-import com.ibrasoft.lensbridge.model.board.PromotableSocialMedia;
-import com.ibrasoft.lensbridge.model.board.frames.FrameDefinition;
-import com.ibrasoft.lensbridge.model.board.frames.FrameType;
-import com.ibrasoft.lensbridge.model.board.frames.PromotableSocialMediaFrameConfig;
+import com.ibrasoft.lensbridge.model.minbar.board.PromotableSocialMedia;
+import com.ibrasoft.lensbridge.model.minbar.board.frames.FrameDefinition;
+import com.ibrasoft.lensbridge.model.minbar.board.frames.FrameType;
+import com.ibrasoft.lensbridge.model.minbar.board.frames.PromotableSocialMediaFrameConfig;
 import com.ibrasoft.lensbridge.service.PromotableSocialMediaService;
 import com.ibrasoft.lensbridge.service.board.BoardContext;
 import lombok.RequiredArgsConstructor;

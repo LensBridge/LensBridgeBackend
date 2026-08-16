@@ -1,7 +1,7 @@
 package com.ibrasoft.lensbridge.handler;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ibrasoft.lensbridge.model.board.Device;
+import com.ibrasoft.lensbridge.model.minbar.board.Device;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

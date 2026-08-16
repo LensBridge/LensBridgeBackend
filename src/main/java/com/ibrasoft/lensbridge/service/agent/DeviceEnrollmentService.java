@@ -1,10 +1,10 @@
 package com.ibrasoft.lensbridge.service.agent;
 
-import com.ibrasoft.lensbridge.model.board.CalculationMethod;
-import com.ibrasoft.lensbridge.model.board.Device;
-import com.ibrasoft.lensbridge.model.board.EnrollmentToken;
-import com.ibrasoft.lensbridge.model.board.Location;
-import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
+import com.ibrasoft.lensbridge.model.minbar.board.CalculationMethod;
+import com.ibrasoft.lensbridge.model.minbar.board.Device;
+import com.ibrasoft.lensbridge.model.minbar.board.EnrollmentToken;
+import com.ibrasoft.lensbridge.model.minbar.board.Location;
+import com.ibrasoft.lensbridge.model.minbar.board.embedded.DeviceConfig;
 import com.ibrasoft.lensbridge.repository.sql.BoardConfigRepository;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import jakarta.transaction.Transactional;

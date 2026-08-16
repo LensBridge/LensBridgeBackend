@@ -3,7 +3,7 @@ package com.ibrasoft.lensbridge.service.agent.events;
 import com.ibrasoft.lensbridge.dto.board.agent.CommandProgressFrame;
 import com.ibrasoft.lensbridge.dto.board.agent.CommandResultFrame;
 import com.ibrasoft.lensbridge.dto.board.agent.HeartbeatFrame;
-import com.ibrasoft.lensbridge.model.board.DeviceCommand;
+import com.ibrasoft.lensbridge.model.minbar.board.DeviceCommand;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;

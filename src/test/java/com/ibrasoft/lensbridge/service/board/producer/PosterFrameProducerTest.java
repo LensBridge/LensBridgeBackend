@@ -1,10 +1,10 @@
 package com.ibrasoft.lensbridge.service.board.producer;
 
-import com.ibrasoft.lensbridge.model.board.Audience;
-import com.ibrasoft.lensbridge.model.board.Poster;
-import com.ibrasoft.lensbridge.model.board.frames.FrameDefinition;
-import com.ibrasoft.lensbridge.model.board.frames.FrameType;
-import com.ibrasoft.lensbridge.model.board.frames.PosterFrameConfig;
+import com.ibrasoft.lensbridge.model.minbar.Audience;
+import com.ibrasoft.lensbridge.model.minbar.board.Poster;
+import com.ibrasoft.lensbridge.model.minbar.board.frames.FrameDefinition;
+import com.ibrasoft.lensbridge.model.minbar.board.frames.FrameType;
+import com.ibrasoft.lensbridge.model.minbar.board.frames.PosterFrameConfig;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

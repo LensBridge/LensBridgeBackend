@@ -4,9 +4,9 @@ import com.ibrasoft.lensbridge.dto.board.request.CreatePromotableSocialMediaRequ
 import com.ibrasoft.lensbridge.dto.board.request.UpdatePromotableSocialMediaRequest;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
 import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
-import com.ibrasoft.lensbridge.model.board.Audience;
-import com.ibrasoft.lensbridge.model.board.PromotableSocialMedia;
-import com.ibrasoft.lensbridge.model.board.SocialType;
+import com.ibrasoft.lensbridge.model.minbar.Audience;
+import com.ibrasoft.lensbridge.model.minbar.board.PromotableSocialMedia;
+import com.ibrasoft.lensbridge.model.minbar.board.SocialType;
 import com.ibrasoft.lensbridge.repository.sql.PromotableSocialMediaRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

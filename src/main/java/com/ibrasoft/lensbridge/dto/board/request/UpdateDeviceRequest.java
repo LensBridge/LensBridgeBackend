@@ -1,6 +1,6 @@
 package com.ibrasoft.lensbridge.dto.board.request;
 
-import com.ibrasoft.lensbridge.model.board.Audience;
+import com.ibrasoft.lensbridge.model.minbar.Audience;
 
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;

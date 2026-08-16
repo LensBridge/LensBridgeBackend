@@ -1,6 +1,6 @@
 package com.ibrasoft.lensbridge.dto.board.response.frames;
 
-import com.ibrasoft.lensbridge.model.board.BoardEvent;
+import com.ibrasoft.lensbridge.model.minbar.BoardEvent;
 import lombok.*;
 
 import java.time.Instant;

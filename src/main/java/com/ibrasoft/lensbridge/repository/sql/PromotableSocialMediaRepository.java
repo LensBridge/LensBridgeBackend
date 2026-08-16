@@ -1,8 +1,8 @@
 package com.ibrasoft.lensbridge.repository.sql;
 
-import com.ibrasoft.lensbridge.model.board.Audience;
-import com.ibrasoft.lensbridge.model.board.PromotableSocialMedia;
-import com.ibrasoft.lensbridge.model.board.SocialType;
+import com.ibrasoft.lensbridge.model.minbar.Audience;
+import com.ibrasoft.lensbridge.model.minbar.board.PromotableSocialMedia;
+import com.ibrasoft.lensbridge.model.minbar.board.SocialType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -21,7 +21,7 @@ public interface PromotableSocialMediaRepository extends JpaRepository<Promotabl
      * is stable between assemblies — there is no explicit ordering column, and an unordered
      * result would let the same board reshuffle its social frames on every refetch.
      */
-    @Query("SELECT s FROM PromotableSocialMedia s WHERE (s.audience = :aud OR s.audience = com.ibrasoft.lensbridge.model.board.Audience.BOTH) ORDER BY s.name ASC")
+    @Query("SELECT s FROM PromotableSocialMedia s WHERE (s.audience = :aud OR s.audience = com.ibrasoft.lensbridge.model.minbar.Audience.BOTH) ORDER BY s.name ASC")
     List<PromotableSocialMedia> findByAudienceOrBoth(@Param("aud") Audience audience);
 
     List<PromotableSocialMedia> findByTypeOrderByNameAsc(SocialType type);

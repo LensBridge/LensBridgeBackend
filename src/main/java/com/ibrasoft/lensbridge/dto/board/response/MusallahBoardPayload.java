@@ -1,8 +1,8 @@
 package com.ibrasoft.lensbridge.dto.board.response;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
-import com.ibrasoft.lensbridge.model.board.frames.FrameDefinition;
+import com.ibrasoft.lensbridge.model.minbar.board.embedded.DeviceConfig;
+import com.ibrasoft.lensbridge.model.minbar.board.frames.FrameDefinition;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

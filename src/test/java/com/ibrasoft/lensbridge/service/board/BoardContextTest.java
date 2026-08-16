@@ -1,8 +1,8 @@
 package com.ibrasoft.lensbridge.service.board;
 
-import com.ibrasoft.lensbridge.model.board.Device;
-import com.ibrasoft.lensbridge.model.board.Location;
-import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
+import com.ibrasoft.lensbridge.model.minbar.board.Device;
+import com.ibrasoft.lensbridge.model.minbar.board.Location;
+import com.ibrasoft.lensbridge.model.minbar.board.embedded.DeviceConfig;
 import org.junit.jupiter.api.Test;
 
 import java.time.DayOfWeek;

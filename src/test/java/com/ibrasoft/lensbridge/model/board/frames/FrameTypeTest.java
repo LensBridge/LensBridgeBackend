@@ -1,5 +1,6 @@
 package com.ibrasoft.lensbridge.model.board.frames;
 
+import com.ibrasoft.lensbridge.model.minbar.board.frames.FrameType;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;

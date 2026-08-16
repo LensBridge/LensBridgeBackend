@@ -1,7 +1,7 @@
 package com.ibrasoft.lensbridge.dto.board.request;
 
-import com.ibrasoft.lensbridge.model.board.IslamicQuote;
-import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
+import com.ibrasoft.lensbridge.model.minbar.board.IslamicQuote;
+import com.ibrasoft.lensbridge.model.minbar.board.embedded.DeviceConfig;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;

@@ -1,5 +1,6 @@
 package com.ibrasoft.lensbridge.model.board;
 
+import com.ibrasoft.lensbridge.model.minbar.board.SocialType;
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;

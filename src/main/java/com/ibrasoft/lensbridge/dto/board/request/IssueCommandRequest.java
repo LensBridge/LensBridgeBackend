@@ -1,6 +1,7 @@
 package com.ibrasoft.lensbridge.dto.board.request;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.ibrasoft.lensbridge.model.minbar.board.commands.CommandPayload;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
@@ -9,7 +10,7 @@ import jakarta.validation.constraints.Positive;
  * Admin request to issue a command at a single device.
  * <p>
  * {@code kind} is the polymorphic discriminator (must match a registered
- * {@link com.ibrasoft.lensbridge.model.board.commands.CommandPayload} subtype).
+ * {@link CommandPayload} subtype).
  * {@code payload} is the kind-specific JSON body (may be empty for parameterless commands).
  * <p>
  * {@code deadlineMs} bounds execution once the agent starts. {@code ttlSeconds} bounds how

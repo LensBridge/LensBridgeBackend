@@ -1,6 +1,7 @@
 package com.ibrasoft.lensbridge.model.board;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ibrasoft.lensbridge.model.minbar.Audience;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

@@ -1,6 +1,6 @@
 package com.ibrasoft.lensbridge.service.board.producer;
 
-import com.ibrasoft.lensbridge.model.board.frames.FrameDefinition;
+import com.ibrasoft.lensbridge.model.minbar.board.frames.FrameDefinition;
 import com.ibrasoft.lensbridge.service.board.BoardContext;
 
 import java.util.List;

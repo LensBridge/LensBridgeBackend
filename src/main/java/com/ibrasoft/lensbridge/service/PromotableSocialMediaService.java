@@ -5,9 +5,9 @@ import com.ibrasoft.lensbridge.dto.board.request.UpdatePromotableSocialMediaRequ
 import com.ibrasoft.lensbridge.dto.upload.response.ErrorResponse;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
 import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
-import com.ibrasoft.lensbridge.model.board.Audience;
-import com.ibrasoft.lensbridge.model.board.PromotableSocialMedia;
-import com.ibrasoft.lensbridge.model.board.SocialType;
+import com.ibrasoft.lensbridge.model.minbar.Audience;
+import com.ibrasoft.lensbridge.model.minbar.board.PromotableSocialMedia;
+import com.ibrasoft.lensbridge.model.minbar.board.SocialType;
 import com.ibrasoft.lensbridge.repository.sql.PromotableSocialMediaRepository;
 import com.ibrasoft.lensbridge.util.Patch;
 import lombok.RequiredArgsConstructor;

@@ -1,7 +1,7 @@
 package com.ibrasoft.lensbridge.dto.board.response;
 
-import com.ibrasoft.lensbridge.model.board.Audience;
-import com.ibrasoft.lensbridge.model.board.Device;
+import com.ibrasoft.lensbridge.model.minbar.Audience;
+import com.ibrasoft.lensbridge.model.minbar.board.Device;
 import lombok.Builder;
 import lombok.Data;
 

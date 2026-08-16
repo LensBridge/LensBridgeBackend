@@ -1,7 +1,7 @@
 package com.ibrasoft.lensbridge.repository.sql;
 
-import com.ibrasoft.lensbridge.model.board.DeviceCommand;
-import com.ibrasoft.lensbridge.model.board.DeviceCommandStatus;
+import com.ibrasoft.lensbridge.model.minbar.board.DeviceCommand;
+import com.ibrasoft.lensbridge.model.minbar.board.DeviceCommandStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

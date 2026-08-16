@@ -2,8 +2,8 @@ package com.ibrasoft.lensbridge.dto.board.response;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ibrasoft.lensbridge.model.board.DeviceCommand;
-import com.ibrasoft.lensbridge.model.board.DeviceCommandStatus;
+import com.ibrasoft.lensbridge.model.minbar.board.DeviceCommand;
+import com.ibrasoft.lensbridge.model.minbar.board.DeviceCommandStatus;
 
 import java.time.Instant;
 import java.util.UUID;

@@ -1,12 +1,12 @@
 package com.ibrasoft.lensbridge.service.board.producer;
 
-import com.ibrasoft.lensbridge.model.board.IslamicQuote;
-import com.ibrasoft.lensbridge.model.board.JummahPrayer;
-import com.ibrasoft.lensbridge.model.board.WeeklyContent;
-import com.ibrasoft.lensbridge.model.board.frames.FrameDefinition;
-import com.ibrasoft.lensbridge.model.board.frames.FrameType;
-import com.ibrasoft.lensbridge.model.board.frames.IslamicQuoteFrameConfig;
-import com.ibrasoft.lensbridge.model.board.frames.JummahFrameConfig;
+import com.ibrasoft.lensbridge.model.minbar.board.IslamicQuote;
+import com.ibrasoft.lensbridge.model.minbar.board.JummahPrayer;
+import com.ibrasoft.lensbridge.model.minbar.board.WeeklyContent;
+import com.ibrasoft.lensbridge.model.minbar.board.frames.FrameDefinition;
+import com.ibrasoft.lensbridge.model.minbar.board.frames.FrameType;
+import com.ibrasoft.lensbridge.model.minbar.board.frames.IslamicQuoteFrameConfig;
+import com.ibrasoft.lensbridge.model.minbar.board.frames.JummahFrameConfig;
 import com.ibrasoft.lensbridge.service.BoardService;
 import com.ibrasoft.lensbridge.service.board.BoardContext;
 import lombok.RequiredArgsConstructor;
