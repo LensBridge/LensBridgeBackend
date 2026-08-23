@@ -425,6 +425,39 @@ public class BoardAdminController {
         return ResponseEntity.ok(new MessageResponse("Calendar event deleted successfully"));
     }
 
+    @PutMapping("/events/{eventId}/ticket-event/{tcketEventId}")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_EVENT_WRITE + "') and hasAuthority('" + Permission.Authority.TCKET_MANAGE + "')")
+    @Operation(operationId = "linkTicketEvent", summary = "Link a tCketManage event to a board event")
+    public ResponseEntity<BoardEvent> linkTicketEvent(
+            @PathVariable UUID eventId,
+            @PathVariable UUID tcketEventId,
+            HttpServletRequest request) {
+
+        log.info("Admin linking board event {} to tCket event {}", eventId, tcketEventId);
+        BoardEvent linked = boardService.linkTicketEvent(eventId, tcketEventId);
+
+        auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.LINK_TICKET_EVENT,
+                "CalendarEvent", eventId, request.getRemoteAddr());
+
+        return ResponseEntity.ok(linked);
+    }
+
+    @DeleteMapping("/events/{eventId}/ticket-event")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_EVENT_WRITE + "') and hasAuthority('" + Permission.Authority.TCKET_MANAGE + "')")
+    @Operation(operationId = "unlinkTicketEvent", summary = "Unlink the tCketManage event from a board event")
+    public ResponseEntity<BoardEvent> unlinkTicketEvent(
+            @PathVariable UUID eventId,
+            HttpServletRequest request) {
+
+        log.info("Admin unlinking ticket event from board event {}", eventId);
+        BoardEvent unlinked = boardService.unlinkTicketEvent(eventId);
+
+        auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.UNLINK_TICKET_EVENT,
+                "CalendarEvent", eventId, request.getRemoteAddr());
+
+        return ResponseEntity.ok(unlinked);
+    }
+
     @PostMapping("/refresh")
     @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_REFRESH + "')")
     public ResponseEntity<MessageResponse> refreshSignboard(HttpServletRequest request) {

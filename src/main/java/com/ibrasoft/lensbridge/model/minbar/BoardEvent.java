@@ -1,5 +1,6 @@
 package com.ibrasoft.lensbridge.model.minbar;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -43,5 +44,8 @@ public class BoardEvent {
      */
     @OneToOne
     @JoinColumn(name = "event_id")
+    // hacky fix for OSIV in the meantime, until I
+    // fix it once and for all in tCketManage
+    @JsonIgnoreProperties({"zones", "tickets"})
     private Event event;
 }

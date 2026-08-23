@@ -18,8 +18,11 @@ import com.ibrasoft.lensbridge.repository.sql.BoardEventRepository;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.repository.sql.WeeklyContentRepository;
 import com.ibrasoft.lensbridge.util.Patch;
+import com.ibrasoft.tcketmanagebackend.model.event.Event;
+import com.ibrasoft.tcketmanagebackend.service.EventService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,6 +44,7 @@ public class BoardService {
     private final BoardEventRepository boardEventRepository;
     private final WeeklyContentRepository weeklyContentRepository;
     private final BoardStreamHandler boardStream;
+    private final ObjectProvider<EventService> eventServiceProvider;
 
     // ==================== Board Config ====================
 
@@ -230,6 +234,10 @@ public class BoardService {
         return boardEventRepository.findOverlappingForAudienceOrBoth(audience, rangeStart, rangeEnd);
     }
 
+    public List<BoardEvent> getEventsForAudienceInRangeWithTicketEvents(Audience audience, Instant rangeStart, Instant rangeEnd) {
+        return boardEventRepository.findOverlappingWithTicketEvent(audience, rangeStart, rangeEnd);
+    }
+
     public BoardEvent createEvent(CreateCalendarEventRequest request) {
         BoardEvent boardEvent = BoardEvent.builder()
                 .name(request.getName())
@@ -266,6 +274,35 @@ public class BoardService {
         boardEventRepository.delete(boardEvent);
         log.info("Deleted event: id={}", eventId);
         boardStream.contentChanged("events");
+    }
+
+    public BoardEvent linkTicketEvent(UUID boardEventId, UUID tcketEventId) {
+        EventService eventService = eventServiceProvider.getIfAvailable();
+        if (eventService == null) {
+            throw new ApiResponseException(HttpStatus.BAD_REQUEST,
+                    ErrorResponse.of("tCketManage is not enabled"));
+        }
+        BoardEvent boardEvent = getEventById(boardEventId);
+        Event tcketEvent = eventService.getEventById(tcketEventId);
+        boardEvent.setEvent(tcketEvent);
+        BoardEvent saved = boardEventRepository.save(boardEvent);
+        log.info("Linked board event {} to tCket event {}", boardEventId, tcketEventId);
+        boardStream.contentChanged("events");
+        return saved;
+    }
+
+    public BoardEvent unlinkTicketEvent(UUID boardEventId) {
+        BoardEvent boardEvent = getEventById(boardEventId);
+        if (boardEvent.getEvent() == null) {
+            throw new ApiResponseException(HttpStatus.BAD_REQUEST,
+                    ErrorResponse.of("Board event is not linked to a ticket event"));
+        }
+        UUID oldTcketEventId = boardEvent.getEvent().getId();
+        boardEvent.setEvent(null);
+        BoardEvent saved = boardEventRepository.save(boardEvent);
+        log.info("Unlinked board event {} from tCket event {}", boardEventId, oldTcketEventId);
+        boardStream.contentChanged("events");
+        return saved;
     }
 
     // ================== Device Management Changes ====================

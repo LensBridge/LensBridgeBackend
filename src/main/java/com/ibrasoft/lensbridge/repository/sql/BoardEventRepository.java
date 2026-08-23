@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -24,4 +25,10 @@ public interface BoardEventRepository extends JpaRepository<BoardEvent, UUID> {
 
     @Query("SELECT e FROM BoardEvent e WHERE (e.audience = :aud OR e.audience = com.ibrasoft.lensbridge.model.minbar.Audience.BOTH) AND e.startTime <= :rangeEnd AND e.endTime >= :rangeStart ORDER BY e.startTime ASC")
     List<BoardEvent> findOverlappingForAudienceOrBoth(@Param("aud") Audience audience, @Param("rangeStart") Instant rangeStart, @Param("rangeEnd") Instant rangeEnd);
+
+    @Query("SELECT e FROM BoardEvent e LEFT JOIN FETCH e.event WHERE (e.audience = :aud OR e.audience = com.ibrasoft.lensbridge.model.minbar.Audience.BOTH) AND e.startTime <= :rangeEnd AND e.endTime >= :rangeStart ORDER BY e.startTime ASC")
+    List<BoardEvent> findOverlappingWithTicketEvent(@Param("aud") Audience audience, @Param("rangeStart") Instant rangeStart, @Param("rangeEnd") Instant rangeEnd);
+
+    @Query("SELECT e FROM BoardEvent e WHERE e.event.id IN :eventIds")
+    List<BoardEvent> findByEventIdIn(@Param("eventIds") Collection<UUID> eventIds);
 }

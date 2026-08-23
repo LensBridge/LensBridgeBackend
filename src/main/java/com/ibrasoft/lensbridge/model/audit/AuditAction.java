@@ -20,6 +20,8 @@ public enum AuditAction {
     CREATE_CALENDAR_EVENT("Create Calendar Event"),
     UPDATE_CALENDAR_EVENT("Update Calendar Event"),
     DELETE_CALENDAR_EVENT("Delete Calendar Event"),
+    LINK_TICKET_EVENT("Link Ticket Event to Board Event"),
+    UNLINK_TICKET_EVENT("Unlink Ticket Event from Board Event"),
 
     // Poster/Frame Management Actions (Musallah Board)
     CREATE_POSTER("Create Poster"),

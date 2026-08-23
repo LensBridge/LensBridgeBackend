@@ -160,6 +160,10 @@ public class UserService {
      */
     private User register(String firstName, String lastName, String email, Audience audience,
                          Supplier<String> passwordHash) {
+        if (audience == Audience.BOTH) {
+            throw new IllegalArgumentException("Audience must be BROTHERS or SISTERS, not BOTH");
+        }
+
         if (existsByEmail(email)) {
             throw new IllegalArgumentException("User with this email or student number already exists");
         }

@@ -73,6 +73,8 @@ paths:
           - CREATE_CALENDAR_EVENT
           - UPDATE_CALENDAR_EVENT
           - DELETE_CALENDAR_EVENT
+          - LINK_TICKET_EVENT
+          - UNLINK_TICKET_EVENT
           - CREATE_POSTER
           - UPDATE_POSTER
           - DELETE_POSTER
@@ -168,6 +170,8 @@ paths:
                   - CREATE_CALENDAR_EVENT
                   - UPDATE_CALENDAR_EVENT
                   - DELETE_CALENDAR_EVENT
+                  - LINK_TICKET_EVENT
+                  - UNLINK_TICKET_EVENT
                   - CREATE_POSTER
                   - UPDATE_POSTER
                   - DELETE_POSTER
@@ -762,7 +766,7 @@ paths:
       - board-admin-controller
   /api/admin/board/events/{eventId}:
     delete:
-      operationId: deleteEvent
+      operationId: deleteEvent_1
       parameters:
       - in: path
         name: eventId
@@ -811,7 +815,7 @@ paths:
       tags:
       - board-admin-controller
     patch:
-      operationId: updateEvent
+      operationId: updateEvent_1
       parameters:
       - in: path
         name: eventId
@@ -838,6 +842,64 @@ paths:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
           description: Request failed; body carries a human-readable message
+      tags:
+      - board-admin-controller
+  /api/admin/board/events/{eventId}/ticket-event:
+    delete:
+      operationId: unlinkTicketEvent
+      parameters:
+      - in: path
+        name: eventId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BoardEvent"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      summary: Unlink the tCketManage event from a board event
+      tags:
+      - board-admin-controller
+  /api/admin/board/events/{eventId}/ticket-event/{tcketEventId}:
+    put:
+      operationId: linkTicketEvent
+      parameters:
+      - in: path
+        name: eventId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: tcketEventId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BoardEvent"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      summary: Link a tCketManage event to a board event
       tags:
       - board-admin-controller
   /api/admin/board/posters:
@@ -1821,6 +1883,9 @@ paths:
               - BOARD_VIEWER
               - BOARD_EDITOR
               - BOARD_ADMIN
+              - TCKET_SCANNER
+              - TCKET_MANAGER
+              - TCKET_ADMIN
               - ROOT
         required: true
       responses:
@@ -1874,6 +1939,9 @@ paths:
               - BOARD_COMMAND_BENIGN
               - BOARD_COMMAND_DISRUPTIVE
               - BOARD_COMMAND_INSPECT
+              - TCKET_SCAN
+              - TCKET_MANAGE
+              - TCKET_ADMIN
               - IAM_USER_READ
               - IAM_USER_WRITE
               - IAM_ROLE_GRANT
@@ -1916,6 +1984,9 @@ paths:
               - BOARD_VIEWER
               - BOARD_EDITOR
               - BOARD_ADMIN
+              - TCKET_SCANNER
+              - TCKET_MANAGER
+              - TCKET_ADMIN
               - ROOT
         required: true
       responses:
@@ -1969,6 +2040,9 @@ paths:
               - BOARD_COMMAND_BENIGN
               - BOARD_COMMAND_DISRUPTIVE
               - BOARD_COMMAND_INSPECT
+              - TCKET_SCAN
+              - TCKET_MANAGE
+              - TCKET_ADMIN
               - IAM_USER_READ
               - IAM_USER_WRITE
               - IAM_ROLE_GRANT
@@ -2562,6 +2636,107 @@ paths:
           description: Request failed; body carries a human-readable message
       tags:
       - gallery-controller
+  /api/minbar/events:
+    get:
+      operationId: getMinbarEvents
+      parameters:
+      - in: query
+        name: audience
+        required: true
+        schema:
+          type: string
+          enum:
+          - brothers
+          - sisters
+          - both
+      - in: query
+        name: year
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - in: query
+        name: month
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EventView"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      summary: "List events for a one-month window, enriched with ticket availability\
+        \ when tCketManage is enabled"
+      tags:
+      - minbar-controller
+  /api/minbar/prayer-spaces:
+    get:
+      operationId: getMinbarPrayerSpaces
+      parameters:
+      - in: query
+        name: audience
+        required: true
+        schema:
+          type: string
+          enum:
+          - brothers
+          - sisters
+          - both
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PrayerSpace"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      summary: List prayer spaces for an audience
+      tags:
+      - minbar-controller
+  /api/minbar/prayer-spaces/{id}:
+    get:
+      operationId: getMinbarPrayerSpaceById
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrayerSpace"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      summary: Fetch a single prayer space with directions
+      tags:
+      - minbar-controller
   /api/musallah/config:
     get:
       operationId: getPublicBoardConfig
@@ -2735,6 +2910,1107 @@ paths:
       summary: Fetch weekly content for a kiosk
       tags:
       - musallah-board-controller
+  /api/tcket/email-jobs/{jobId}:
+    get:
+      operationId: getJob
+      parameters:
+      - in: path
+        name: jobId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailJobStatus"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - email-job-controller
+  /api/tcket/events:
+    get:
+      operationId: getAllEvents
+      parameters:
+      - in: query
+        name: pageable
+        required: true
+        schema:
+          $ref: "#/components/schemas/Pageable"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageEventResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - event-controller
+    post:
+      operationId: createEvent
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEventRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - event-controller
+  /api/tcket/events/full:
+    post:
+      operationId: createFullEvent
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFullEventRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FullEventResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - event-controller
+  /api/tcket/events/{id}:
+    delete:
+      operationId: deleteEvent
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - event-controller
+    get:
+      operationId: getEventById
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - event-controller
+    put:
+      operationId: updateEvent
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEventRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - event-controller
+  /api/tcket/events/{id}/imports:
+    post:
+      operationId: importAttendees
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                config:
+                  $ref: "#/components/schemas/ImportConfig"
+                file:
+                  type: string
+                  format: binary
+              required:
+              - config
+              - file
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportResult"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - event-controller
+  /api/tcket/events/{id}/ticket-types:
+    get:
+      operationId: getTicketTypesByEvent
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TicketTypeResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - event-controller
+    post:
+      operationId: createTicketType
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTicketTypeRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicketTypeResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - event-controller
+  /api/tcket/events/{id}/tickets:
+    get:
+      operationId: getTicketsByEvent
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: pageable
+        required: true
+        schema:
+          $ref: "#/components/schemas/Pageable"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageTicketResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - event-controller
+  /api/tcket/events/{id}/tickets/resend:
+    post:
+      operationId: resendAllTickets
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailJobAccepted"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - event-controller
+  /api/tcket/events/{id}/tickets/send-missing:
+    post:
+      operationId: sendMissingTickets
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailJobAccepted"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - event-controller
+  /api/tcket/events/{id}/zones:
+    get:
+      operationId: getZonesByEvent
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ZoneResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - event-controller
+    post:
+      operationId: addZoneToEvent
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddZoneRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ZoneResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - event-controller
+  /api/tcket/orders:
+    get:
+      operationId: getOrders
+      parameters:
+      - in: query
+        name: eventId
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: externalRef
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OrderResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - order-controller
+    post:
+      operationId: createOrder_1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrderRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - order-controller
+  /api/tcket/orders/{id}:
+    get:
+      operationId: getOrder_1
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - order-controller
+  /api/tcket/orders/{id}/cancel:
+    post:
+      operationId: cancelOrder_1
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - order-controller
+  /api/tcket/orders/{id}/confirm-manual-payment:
+    post:
+      operationId: confirmManualPayment
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - order-controller
+  /api/tcket/payments/mock/{orderId}/complete:
+    post:
+      operationId: completeMockPayment
+      parameters:
+      - in: path
+        name: orderId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - payment-webhook-controller
+  /api/tcket/payments/{providerId}/webhook:
+    post:
+      operationId: webhook
+      parameters:
+      - in: path
+        name: providerId
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: string
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - payment-webhook-controller
+  /api/tcket/scans/count/ticket/{ticketId}/zone/{zoneId}:
+    get:
+      operationId: getTicketZoneEntryCount
+      parameters:
+      - in: path
+        name: ticketId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: zoneId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: integer
+                format: int32
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - scan-event-controller
+  /api/tcket/scans/event/{eventId}:
+    get:
+      operationId: getScanHistoryForEvent
+      parameters:
+      - in: path
+        name: eventId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: pageable
+        required: true
+        schema:
+          $ref: "#/components/schemas/Pageable"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageScanEventResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - scan-event-controller
+  /api/tcket/scans/scan:
+    post:
+      operationId: scanTicket
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScanRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanResult"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - scan-event-controller
+  /api/tcket/scans/scan-qr:
+    post:
+      operationId: scanByQr
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QrScanRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanResult"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - scan-event-controller
+  /api/tcket/scans/ticket/{ticketId}:
+    get:
+      operationId: getScanHistoryForTicket
+      parameters:
+      - in: path
+        name: ticketId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ScanEventResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - scan-event-controller
+  /api/tcket/scans/validate:
+    post:
+      operationId: validateTicketForZone
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ValidateRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationResult"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - scan-event-controller
+  /api/tcket/scans/zone/{zoneId}:
+    get:
+      operationId: getScanHistoryForZone
+      parameters:
+      - in: path
+        name: zoneId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: pageable
+        required: true
+        schema:
+          $ref: "#/components/schemas/Pageable"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageScanEventResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - scan-event-controller
+  /api/tcket/ticket-types:
+    get:
+      operationId: getAllTicketTypes
+      parameters:
+      - in: query
+        name: pageable
+        required: true
+        schema:
+          $ref: "#/components/schemas/Pageable"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageTicketTypeResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - ticket-type-controller
+  /api/tcket/ticket-types/{id}:
+    delete:
+      operationId: deleteTicketType
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - ticket-type-controller
+    get:
+      operationId: getTicketTypeById
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicketTypeResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - ticket-type-controller
+    put:
+      operationId: updateTicketType
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTicketTypeRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicketTypeResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - ticket-type-controller
+  /api/tcket/tickets:
+    post:
+      operationId: createTicket
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTicketRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicketResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - ticket-controller
+  /api/tcket/tickets/{id}:
+    delete:
+      operationId: deleteTicket
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - ticket-controller
+    get:
+      operationId: getTicketById
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicketResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - ticket-controller
+    put:
+      operationId: updateTicket
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTicketRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicketResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - ticket-controller
+  /api/tcket/tickets/{id}/resend:
+    post:
+      operationId: resendTicket
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailJobAccepted"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - ticket-controller
+  /api/tcket/zones:
+    get:
+      operationId: getAllZones
+      parameters:
+      - in: query
+        name: pageable
+        required: true
+        schema:
+          $ref: "#/components/schemas/Pageable"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageZoneResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - zone-controller
+  /api/tcket/zones/{id}:
+    delete:
+      operationId: deleteZone
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - zone-controller
+    get:
+      operationId: getZoneById
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ZoneResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - zone-controller
+    put:
+      operationId: updateZone
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateZoneRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ZoneResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - zone-controller
   /api/upload/event/{eventId}:
     get:
       operationId: getUploadsByEvent
@@ -2941,6 +4217,99 @@ paths:
           description: Request failed; body carries a human-readable message
       tags:
       - file-upload-controller
+  /api/user/orders:
+    get:
+      operationId: getUserOrders
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MinbarOrderResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - user-order-controller
+    post:
+      operationId: createOrder
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MinbarCreateOrderRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MinbarOrderResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - user-order-controller
+  /api/user/orders/{id}:
+    get:
+      operationId: getOrder
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MinbarOrderResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - user-order-controller
+  /api/user/orders/{id}/cancel:
+    post:
+      operationId: cancelOrder
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MinbarOrderResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - user-order-controller
   /api/user/profile:
     get:
       operationId: getUserProfile
@@ -3000,6 +4369,26 @@ paths:
           description: Request failed; body carries a human-readable message
       tags:
       - user-controller
+  /api/user/tickets:
+    get:
+      operationId: getUserTickets
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BoardingPassView"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - user-order-controller
   /api/user/uploads:
     get:
       operationId: getUserUploads
@@ -3071,6 +4460,11 @@ paths:
       - user-controller
 components:
   schemas:
+    AddZoneRequest:
+      type: object
+      properties:
+        zoneName:
+          type: string
     AdminUploadDto:
       type: object
       properties:
@@ -3181,6 +4575,8 @@ components:
           - CREATE_CALENDAR_EVENT
           - UPDATE_CALENDAR_EVENT
           - DELETE_CALENDAR_EVENT
+          - LINK_TICKET_EVENT
+          - UNLINK_TICKET_EVENT
           - CREATE_POSTER
           - UPDATE_POSTER
           - DELETE_POSTER
@@ -3259,6 +4655,8 @@ components:
         endTime:
           type: string
           format: date-time
+        event:
+          $ref: "#/components/schemas/Event"
         id:
           type: string
           format: uuid
@@ -3269,6 +4667,31 @@ components:
         startTime:
           type: string
           format: date-time
+    BoardingPassView:
+      type: object
+      properties:
+        attendeeName:
+          type: string
+        eventDate:
+          type: string
+        eventId:
+          type: string
+          format: uuid
+        eventTitle:
+          type: string
+        location:
+          type: string
+        qrPayload:
+          type: string
+        startTime:
+          type: string
+        status:
+          type: string
+        ticketId:
+          type: string
+          format: uuid
+        ticketType:
+          type: string
     ChangePasswordRequest:
       type: object
       properties:
@@ -3398,6 +4821,77 @@ components:
       - location
       - name
       - startEpochMs
+    CreateEventRequest:
+      type: object
+      properties:
+        description:
+          type: string
+          minLength: 1
+        location:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+        time:
+          type: string
+          format: date-time
+      required:
+      - description
+      - location
+      - name
+      - time
+    CreateFullEventRequest:
+      type: object
+      properties:
+        description:
+          type: string
+          minLength: 1
+        location:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+        ticketTypes:
+          type: array
+          items:
+            $ref: "#/components/schemas/WizardTicketTypeRequest"
+        time:
+          type: string
+          format: date-time
+        zones:
+          type: array
+          items:
+            $ref: "#/components/schemas/WizardZoneRequest"
+          minItems: 1
+      required:
+      - description
+      - location
+      - name
+      - time
+      - zones
+    CreateOrderRequest:
+      type: object
+      properties:
+        buyerEmail:
+          type: string
+          format: email
+          minLength: 1
+        eventId:
+          type: string
+          format: uuid
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItemRequest"
+          minItems: 1
+        providerId:
+          type: string
+      required:
+      - buyerEmail
+      - eventId
+      - items
     CreatePosterRequest:
       type: object
       properties:
@@ -3479,9 +4973,55 @@ components:
       - name
       - type
       - url
+    CreateTicketRequest:
+      type: object
+      properties:
+        email:
+          type: string
+        eventId:
+          type: string
+          format: uuid
+        firstName:
+          type: string
+        lastName:
+          type: string
+        sendEmail:
+          type: boolean
+        ticketTypeId:
+          type: string
+          format: uuid
+    CreateTicketTypeRequest:
+      type: object
+      properties:
+        entitlements:
+          type: array
+          items:
+            $ref: "#/components/schemas/ZoneEntitlementRequest"
+        isActive:
+          type: boolean
+        name:
+          type: string
+          minLength: 1
+        price:
+          type: number
+        salesEndAt:
+          type: string
+          format: date-time
+        salesStartAt:
+          type: string
+          format: date-time
+      required:
+      - name
+      - price
     CreateUserRequest:
       type: object
       properties:
+        audience:
+          type: string
+          enum:
+          - brothers
+          - sisters
+          - both
         email:
           type: string
           format: email
@@ -3504,15 +5044,11 @@ components:
             in right away.
           maxLength: 40
           minLength: 6
-        studentNumber:
-          type: string
-          maxLength: 10
-          minLength: 0
       required:
+      - audience
       - email
       - firstName
       - lastName
-      - studentNumber
     DayBucket:
       type: object
       properties:
@@ -3574,16 +5110,133 @@ components:
         revokedAt:
           type: string
           format: date-time
+    DirectionStep:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        instruction:
+          type: string
+        stepOrder:
+          type: integer
+          format: int32
+        subtext:
+          type: string
+    EmailJobAccepted:
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        total:
+          type: integer
+          format: int32
+    EmailJobStatus:
+      type: object
+      properties:
+        failed:
+          type: integer
+          format: int32
+        finishedAt:
+          type: string
+          format: date-time
+        jobId:
+          type: string
+          format: uuid
+        lastEmail:
+          type: string
+        lastSuccess:
+          type: boolean
+        processed:
+          type: integer
+          format: int32
+        sent:
+          type: integer
+          format: int32
+        startedAt:
+          type: string
+          format: date-time
+        state:
+          type: string
+          enum:
+          - RUNNING
+          - COMPLETED
+        total:
+          type: integer
+          format: int32
+        type:
+          type: string
+    Event:
+      type: object
+      properties:
+        description:
+          type: string
+          minLength: 1
+        id:
+          type: string
+          format: uuid
+        location:
+          type: string
+          minLength: 1
+        name:
+          type: string
+        tickets:
+          type: array
+          items:
+            $ref: "#/components/schemas/Ticket"
+        time:
+          type: string
+          format: date-time
+        zones:
+          type: array
+          items:
+            $ref: "#/components/schemas/Zone"
+          maxItems: 64
+          minItems: 1
+      required:
+      - description
+      - location
+      - name
+      - time
+    EventResponse:
+      type: object
+      properties:
+        description:
+          type: string
+        id:
+          type: string
+          format: uuid
+        location:
+          type: string
+        name:
+          type: string
+        time:
+          type: string
+          format: date-time
+        zones:
+          type: array
+          items:
+            $ref: "#/components/schemas/ZoneResponse"
     EventView:
       type: object
       properties:
         allDay:
           type: boolean
+        audience:
+          type: string
+          enum:
+          - brothers
+          - sisters
+          - both
         description:
           type: string
         endTime:
           type: string
           format: date-time
+        id:
+          type: string
+          format: uuid
         location:
           type: string
         name:
@@ -3591,6 +5244,13 @@ components:
         startTime:
           type: string
           format: date-time
+        ticketEventId:
+          type: string
+          format: uuid
+        ticketTypes:
+          type: array
+          items:
+            $ref: "#/components/schemas/MinbarTicketTypeView"
     FrameConfig:
       discriminator:
         mapping:
@@ -3631,6 +5291,15 @@ components:
           - jummah
           - islamic_quote
           - socials
+    FullEventResponse:
+      type: object
+      properties:
+        event:
+          $ref: "#/components/schemas/EventResponse"
+        ticketTypes:
+          type: array
+          items:
+            $ref: "#/components/schemas/TicketTypeResponse"
     GalleryItemDto:
       type: object
       properties:
@@ -3652,6 +5321,40 @@ components:
           type: string
         type:
           type: string
+    ImportConfig:
+      type: object
+      properties:
+        defaultTicketTypeId:
+          type: string
+          format: uuid
+        emailColumn:
+          type: integer
+          format: int32
+        firstNameColumn:
+          type: integer
+          format: int32
+        hasHeaderRow:
+          type: boolean
+        lastNameColumn:
+          type: integer
+          format: int32
+        ticketTypeColumn:
+          type: integer
+          format: int32
+      required:
+      - emailColumn
+      - firstNameColumn
+      - lastNameColumn
+    ImportResult:
+      type: object
+      properties:
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/RowError"
+        imported:
+          type: integer
+          format: int32
     IslamicQuote:
       type: object
       properties:
@@ -3865,6 +5568,93 @@ components:
       properties:
         message:
           type: string
+    MinbarCreateOrderRequest:
+      type: object
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItemRequest"
+          minItems: 1
+      required:
+      - eventId
+      - items
+    MinbarOrderItemResponse:
+      type: object
+      properties:
+        attendeeFirstName:
+          type: string
+        attendeeLastName:
+          type: string
+        ticketTypeName:
+          type: string
+        unitPrice:
+          type: number
+    MinbarOrderResponse:
+      type: object
+      properties:
+        amountTotal:
+          type: number
+        buyerEmail:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        currency:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        id:
+          type: string
+          format: uuid
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MinbarOrderItemResponse"
+        paidAt:
+          type: string
+          format: date-time
+        payment:
+          $ref: "#/components/schemas/MinbarPaymentResponse"
+        referenceCode:
+          type: string
+        status:
+          type: string
+    MinbarPaymentResponse:
+      type: object
+      properties:
+        details:
+          type: object
+          additionalProperties:
+            type: string
+        instructions:
+          type: string
+        redirectUrl:
+          type: string
+        type:
+          type: string
+    MinbarTicketTypeView:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        price:
+          type: number
+        salesEndAt:
+          type: string
+          format: date-time
+        salesStartAt:
+          type: string
+          format: date-time
+        soldOut:
+          type: boolean
     MusallahBoardPayload:
       type: object
       properties:
@@ -3879,6 +5669,84 @@ components:
     NextPrayerFrameConfig:
       allOf:
       - $ref: "#/components/schemas/FrameConfig"
+    OrderItemRequest:
+      type: object
+      properties:
+        attendeeEmail:
+          type: string
+          format: email
+          minLength: 1
+        attendeeFirstName:
+          type: string
+          minLength: 1
+        attendeeLastName:
+          type: string
+          minLength: 1
+        ticketTypeId:
+          type: string
+          format: uuid
+      required:
+      - attendeeEmail
+      - attendeeFirstName
+      - attendeeLastName
+      - ticketTypeId
+    OrderItemResponse:
+      type: object
+      properties:
+        attendeeEmail:
+          type: string
+        attendeeFirstName:
+          type: string
+        attendeeLastName:
+          type: string
+        id:
+          type: string
+          format: uuid
+        ticketTypeId:
+          type: string
+          format: uuid
+        ticketTypeName:
+          type: string
+        unitPrice:
+          type: number
+    OrderResponse:
+      type: object
+      properties:
+        amountTotal:
+          type: number
+        buyerEmail:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        currency:
+          type: string
+        eventId:
+          type: string
+          format: uuid
+        expiresAt:
+          type: string
+          format: date-time
+        externalRef:
+          type: string
+        id:
+          type: string
+          format: uuid
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItemResponse"
+        paidAt:
+          type: string
+          format: date-time
+        payment:
+          $ref: "#/components/schemas/PaymentResponse"
+        providerId:
+          type: string
+        referenceCode:
+          type: string
+        status:
+          type: string
     PageAdminUploadDto:
       type: object
       properties:
@@ -3943,6 +5811,38 @@ components:
         totalPages:
           type: integer
           format: int32
+    PageEventResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/EventResponse"
+        empty:
+          type: boolean
+        first:
+          type: boolean
+        last:
+          type: boolean
+        number:
+          type: integer
+          format: int32
+        numberOfElements:
+          type: integer
+          format: int32
+        pageable:
+          $ref: "#/components/schemas/Pageable"
+        size:
+          type: integer
+          format: int32
+        sort:
+          $ref: "#/components/schemas/SortObject"
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
     PageGalleryItemDto:
       type: object
       properties:
@@ -3950,6 +5850,102 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/GalleryItemDto"
+        empty:
+          type: boolean
+        first:
+          type: boolean
+        last:
+          type: boolean
+        number:
+          type: integer
+          format: int32
+        numberOfElements:
+          type: integer
+          format: int32
+        pageable:
+          $ref: "#/components/schemas/Pageable"
+        size:
+          type: integer
+          format: int32
+        sort:
+          $ref: "#/components/schemas/SortObject"
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+    PageScanEventResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScanEventResponse"
+        empty:
+          type: boolean
+        first:
+          type: boolean
+        last:
+          type: boolean
+        number:
+          type: integer
+          format: int32
+        numberOfElements:
+          type: integer
+          format: int32
+        pageable:
+          $ref: "#/components/schemas/Pageable"
+        size:
+          type: integer
+          format: int32
+        sort:
+          $ref: "#/components/schemas/SortObject"
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+    PageTicketResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/TicketResponse"
+        empty:
+          type: boolean
+        first:
+          type: boolean
+        last:
+          type: boolean
+        number:
+          type: integer
+          format: int32
+        numberOfElements:
+          type: integer
+          format: int32
+        pageable:
+          $ref: "#/components/schemas/Pageable"
+        size:
+          type: integer
+          format: int32
+        sort:
+          $ref: "#/components/schemas/SortObject"
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+    PageTicketTypeResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/TicketTypeResponse"
         empty:
           type: boolean
         first:
@@ -4039,6 +6035,38 @@ components:
         totalPages:
           type: integer
           format: int32
+    PageZoneResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ZoneResponse"
+        empty:
+          type: boolean
+        first:
+          type: boolean
+        last:
+          type: boolean
+        number:
+          type: integer
+          format: int32
+        numberOfElements:
+          type: integer
+          format: int32
+        pageable:
+          $ref: "#/components/schemas/Pageable"
+        size:
+          type: integer
+          format: int32
+        sort:
+          $ref: "#/components/schemas/SortObject"
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
     Pageable:
       type: object
       properties:
@@ -4054,6 +6082,21 @@ components:
           type: array
           items:
             type: string
+    PaymentResponse:
+      type: object
+      properties:
+        details:
+          type: object
+          additionalProperties:
+            type: string
+        instructions:
+          type: string
+        providerRef:
+          type: string
+        redirectUrl:
+          type: string
+        type:
+          type: string
     PermissionResponse:
       type: object
       properties:
@@ -4101,6 +6144,54 @@ components:
             type: string
           title:
             type: string
+    PrayerSpace:
+      type: object
+      properties:
+        amenities:
+          type: array
+          items:
+            type: string
+        audience:
+          type: string
+          enum:
+          - brothers
+          - sisters
+          - both
+        building:
+          type: string
+        capacity:
+          type: integer
+          format: int32
+        entranceDescription:
+          type: string
+        entranceName:
+          type: string
+        floor:
+          type: string
+        id:
+          type: string
+          format: uuid
+        location:
+          type: string
+        mapsUrl:
+          type: string
+        name:
+          type: string
+        startingPoint:
+          type: string
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/DirectionStep"
+        tag:
+          type: string
+        tips:
+          type: array
+          items:
+            type: string
+        walkTimeMinutes:
+          type: integer
+          format: int32
     PresignedUploadResponse:
       type: object
       properties:
@@ -4178,6 +6269,18 @@ components:
             - other
           url:
             type: string
+    QrScanRequest:
+      type: object
+      properties:
+        qrPayload:
+          type: string
+          minLength: 1
+        zoneId:
+          type: string
+          format: uuid
+      required:
+      - qrPayload
+      - zoneId
     QuoteEntry:
       type: object
       properties:
@@ -4223,9 +6326,65 @@ components:
           type: array
           items:
             type: string
+    RowError:
+      type: object
+      properties:
+        reason:
+          type: string
+        row:
+          type: integer
+          format: int32
+    ScanEventResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        ticketId:
+          type: string
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+        zoneId:
+          type: string
+          format: uuid
+        zoneName:
+          type: string
+    ScanRequest:
+      type: object
+      properties:
+        ticketId:
+          type: string
+          format: uuid
+        zoneId:
+          type: string
+          format: uuid
+    ScanResult:
+      type: object
+      properties:
+        message:
+          type: string
+        outcome:
+          type: string
+          enum:
+          - SUCCESS
+          - INVALID_QR
+          - NO_ZONE_ENTITLEMENT
+          - ENTRY_LIMIT_REACHED
+        scanEvent:
+          $ref: "#/components/schemas/ScanEventResponse"
+        success:
+          type: boolean
     SignupRequest:
       type: object
       properties:
+        audience:
+          type: string
+          enum:
+          - brothers
+          - sisters
+          - both
         email:
           type: string
           format: email
@@ -4246,16 +6405,12 @@ components:
           type: string
           maxLength: 40
           minLength: 6
-        studentNumber:
-          type: string
-          maxLength: 10
-          minLength: 0
       required:
+      - audience
       - email
       - firstName
       - lastName
       - password
-      - studentNumber
     SortObject:
       type: object
       properties:
@@ -4265,6 +6420,139 @@ components:
           type: boolean
         unsorted:
           type: boolean
+    Ticket:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+        event:
+          required:
+          - description
+          - location
+          - name
+          - time
+        firstName:
+          type: string
+          maxLength: 50
+          minLength: 1
+        holderRef:
+          type: string
+        id:
+          type: string
+          format: uuid
+        lastName:
+          type: string
+          maxLength: 50
+          minLength: 1
+        lastTicketSent:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - CANCELLED
+        ticketType:
+          $ref: "#/components/schemas/TicketType"
+      required:
+      - email
+      - firstName
+      - lastName
+      - ticketType
+    TicketResponse:
+      type: object
+      properties:
+        email:
+          type: string
+        eventId:
+          type: string
+          format: uuid
+        firstName:
+          type: string
+        holderRef:
+          type: string
+        id:
+          type: string
+          format: uuid
+        lastName:
+          type: string
+        lastTicketSent:
+          type: string
+          format: date-time
+        ticketType:
+          $ref: "#/components/schemas/TicketTypeResponse"
+    TicketType:
+      type: object
+      properties:
+        capacity:
+          type: integer
+          format: int32
+        createdAt:
+          type: string
+          format: date-time
+        entitlements:
+          type: array
+          items:
+            $ref: "#/components/schemas/ZoneEntitlement"
+        id:
+          type: string
+          format: uuid
+        isActive:
+          type: boolean
+        name:
+          type: string
+          minLength: 1
+        price:
+          type: number
+        reservedCount:
+          type: integer
+          format: int32
+        salesEndAt:
+          type: string
+          format: date-time
+        salesStartAt:
+          type: string
+          format: date-time
+      required:
+      - isActive
+      - name
+      - price
+    TicketTypeResponse:
+      type: object
+      properties:
+        capacity:
+          type: integer
+          format: int32
+        createdAt:
+          type: string
+          format: date-time
+        entitlements:
+          type: array
+          items:
+            $ref: "#/components/schemas/ZoneEntitlementResponse"
+        eventId:
+          type: string
+          format: uuid
+        id:
+          type: string
+          format: uuid
+        isActive:
+          type: boolean
+        name:
+          type: string
+        price:
+          type: number
+        reservedCount:
+          type: integer
+          format: int32
+        salesEndAt:
+          type: string
+          format: date-time
+        salesStartAt:
+          type: string
+          format: date-time
     TokenRefreshRequest:
       type: object
       properties:
@@ -4366,6 +6654,26 @@ components:
           maxLength: 255
           minLength: 0
           pattern: .*\S.*
+    UpdateEventRequest:
+      type: object
+      properties:
+        description:
+          type: string
+          minLength: 1
+        location:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+        time:
+          type: string
+          format: date-time
+      required:
+      - description
+      - location
+      - name
+      - time
     UpdatePosterRequest:
       type: object
       properties:
@@ -4402,10 +6710,6 @@ components:
           maxLength: 20
           minLength: 0
           pattern: "^[A-Za-z]+([ '-][A-Za-z]+)*$"
-        studentNumber:
-          type: string
-          maxLength: 10
-          minLength: 0
     UpdatePromotableSocialMediaRequest:
       type: object
       properties:
@@ -4449,6 +6753,52 @@ components:
           type: array
           items:
             type: string
+    UpdateTicketRequest:
+      type: object
+      properties:
+        email:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        ticketTypeId:
+          type: string
+          format: uuid
+    UpdateTicketTypeRequest:
+      type: object
+      properties:
+        entitlements:
+          type: array
+          items:
+            $ref: "#/components/schemas/ZoneEntitlementRequest"
+        isActive:
+          type: boolean
+        name:
+          type: string
+          minLength: 1
+        price:
+          type: number
+        salesEndAt:
+          type: string
+          format: date-time
+        salesStartAt:
+          type: string
+          format: date-time
+      required:
+      - name
+      - price
+    UpdateZoneRequest:
+      type: object
+      properties:
+        description:
+          type: string
+        name:
+          type: string
+          minLength: 1
+      required:
+      - description
+      - name
     UploadCompletionResponse:
       type: object
       properties:
@@ -4535,6 +6885,12 @@ components:
     UserInfoResponse:
       type: object
       properties:
+        audience:
+          type: string
+          enum:
+          - brothers
+          - sisters
+          - both
         directPermissions:
           type: array
           items:
@@ -4562,10 +6918,11 @@ components:
             - BOARD_VIEWER
             - BOARD_EDITOR
             - BOARD_ADMIN
+            - TCKET_SCANNER
+            - TCKET_MANAGER
+            - TCKET_ADMIN
             - ROOT
           uniqueItems: true
-        studentNumber:
-          type: string
         verified:
           type: boolean
     UserStatsResponse:
@@ -4583,6 +6940,15 @@ components:
         totalUploads:
           type: integer
           format: int32
+    ValidateRequest:
+      type: object
+      properties:
+        ticketId:
+          type: string
+          format: uuid
+        zoneId:
+          type: string
+          format: uuid
     ValidateResetTokenRequest:
       type: object
       properties:
@@ -4591,6 +6957,13 @@ components:
           minLength: 1
       required:
       - token
+    ValidationResult:
+      type: object
+      properties:
+        message:
+          type: string
+        valid:
+          type: boolean
     VerifyEmailRequest:
       type: object
       properties:
@@ -4638,6 +7011,125 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/QuoteEntry"
+    WizardEntitlementRequest:
+      type: object
+      properties:
+        maxEntries:
+          type: integer
+          format: int32
+          minimum: 1
+        zoneKey:
+          type: string
+          minLength: 1
+      required:
+      - zoneKey
+    WizardTicketTypeRequest:
+      type: object
+      properties:
+        capacity:
+          type: integer
+          format: int32
+          minimum: 0
+        entitlements:
+          type: array
+          items:
+            $ref: "#/components/schemas/WizardEntitlementRequest"
+        isActive:
+          type: boolean
+        name:
+          type: string
+          minLength: 1
+        price:
+          type: number
+        salesEndAt:
+          type: string
+          format: date-time
+        salesStartAt:
+          type: string
+          format: date-time
+      required:
+      - name
+      - price
+    WizardZoneRequest:
+      type: object
+      properties:
+        description:
+          type: string
+        key:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          maxLength: 20
+          minLength: 1
+      required:
+      - key
+      - name
+    Zone:
+      type: object
+      properties:
+        description:
+          type: string
+        event:
+          $ref: "#/components/schemas/Event"
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 20
+          minLength: 1
+      required:
+      - description
+      - name
+    ZoneEntitlement:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        maxEntries:
+          type: integer
+          format: int32
+          minimum: 1
+        zone:
+          $ref: "#/components/schemas/Zone"
+    ZoneEntitlementRequest:
+      type: object
+      properties:
+        maxEntries:
+          type: integer
+          format: int32
+          minimum: 1
+        zoneId:
+          type: string
+          format: uuid
+      required:
+      - zoneId
+    ZoneEntitlementResponse:
+      type: object
+      properties:
+        maxEntries:
+          type: integer
+          format: int32
+        zoneId:
+          type: string
+          format: uuid
+        zoneName:
+          type: string
+    ZoneResponse:
+      type: object
+      properties:
+        description:
+          type: string
+        eventId:
+          type: string
+          format: uuid
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
   securitySchemes:
     bearerAuth:
       bearerFormat: JWT

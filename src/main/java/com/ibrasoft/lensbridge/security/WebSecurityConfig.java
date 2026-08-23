@@ -19,6 +19,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import com.ibrasoft.lensbridge.model.auth.Permission;
 import com.ibrasoft.tcketmanage.autoconfigure.TcketManagePaths;
 import org.springframework.http.HttpMethod;
 
@@ -101,13 +102,11 @@ public class WebSecurityConfig {
             // Disable these endpoints in production; they are only for local dev and CI.
             .requestMatchers("/swagger-ui/**", "/swagger-ui.html",
                 "/v3/api-docs", "/v3/api-docs.yaml", "/v3/api-docs/**").permitAll()
-            // tcketmanage-core publishes the patterns that must stay reachable without a login:
-            // public event browsing, guest checkout, buyer self-service and payment webhooks.
-            // These are not unprotected -- GET /orders/{id}, POST /orders/{id}/cancel and
-            // GET /tickets/{id} enforce ownership per entity via OrderAccessPolicy, which a URL
-            // rule cannot express. Everything else under the mount point needs authentication.
-            .requestMatchers(HttpMethod.GET, tcket.publicGetPatterns()).permitAll()
-            .requestMatchers(HttpMethod.POST, tcket.publicPostPatterns()).permitAll()
+            // Payment webhooks are called by the provider (no session); everything else
+            // under tCketManage is operator-only. Minbar users get curated data through
+            // /api/user/* and /api/minbar/* instead.
+            .requestMatchers(HttpMethod.POST, tcket.basePath() + "/payments/*/webhook").permitAll()
+            .requestMatchers(tcket.allPatterns()).hasAuthority(Permission.Authority.TCKET_MANAGE)
             .anyRequest().authenticated());
 
     http.authenticationProvider(authenticationProvider());
