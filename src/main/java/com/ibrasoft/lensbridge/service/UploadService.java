@@ -5,9 +5,10 @@ import com.ibrasoft.lensbridge.dto.upload.response.UploadDto;
 import com.ibrasoft.lensbridge.dto.auth.response.UserStatsResponse;
 import com.ibrasoft.lensbridge.exception.FileProcessingException;
 import com.ibrasoft.lensbridge.model.auth.User;
-import com.ibrasoft.lensbridge.model.upload.MediaEvent;
+import com.ibrasoft.lensbridge.model.minbar.BoardEvent;
 import com.ibrasoft.lensbridge.model.upload.Upload;
 import com.ibrasoft.lensbridge.model.upload.UploadType;
+import com.ibrasoft.lensbridge.repository.sql.BoardEventRepository;
 import com.ibrasoft.lensbridge.repository.upload.UploadRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -30,7 +31,7 @@ public class UploadService {
 
     private final UploadRepository uploadRepository;
     private final UserService userService;
-    private final EventsService eventsService;
+    private final BoardEventRepository boardEventRepository;
     private final R2StorageService r2StorageService;
 
     @Value("${uploads.default-approved:false}")
@@ -47,7 +48,7 @@ public class UploadService {
         try {
             User user = userService.findById(uploadedBy)
                     .orElseThrow(() -> new IllegalArgumentException("User not found"));
-            MediaEvent mediaEvent = eventsService.getEventById(eventId)
+            BoardEvent boardEvent = boardEventRepository.findById(eventId)
                     .orElseThrow(() -> new IllegalArgumentException("Event not found"));
 
             Upload upload = new Upload();
@@ -57,7 +58,7 @@ public class UploadService {
             upload.setUploadDescription(description);
             upload.setInstagramHandle(instagramHandle);
             upload.setUploadedBy(user);
-            upload.setMediaEvent(mediaEvent);
+            upload.setBoardEvent(boardEvent);
             upload.setCreatedDate(Instant.now());
             upload.setApproved(defaultApproved);
             upload.setFeatured(defaultFeatured);
@@ -161,21 +162,21 @@ public class UploadService {
     }
 
     public Page<Upload> getUploadsByEvent(UUID eventId, Pageable pageable) {
-        MediaEvent mediaEvent = eventsService.getEventById(eventId)
+        BoardEvent boardEvent = boardEventRepository.findById(eventId)
                 .orElseThrow(() -> new IllegalArgumentException("Event not found"));
-        return uploadRepository.findByMediaEventAndDeletedAtIsNull(mediaEvent, pageable);
+        return uploadRepository.findByBoardEventAndDeletedAtIsNull(boardEvent, pageable);
     }
 
     public Page<UploadDto> getUploadsByEventAsDto(UUID eventId, Pageable pageable) {
-        MediaEvent mediaEvent = eventsService.getEventById(eventId)
+        BoardEvent boardEvent = boardEventRepository.findById(eventId)
                 .orElseThrow(() -> new IllegalArgumentException("Event not found"));
-        return uploadRepository.findByMediaEventAndDeletedAtIsNull(mediaEvent, pageable).map(this::toUploadDto);
+        return uploadRepository.findByBoardEventAndDeletedAtIsNull(boardEvent, pageable).map(this::toUploadDto);
     }
 
-    public Page<Upload> getUploadsByUploadedBy(UUID userId, Pageable pageable) {
+    public Page<UploadDto> getUserUploads(UUID userId, Pageable pageable) {
         User user = userService.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
-        return uploadRepository.findByUploadedByAndDeletedAtIsNull(user, pageable);
+        return uploadRepository.findByUploadedByAndDeletedAtIsNull(user, pageable).map(this::toUploadDto);
     }
 
     public Page<AdminUploadDto> getAllUploadsForAdmin(Pageable pageable) {
@@ -221,6 +222,7 @@ public class UploadService {
                 .orElseThrow(() -> new IllegalArgumentException("Upload not found: " + id));
     }
 
+    // TODO: Consolidate this in UploadDTO class as from(Upload)
     private UploadDto toUploadDto(Upload upload) {
         return new UploadDto(
                 upload.getUuid(),
@@ -230,8 +232,8 @@ public class UploadService {
                 upload.getUploadDescription(),
                 upload.getInstagramHandle(),
                 upload.getUploadedBy() != null ? upload.getUploadedBy().getId() : null,
-                upload.getMediaEvent() != null ? upload.getMediaEvent().getId() : null,
-                upload.getMediaEvent() != null ? upload.getMediaEvent().getName() : null,
+                upload.getBoardEvent() != null ? upload.getBoardEvent().getId() : null,
+                upload.getBoardEvent() != null ? upload.getBoardEvent().getName() : null,
                 upload.getCreatedDate(),
                 upload.isApproved(),
                 upload.isFeatured(),
@@ -247,7 +249,7 @@ public class UploadService {
         dto.setUploadDescription(upload.getUploadDescription());
         dto.setInstagramHandle(upload.getInstagramHandle());
         dto.setUploadedBy(upload.getUploadedBy() != null ? upload.getUploadedBy().getId() : null);
-        dto.setEventId(upload.getMediaEvent() != null ? upload.getMediaEvent().getId() : null);
+        dto.setEventId(upload.getBoardEvent() != null ? upload.getBoardEvent().getId() : null);
         dto.setCreatedDate(upload.getCreatedDate());
         dto.setApproved(upload.isApproved());
         dto.setFeatured(upload.isFeatured());
@@ -275,8 +277,8 @@ public class UploadService {
             dto.setUploaderEmail(u.getEmail());
         }
 
-        if (upload.getMediaEvent() != null) {
-            dto.setEventName(upload.getMediaEvent().getName());
+        if (upload.getBoardEvent() != null) {
+            dto.setEventName(upload.getBoardEvent().getName());
         }
 
         return dto;

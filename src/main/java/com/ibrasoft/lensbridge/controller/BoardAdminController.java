@@ -12,6 +12,7 @@ import com.ibrasoft.lensbridge.dto.board.request.UpdateTickerRequest;
 import com.ibrasoft.lensbridge.dto.board.request.WeeklyContentRequest;
 import com.ibrasoft.lensbridge.dto.board.response.DeviceSummary;
 import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
+import com.ibrasoft.lensbridge.dto.upload.response.AdminUploadDto;
 import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
 import com.ibrasoft.lensbridge.model.audit.AuditAction;
 import com.ibrasoft.lensbridge.model.minbar.Audience;
@@ -26,11 +27,14 @@ import com.ibrasoft.lensbridge.service.AdminAuditService;
 import com.ibrasoft.lensbridge.service.BoardService;
 import com.ibrasoft.lensbridge.service.PosterService;
 import com.ibrasoft.lensbridge.service.PromotableSocialMediaService;
+import com.ibrasoft.lensbridge.service.UploadService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -39,9 +43,11 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springdoc.core.annotations.ParameterObject;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Consumer;
 import io.swagger.v3.oas.annotations.Operation;
 
 /**
@@ -64,6 +70,7 @@ public class BoardAdminController {
     private final BoardService boardService;
     private final AdminAuditService auditService;
     private final BoardStreamHandler boardStream;
+    private final UploadService uploadService;
 
     // ==================== Board Config Endpoints ====================
 
@@ -482,6 +489,69 @@ public class BoardAdminController {
         auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.UPDATE_BOARD_CONFIG, "Device", deviceId, request.getRemoteAddr());
         
         return ResponseEntity.ok(DeviceSummary.of(updated));
+    }
+
+    // ==================== Upload Moderation Endpoints ====================
+
+    private ResponseEntity<MessageResponse> executeUploadAction(UUID uploadId, HttpServletRequest request, Consumer<UUID> serviceAction, AuditAction auditAction, String successMessage) {
+        serviceAction.accept(uploadId);
+        auditService.logAuditEvent(getCurrentUserEmail(), auditAction, "Upload", uploadId, request.getRemoteAddr());
+        return ResponseEntity.ok(new MessageResponse(successMessage));
+    }
+
+    @PostMapping("/uploads/{uploadId}/approve")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.MEDIA_UPLOAD_MODERATE + "')")
+    public ResponseEntity<MessageResponse> approveUpload(@PathVariable UUID uploadId, HttpServletRequest request) {
+        return executeUploadAction(uploadId, request, uploadService::approveUpload, AuditAction.APPROVE_UPLOAD, "Upload approved successfully");
+    }
+
+    @DeleteMapping("/uploads/{uploadId}")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.MEDIA_UPLOAD_MODERATE + "')")
+    public ResponseEntity<MessageResponse> deleteUpload(@PathVariable UUID uploadId, HttpServletRequest request) {
+        return executeUploadAction(uploadId, request, uploadService::deleteUpload, AuditAction.DELETE_UPLOAD, "Upload deleted successfully");
+    }
+
+    @PostMapping("/uploads/{uploadId}/feature")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.MEDIA_UPLOAD_MODERATE + "')")
+    public ResponseEntity<MessageResponse> featureUpload(@PathVariable UUID uploadId, HttpServletRequest request) {
+        return executeUploadAction(uploadId, request, uploadService::featureUpload, AuditAction.FEATURE_UPLOAD, "Upload featured successfully");
+    }
+
+    @DeleteMapping("/uploads/{uploadId}/approval")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.MEDIA_UPLOAD_MODERATE + "')")
+    public ResponseEntity<MessageResponse> unapproveUpload(@PathVariable UUID uploadId, HttpServletRequest request) {
+        return executeUploadAction(uploadId, request, uploadService::unapproveUpload, AuditAction.UNAPPROVE_UPLOAD, "Upload unapproved successfully");
+    }
+
+    @DeleteMapping("/uploads/{uploadId}/featured")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.MEDIA_UPLOAD_MODERATE + "')")
+    public ResponseEntity<MessageResponse> unfeatureUpload(@PathVariable UUID uploadId, HttpServletRequest request) {
+        return executeUploadAction(uploadId, request, uploadService::unfeatureUpload, AuditAction.UNFEATURE_UPLOAD, "Upload unfeatured successfully");
+    }
+
+    @GetMapping("/uploads")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.MEDIA_UPLOAD_READ + "')")
+    @Operation(operationId = "getAdminUploads", summary = "Page through every upload, any approval state")
+    public ResponseEntity<Page<AdminUploadDto>> getAllUploads(@ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(uploadService.getAllUploadsForAdmin(pageable));
+    }
+
+    @GetMapping("/uploads/pending")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.MEDIA_UPLOAD_READ + "')")
+    public ResponseEntity<Page<AdminUploadDto>> getPendingUploads(@ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(uploadService.getUploadsByApprovalStatus(false, pageable));
+    }
+
+    @GetMapping("/uploads/approved")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.MEDIA_UPLOAD_READ + "')")
+    public ResponseEntity<Page<AdminUploadDto>> getApprovedUploads(@ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(uploadService.getUploadsByApprovalStatus(true, pageable));
+    }
+
+    @GetMapping("/uploads/featured")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.MEDIA_UPLOAD_READ + "')")
+    public ResponseEntity<Page<AdminUploadDto>> getFeaturedUploads(@ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(uploadService.getUploadsByFeaturedStatus(true, pageable));
     }
 
     private String getCurrentUserEmail() {

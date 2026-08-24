@@ -74,7 +74,7 @@ image-processing.thumbnail-folder=thumbnails/
 # Rate limiting
 ratelimit.requests=100
 ratelimit.duration.minutes=1
-ratelimit.exempt-roles=ROLE_ROOT,ROLE_ADMIN
+ratelimit.exempt-roles=ROLE_ROOT
 
 # Spring multipart cap
 spring.servlet.multipart.max-file-size=250MB

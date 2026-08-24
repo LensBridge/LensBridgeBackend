@@ -50,15 +50,12 @@ class AuthorityResolverTest {
                 .containsExactlyInAnyOrderElementsOf(Role.BOARD_EDITOR.getPermissions());
     }
 
-    /**
-     * Both forms are emitted so the untouched legacy media endpoints, which still say
-     * hasRole('ADMIN'), keep working while board endpoints check permissions.
-     */
     @Test
     void authoritiesCarryBothTheRoleAndItsPermissions() {
-        Set<String> authorities = authorityStrings(user(Role.ADMIN));
+        Set<String> authorities = authorityStrings(user(Role.BOARD_ADMIN));
 
-        assertThat(authorities).contains("ROLE_ADMIN");
+        assertThat(authorities).contains("ROLE_BOARD_ADMIN");
+        assertThat(authorities).contains(Permission.BOARD_CONFIG_WRITE.getAuthority());
         assertThat(authorities).contains(Permission.MEDIA_UPLOAD_MODERATE.getAuthority());
     }
 

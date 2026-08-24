@@ -21,9 +21,9 @@ class UserTest {
     void addRoleAddsRoleToSet() {
         User user = new User();
 
-        user.addRole(Role.ADMIN);
+        user.addRole(Role.BOARD_ADMIN);
 
-        assertThat(user.getRoles()).containsExactly(Role.ADMIN);
+        assertThat(user.getRoles()).containsExactly(Role.BOARD_ADMIN);
     }
 
     @Test
@@ -59,7 +59,7 @@ class UserTest {
         User user = new User();
         user.addRole(Role.USER);
 
-        assertThat(user.hasRole(Role.ADMIN)).isFalse();
+        assertThat(user.hasRole(Role.BOARD_ADMIN)).isFalse();
     }
 
     @Test

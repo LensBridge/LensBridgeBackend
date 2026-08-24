@@ -1259,6 +1259,308 @@ paths:
           description: Request failed; body carries a human-readable message
       tags:
       - board-admin-controller
+  /api/admin/board/uploads:
+    get:
+      operationId: getAdminUploads
+      parameters:
+      - description: Zero-based page index (0..N)
+        in: query
+        name: page
+        required: false
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+      - description: The size of the page to be returned
+        in: query
+        name: size
+        required: false
+        schema:
+          type: integer
+          default: 20
+          minimum: 1
+      - description: "Sorting criteria in the format: property,(asc|desc). Default\
+          \ sort order is ascending. Multiple sort criteria are supported."
+        in: query
+        name: sort
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageAdminUploadDto"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      summary: "Page through every upload, any approval state"
+      tags:
+      - board-admin-controller
+  /api/admin/board/uploads/approved:
+    get:
+      operationId: getApprovedUploads
+      parameters:
+      - description: Zero-based page index (0..N)
+        in: query
+        name: page
+        required: false
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+      - description: The size of the page to be returned
+        in: query
+        name: size
+        required: false
+        schema:
+          type: integer
+          default: 20
+          minimum: 1
+      - description: "Sorting criteria in the format: property,(asc|desc). Default\
+          \ sort order is ascending. Multiple sort criteria are supported."
+        in: query
+        name: sort
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageAdminUploadDto"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - board-admin-controller
+  /api/admin/board/uploads/featured:
+    get:
+      operationId: getFeaturedUploads
+      parameters:
+      - description: Zero-based page index (0..N)
+        in: query
+        name: page
+        required: false
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+      - description: The size of the page to be returned
+        in: query
+        name: size
+        required: false
+        schema:
+          type: integer
+          default: 20
+          minimum: 1
+      - description: "Sorting criteria in the format: property,(asc|desc). Default\
+          \ sort order is ascending. Multiple sort criteria are supported."
+        in: query
+        name: sort
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageAdminUploadDto"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - board-admin-controller
+  /api/admin/board/uploads/pending:
+    get:
+      operationId: getPendingUploads
+      parameters:
+      - description: Zero-based page index (0..N)
+        in: query
+        name: page
+        required: false
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+      - description: The size of the page to be returned
+        in: query
+        name: size
+        required: false
+        schema:
+          type: integer
+          default: 20
+          minimum: 1
+      - description: "Sorting criteria in the format: property,(asc|desc). Default\
+          \ sort order is ascending. Multiple sort criteria are supported."
+        in: query
+        name: sort
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageAdminUploadDto"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - board-admin-controller
+  /api/admin/board/uploads/{uploadId}:
+    delete:
+      operationId: deleteUpload
+      parameters:
+      - in: path
+        name: uploadId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - board-admin-controller
+  /api/admin/board/uploads/{uploadId}/approval:
+    delete:
+      operationId: unapproveUpload
+      parameters:
+      - in: path
+        name: uploadId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - board-admin-controller
+  /api/admin/board/uploads/{uploadId}/approve:
+    post:
+      operationId: approveUpload
+      parameters:
+      - in: path
+        name: uploadId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - board-admin-controller
+  /api/admin/board/uploads/{uploadId}/feature:
+    post:
+      operationId: featureUpload
+      parameters:
+      - in: path
+        name: uploadId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - board-admin-controller
+  /api/admin/board/uploads/{uploadId}/featured:
+    delete:
+      operationId: unfeatureUpload
+      parameters:
+      - in: path
+        name: uploadId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      tags:
+      - board-admin-controller
   /api/admin/board/weekly-content:
     get:
       operationId: getAllWeeklyContent
@@ -1404,92 +1706,6 @@ paths:
           description: Request failed; body carries a human-readable message
       tags:
       - board-admin-controller
-  /api/admin/create-event:
-    post:
-      operationId: createMediaEvent
-      parameters:
-      - in: query
-        name: eventName
-        required: true
-        schema:
-          type: string
-      - in: query
-        name: eventDate
-        required: true
-        schema:
-          type: string
-          format: date-time
-      - in: query
-        name: status
-        required: false
-        schema:
-          type: string
-          enum:
-          - UPCOMING
-          - ONGOING
-          - PAST
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: OK
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: Request failed; body carries a human-readable message
-      summary: Create a media event
-      tags:
-      - admin-controller
-  /api/admin/events:
-    get:
-      operationId: getAllEventsForAdmin
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/MediaEvent"
-          description: OK
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: Request failed; body carries a human-readable message
-      summary: "List every event, including unpublished ones"
-      tags:
-      - admin-controller
-  /api/admin/feature-upload/{uploadId}:
-    post:
-      operationId: featureUpload
-      parameters:
-      - in: path
-        name: uploadId
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: OK
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: Request failed; body carries a human-readable message
-      tags:
-      - admin-controller
   /api/admin/permissions:
     get:
       operationId: getAvailablePermissions
@@ -1530,282 +1746,6 @@ paths:
                 $ref: "#/components/schemas/MessageResponse"
           description: Request failed; body carries a human-readable message
       summary: List assignable roles with the permissions each one confers
-      tags:
-      - admin-controller
-  /api/admin/upload/{uploadId}:
-    delete:
-      operationId: deleteUpload
-      parameters:
-      - in: path
-        name: uploadId
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: OK
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: Request failed; body carries a human-readable message
-      tags:
-      - admin-controller
-    post:
-      operationId: approveUpload
-      parameters:
-      - in: path
-        name: uploadId
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: OK
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: Request failed; body carries a human-readable message
-      tags:
-      - admin-controller
-  /api/admin/upload/{uploadId}/approval:
-    delete:
-      operationId: unapproveUpload
-      parameters:
-      - in: path
-        name: uploadId
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: OK
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: Request failed; body carries a human-readable message
-      tags:
-      - admin-controller
-  /api/admin/upload/{uploadId}/featured:
-    delete:
-      operationId: unfeatureUpload
-      parameters:
-      - in: path
-        name: uploadId
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: OK
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: Request failed; body carries a human-readable message
-      tags:
-      - admin-controller
-  /api/admin/uploads:
-    get:
-      operationId: getAdminUploads
-      parameters:
-      - description: Zero-based page index (0..N)
-        in: query
-        name: page
-        required: false
-        schema:
-          type: integer
-          default: 0
-          minimum: 0
-      - description: The size of the page to be returned
-        in: query
-        name: size
-        required: false
-        schema:
-          type: integer
-          default: 20
-          minimum: 1
-      - description: "Sorting criteria in the format: property,(asc|desc). Default\
-          \ sort order is ascending. Multiple sort criteria are supported."
-        in: query
-        name: sort
-        required: false
-        schema:
-          type: array
-          items:
-            type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PageAdminUploadDto"
-          description: OK
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: Request failed; body carries a human-readable message
-      summary: "Page through every upload, any approval state"
-      tags:
-      - admin-controller
-  /api/admin/uploads/approved:
-    get:
-      operationId: getApprovedUploads
-      parameters:
-      - description: Zero-based page index (0..N)
-        in: query
-        name: page
-        required: false
-        schema:
-          type: integer
-          default: 0
-          minimum: 0
-      - description: The size of the page to be returned
-        in: query
-        name: size
-        required: false
-        schema:
-          type: integer
-          default: 20
-          minimum: 1
-      - description: "Sorting criteria in the format: property,(asc|desc). Default\
-          \ sort order is ascending. Multiple sort criteria are supported."
-        in: query
-        name: sort
-        required: false
-        schema:
-          type: array
-          items:
-            type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PageAdminUploadDto"
-          description: OK
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: Request failed; body carries a human-readable message
-      tags:
-      - admin-controller
-  /api/admin/uploads/featured:
-    get:
-      operationId: getFeaturedUploads
-      parameters:
-      - description: Zero-based page index (0..N)
-        in: query
-        name: page
-        required: false
-        schema:
-          type: integer
-          default: 0
-          minimum: 0
-      - description: The size of the page to be returned
-        in: query
-        name: size
-        required: false
-        schema:
-          type: integer
-          default: 20
-          minimum: 1
-      - description: "Sorting criteria in the format: property,(asc|desc). Default\
-          \ sort order is ascending. Multiple sort criteria are supported."
-        in: query
-        name: sort
-        required: false
-        schema:
-          type: array
-          items:
-            type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PageAdminUploadDto"
-          description: OK
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: Request failed; body carries a human-readable message
-      tags:
-      - admin-controller
-  /api/admin/uploads/pending:
-    get:
-      operationId: getPendingUploads
-      parameters:
-      - description: Zero-based page index (0..N)
-        in: query
-        name: page
-        required: false
-        schema:
-          type: integer
-          default: 0
-          minimum: 0
-      - description: The size of the page to be returned
-        in: query
-        name: size
-        required: false
-        schema:
-          type: integer
-          default: 20
-          minimum: 1
-      - description: "Sorting criteria in the format: property,(asc|desc). Default\
-          \ sort order is ascending. Multiple sort criteria are supported."
-        in: query
-        name: sort
-        required: false
-        schema:
-          type: array
-          items:
-            type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PageAdminUploadDto"
-          description: OK
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: Request failed; body carries a human-readable message
       tags:
       - admin-controller
   /api/admin/user/create:
@@ -1879,7 +1819,6 @@ paths:
               type: string
               enum:
               - USER
-              - ADMIN
               - BOARD_VIEWER
               - BOARD_EDITOR
               - BOARD_ADMIN
@@ -1922,7 +1861,6 @@ paths:
               - MEDIA_UPLOAD_SELF
               - MEDIA_UPLOAD_MODERATE
               - MEDIA_UPLOAD_READ
-              - MEDIA_EVENT_WRITE
               - BOARD_CONTENT_READ
               - BOARD_POSTER_WRITE
               - BOARD_EVENT_WRITE
@@ -1980,7 +1918,6 @@ paths:
               type: string
               enum:
               - USER
-              - ADMIN
               - BOARD_VIEWER
               - BOARD_EDITOR
               - BOARD_ADMIN
@@ -2023,7 +1960,6 @@ paths:
               - MEDIA_UPLOAD_SELF
               - MEDIA_UPLOAD_MODERATE
               - MEDIA_UPLOAD_READ
-              - MEDIA_EVENT_WRITE
               - BOARD_CONTENT_READ
               - BOARD_POSTER_WRITE
               - BOARD_EVENT_WRITE
@@ -2494,148 +2430,6 @@ paths:
       summary: Confirm an email address using the token from the verification email
       tags:
       - auth-controller
-  /api/events:
-    get:
-      operationId: getPublicEvents
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/MediaEvent"
-          description: OK
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: Request failed; body carries a human-readable message
-      summary: List publicly visible events
-      tags:
-      - events-controller
-  /api/events/{id}:
-    get:
-      operationId: getPublicEventById
-      parameters:
-      - in: path
-        name: id
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MediaEvent"
-          description: OK
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: Request failed; body carries a human-readable message
-      summary: Fetch a single publicly visible event
-      tags:
-      - events-controller
-  /api/gallery:
-    get:
-      operationId: getGalleryUploads
-      parameters:
-      - description: Zero-based page index (0..N)
-        in: query
-        name: page
-        required: false
-        schema:
-          type: integer
-          default: 0
-          minimum: 0
-      - description: The size of the page to be returned
-        in: query
-        name: size
-        required: false
-        schema:
-          type: integer
-          default: 20
-          minimum: 1
-      - description: "Sorting criteria in the format: property,(asc|desc). Default\
-          \ sort order is ascending. Multiple sort criteria are supported."
-        in: query
-        name: sort
-        required: false
-        schema:
-          type: array
-          items:
-            type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PageGalleryItemDto"
-          description: OK
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: Request failed; body carries a human-readable message
-      summary: Page through approved gallery media
-      tags:
-      - gallery-controller
-  /api/gallery/event/{eventId}:
-    get:
-      operationId: getGalleryByEvent
-      parameters:
-      - in: path
-        name: eventId
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - description: Zero-based page index (0..N)
-        in: query
-        name: page
-        required: false
-        schema:
-          type: integer
-          default: 0
-          minimum: 0
-      - description: The size of the page to be returned
-        in: query
-        name: size
-        required: false
-        schema:
-          type: integer
-          default: 20
-          minimum: 1
-      - description: "Sorting criteria in the format: property,(asc|desc). Default\
-          \ sort order is ascending. Multiple sort criteria are supported."
-        in: query
-        name: sort
-        required: false
-        schema:
-          type: array
-          items:
-            type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PageGalleryItemDto"
-          description: OK
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: Request failed; body carries a human-readable message
-      tags:
-      - gallery-controller
   /api/minbar/events:
     get:
       operationId: getMinbarEvents
@@ -4351,24 +4145,6 @@ paths:
           description: Request failed; body carries a human-readable message
       tags:
       - user-controller
-  /api/user/stats:
-    get:
-      operationId: getUserStats
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/UserStatsResponse"
-          description: OK
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: Request failed; body carries a human-readable message
-      tags:
-      - user-controller
   /api/user/tickets:
     get:
       operationId: getUserTickets
@@ -4423,7 +4199,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageGalleryItemDto"
+                $ref: "#/components/schemas/PageUploadDto"
           description: OK
         default:
           content:
@@ -4644,6 +4420,8 @@ components:
       properties:
         allDay:
           type: boolean
+        allowUploads:
+          type: boolean
         audience:
           type: string
           enum:
@@ -4791,6 +4569,8 @@ components:
       type: object
       properties:
         allDay:
+          type: boolean
+        allowUploads:
           type: boolean
         audience:
           type: string
@@ -5181,19 +4961,9 @@ components:
           minLength: 1
         name:
           type: string
-        tickets:
-          type: array
-          items:
-            $ref: "#/components/schemas/Ticket"
         time:
           type: string
           format: date-time
-        zones:
-          type: array
-          items:
-            $ref: "#/components/schemas/Zone"
-          maxItems: 64
-          minItems: 1
       required:
       - description
       - location
@@ -5222,6 +4992,8 @@ components:
       type: object
       properties:
         allDay:
+          type: boolean
+        allowUploads:
           type: boolean
         audience:
           type: string
@@ -5300,27 +5072,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TicketTypeResponse"
-    GalleryItemDto:
-      type: object
-      properties:
-        author:
-          type: string
-        date:
-          type: string
-        event:
-          type: string
-        featured:
-          type: boolean
-        id:
-          type: string
-        src:
-          type: string
-        thumbnail:
-          type: string
-        title:
-          type: string
-        type:
-          type: string
     ImportConfig:
       type: object
       properties:
@@ -5546,23 +5297,6 @@ components:
       required:
       - email
       - password
-    MediaEvent:
-      type: object
-      properties:
-        date:
-          type: string
-          format: date-time
-        id:
-          type: string
-          format: uuid
-        name:
-          type: string
-        status:
-          type: string
-          enum:
-          - UPCOMING
-          - ONGOING
-          - PAST
     MessageResponse:
       type: object
       properties:
@@ -5589,6 +5323,9 @@ components:
           type: string
         attendeeLastName:
           type: string
+        eventId:
+          type: string
+          format: uuid
         ticketTypeName:
           type: string
         unitPrice:
@@ -5699,6 +5436,9 @@ components:
           type: string
         attendeeLastName:
           type: string
+        eventId:
+          type: string
+          format: uuid
         id:
           type: string
           format: uuid
@@ -5818,38 +5558,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/EventResponse"
-        empty:
-          type: boolean
-        first:
-          type: boolean
-        last:
-          type: boolean
-        number:
-          type: integer
-          format: int32
-        numberOfElements:
-          type: integer
-          format: int32
-        pageable:
-          $ref: "#/components/schemas/Pageable"
-        size:
-          type: integer
-          format: int32
-        sort:
-          $ref: "#/components/schemas/SortObject"
-        totalElements:
-          type: integer
-          format: int64
-        totalPages:
-          type: integer
-          format: int32
-    PageGalleryItemDto:
-      type: object
-      properties:
-        content:
-          type: array
-          items:
-            $ref: "#/components/schemas/GalleryItemDto"
         empty:
           type: boolean
         first:
@@ -6420,47 +6128,6 @@ components:
           type: boolean
         unsorted:
           type: boolean
-    Ticket:
-      type: object
-      properties:
-        email:
-          type: string
-          format: email
-          minLength: 1
-        event:
-          required:
-          - description
-          - location
-          - name
-          - time
-        firstName:
-          type: string
-          maxLength: 50
-          minLength: 1
-        holderRef:
-          type: string
-        id:
-          type: string
-          format: uuid
-        lastName:
-          type: string
-          maxLength: 50
-          minLength: 1
-        lastTicketSent:
-          type: string
-          format: date-time
-        status:
-          type: string
-          enum:
-          - ACTIVE
-          - CANCELLED
-        ticketType:
-          $ref: "#/components/schemas/TicketType"
-      required:
-      - email
-      - firstName
-      - lastName
-      - ticketType
     TicketResponse:
       type: object
       properties:
@@ -6483,42 +6150,6 @@ components:
           format: date-time
         ticketType:
           $ref: "#/components/schemas/TicketTypeResponse"
-    TicketType:
-      type: object
-      properties:
-        capacity:
-          type: integer
-          format: int32
-        createdAt:
-          type: string
-          format: date-time
-        entitlements:
-          type: array
-          items:
-            $ref: "#/components/schemas/ZoneEntitlement"
-        id:
-          type: string
-          format: uuid
-        isActive:
-          type: boolean
-        name:
-          type: string
-          minLength: 1
-        price:
-          type: number
-        reservedCount:
-          type: integer
-          format: int32
-        salesEndAt:
-          type: string
-          format: date-time
-        salesStartAt:
-          type: string
-          format: date-time
-      required:
-      - isActive
-      - name
-      - price
     TicketTypeResponse:
       type: object
       properties:
@@ -6621,6 +6252,8 @@ components:
       type: object
       properties:
         allDay:
+          type: boolean
+        allowUploads:
           type: boolean
         audience:
           type: string
@@ -6914,7 +6547,6 @@ components:
             type: string
             enum:
             - USER
-            - ADMIN
             - BOARD_VIEWER
             - BOARD_EDITOR
             - BOARD_ADMIN
@@ -6925,21 +6557,6 @@ components:
           uniqueItems: true
         verified:
           type: boolean
-    UserStatsResponse:
-      type: object
-      properties:
-        approvedUploads:
-          type: integer
-          format: int32
-        featuredUploads:
-          type: integer
-          format: int32
-        pendingUploads:
-          type: integer
-          format: int32
-        totalUploads:
-          type: integer
-          format: int32
     ValidateRequest:
       type: object
       properties:
@@ -7065,35 +6682,6 @@ components:
       required:
       - key
       - name
-    Zone:
-      type: object
-      properties:
-        description:
-          type: string
-        event:
-          $ref: "#/components/schemas/Event"
-        id:
-          type: string
-          format: uuid
-        name:
-          type: string
-          maxLength: 20
-          minLength: 1
-      required:
-      - description
-      - name
-    ZoneEntitlement:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        maxEntries:
-          type: integer
-          format: int32
-          minimum: 1
-        zone:
-          $ref: "#/components/schemas/Zone"
     ZoneEntitlementRequest:
       type: object
       properties:

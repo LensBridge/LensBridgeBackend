@@ -28,4 +28,6 @@ public class CreateCalendarEventRequest {
     
     @NotNull(message = "Audience is required")
     private Audience audience;
+
+    private Boolean allowUploads;
 }

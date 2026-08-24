@@ -15,12 +15,10 @@ import org.springframework.web.bind.annotation.*;
 import com.ibrasoft.lensbridge.dto.auth.request.UpdateProfileRequest;
 import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
 import com.ibrasoft.lensbridge.dto.auth.response.UserInfoResponse;
-import com.ibrasoft.lensbridge.dto.auth.response.UserStatsResponse;
-import com.ibrasoft.lensbridge.dto.upload.response.GalleryItemDto;
+import com.ibrasoft.lensbridge.dto.upload.response.UploadDto;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.model.auth.User;
 import com.ibrasoft.lensbridge.security.CurrentUser;
-import com.ibrasoft.lensbridge.service.GalleryService;
 import com.ibrasoft.lensbridge.service.UploadService;
 import com.ibrasoft.lensbridge.service.UserService;
 import org.springdoc.core.annotations.ParameterObject;
@@ -29,11 +27,11 @@ import org.springdoc.core.annotations.ParameterObject;
 @RequestMapping("/api/user")
 @RequiredArgsConstructor
 @Slf4j
+// TODO: Combine this with UserOrderController, or isolate this as UserAuthController
 public class UserController {
 
     private final UserService userService;
     private final UploadService uploadService;
-    private final GalleryService galleryService;
 
     @GetMapping("/profile")
     @PreAuthorize("hasRole('" + Role.Authority.USER + "')")
@@ -50,16 +48,10 @@ public class UserController {
         return ResponseEntity.ok(UserInfoResponse.of(updated));
     }
 
-    @GetMapping("/stats")
-    @PreAuthorize("hasRole('" + Role.Authority.USER + "')")
-    public ResponseEntity<UserStatsResponse> getUserStats(@CurrentUser User user) {
-        return ResponseEntity.ok(uploadService.getUserStats(user.getId()));
-    }
-
     @GetMapping("/uploads")
     @PreAuthorize("hasRole('" + Role.Authority.USER + "')")
-    public ResponseEntity<Page<GalleryItemDto>> getUserUploads(@ParameterObject Pageable pageable, @CurrentUser User user) {
-        return ResponseEntity.ok(galleryService.getUserGallery(user.getId(), pageable));
+    public ResponseEntity<Page<UploadDto>> getUserUploads(@ParameterObject Pageable pageable, @CurrentUser User user) {
+        return ResponseEntity.ok(uploadService.getUserUploads(user.getId(), pageable));
     }
 
     @DeleteMapping("/uploads/{uploadId}")

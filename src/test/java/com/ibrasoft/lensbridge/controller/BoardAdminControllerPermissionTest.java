@@ -6,6 +6,7 @@ import com.ibrasoft.lensbridge.service.AdminAuditService;
 import com.ibrasoft.lensbridge.service.BoardService;
 import com.ibrasoft.lensbridge.service.PosterService;
 import com.ibrasoft.lensbridge.service.PromotableSocialMediaService;
+import com.ibrasoft.lensbridge.service.UploadService;
 import com.ibrasoft.lensbridge.service.UserService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,6 +53,8 @@ class BoardAdminControllerPermissionTest {
     private AdminAuditService auditService;
     @MockitoBean
     private BoardStreamHandler boardStreamHandler;
+    @MockitoBean
+    private UploadService uploadService;
 
     /**
      * Not used by this controller. WebConfig registers CurrentUserArgumentResolver, which
@@ -149,14 +152,7 @@ class BoardAdminControllerPermissionTest {
                 .contentType(MediaType.APPLICATION_JSON).content("{}"), Role.BOARD_EDITOR);
     }
 
-    // ==================== Media roles have no board access ====================
-
-    @Test
-    void mediaAdminHasNoBoardAccess() throws Exception {
-        expectForbidden(get(BASE + "/posters"), Role.ADMIN);
-        expectForbidden(get(BASE + "/configs"), Role.ADMIN);
-        expectForbidden(delete(BASE + "/posters/" + id()), Role.ADMIN);
-    }
+    // ==================== Non-board roles have no board access ====================
 
     @Test
     void plainUserHasNoBoardAccess() throws Exception {

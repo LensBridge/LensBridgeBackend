@@ -16,7 +16,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -54,11 +53,9 @@ public class FileUploadController {
             @RequestParam String contentType,
             @RequestParam long fileSize,
             @RequestParam String expectedSha256,
-            @CurrentUser User user,
-            Authentication authentication) {
-        Role role = uploadLimitsService.getHighestRole(authentication);
+            @CurrentUser User user) {
         return ResponseEntity.ok(uploadWorkflowService.initiateUpload(
-                eventId, filename, contentType, fileSize, expectedSha256, user.getId(), role));
+                eventId, filename, contentType, fileSize, expectedSha256, user.getId(), user));
     }
 
     @PostMapping("/{eventId}/direct/complete")
@@ -81,8 +78,7 @@ public class FileUploadController {
 
     @GetMapping("/limits")
     @PreAuthorize("hasRole('" + Role.Authority.USER + "')")
-    public ResponseEntity<UploadLimitsResponse> getUploadLimits(@CurrentUser User user, Authentication authentication) {
-        Role role = uploadLimitsService.getHighestRole(authentication);
-        return ResponseEntity.ok(uploadLimitsService.getLimitsForRole(role, user.getId()));
+    public ResponseEntity<UploadLimitsResponse> getUploadLimits(@CurrentUser User user) {
+        return ResponseEntity.ok(uploadLimitsService.getLimitsForUser(user));
     }
 }

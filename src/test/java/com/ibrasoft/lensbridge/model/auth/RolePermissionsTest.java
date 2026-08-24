@@ -44,11 +44,12 @@ class RolePermissionsTest {
         }
     }
 
-    // ==================== Legacy media, unchanged ====================
+    // ==================== Media uploads ====================
 
     @Test
-    void adminContainsUser() {
-        assertThat(Role.ADMIN.getPermissions()).containsAll(Role.USER.getPermissions());
+    void boardAdminHoldsMediaModeration() {
+        assertThat(Role.BOARD_ADMIN.getPermissions())
+                .contains(Permission.MEDIA_UPLOAD_MODERATE, Permission.MEDIA_UPLOAD_READ);
     }
 
     @Test
@@ -57,9 +58,8 @@ class RolePermissionsTest {
     }
 
     @Test
-    void mediaModerationStaysOutOfEveryBoardRole() {
-        for (Role role : new Role[]{Role.BOARD_VIEWER, Role.BOARD_EDITOR,
-                                    Role.BOARD_ADMIN}) {
+    void mediaModerationStaysOutOfViewerAndEditorRoles() {
+        for (Role role : new Role[]{Role.BOARD_VIEWER, Role.BOARD_EDITOR}) {
             assertThat(role.getPermissions())
                     .as("%s must not confer media moderation", role)
                     .doesNotContain(Permission.MEDIA_UPLOAD_MODERATE);

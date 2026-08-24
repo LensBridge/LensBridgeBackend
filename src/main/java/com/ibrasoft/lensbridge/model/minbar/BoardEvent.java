@@ -39,6 +39,10 @@ public class BoardEvent {
     @Column(nullable = false)
     private Audience audience;
 
+    @Builder.Default
+    @Column(nullable = false)
+    private Boolean allowUploads = false;
+
     /**
      * Reference to a tCketEvent object, if it exists, for tCketManage integration
      */

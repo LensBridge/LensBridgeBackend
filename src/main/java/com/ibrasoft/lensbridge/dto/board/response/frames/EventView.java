@@ -25,6 +25,7 @@ public class EventView {
     private Audience audience;
     private UUID ticketEventId;
     private List<MinbarTicketTypeView> ticketTypes;
+    private boolean allowUploads;
 
     public static EventView of(BoardEvent event) {
         return of(event, null);
@@ -45,7 +46,8 @@ public class EventView {
                 .startTime(event.getStartTime())
                 .endTime(event.getEndTime())
                 .allDay(event.getAllDay())
-                .audience(event.getAudience());
+                .audience(event.getAudience())
+                .allowUploads(event.getAllowUploads());
 
         if (event.getEvent() != null) {
             b.ticketEventId(event.getEvent().getId());

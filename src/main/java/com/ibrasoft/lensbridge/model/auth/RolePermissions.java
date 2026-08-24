@@ -24,16 +24,8 @@ final class RolePermissions {
     private static final Map<Role, Set<Permission>> BUNDLES = new EnumMap<>(Role.class);
 
     static {
-        // ---------- Legacy media sharing ----------
-
         Set<Permission> user = EnumSet.of(
                 Permission.MEDIA_UPLOAD_SELF);
-
-        Set<Permission> admin = union(user, EnumSet.of(
-                Permission.MEDIA_UPLOAD_MODERATE,
-                Permission.MEDIA_UPLOAD_READ,
-                Permission.MEDIA_EVENT_WRITE,
-                Permission.AUDIT_READ));
 
         // ---------- MusallahBoard ----------
 
@@ -64,6 +56,8 @@ final class RolePermissions {
                 Permission.BOARD_DEVICE_ENROLL,
                 Permission.BOARD_DEVICE_REVOKE,
                 Permission.BOARD_COMMAND_INSPECT,
+                Permission.MEDIA_UPLOAD_MODERATE,
+                Permission.MEDIA_UPLOAD_READ,
                 Permission.AUDIT_READ));
 
         // ---------- Ticketing ----------
@@ -85,7 +79,6 @@ final class RolePermissions {
                 Permission.TCKET_ADMIN));
 
         BUNDLES.put(Role.USER, user);
-        BUNDLES.put(Role.ADMIN, admin);
         BUNDLES.put(Role.BOARD_VIEWER, boardViewer);
         BUNDLES.put(Role.BOARD_EDITOR, boardEditor);
         BUNDLES.put(Role.BOARD_ADMIN, boardAdmin);

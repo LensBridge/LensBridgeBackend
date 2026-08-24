@@ -247,6 +247,7 @@ public class BoardService {
                 .endTime(Instant.ofEpochMilli(request.getEndEpochMs()))
                 .allDay(request.getAllDay())
                 .audience(request.getAudience())
+                .allowUploads(request.getAllowUploads() != null ? request.getAllowUploads() : false)
                 .build();
         BoardEvent saved = boardEventRepository.save(boardEvent);
         log.info("Created event: id={}, name={}", saved.getId(), saved.getName());
@@ -263,6 +264,7 @@ public class BoardService {
         Patch.apply(request.getEndTime(), existing::setEndTime);
         Patch.apply(request.getAllDay(), existing::setAllDay);
         Patch.apply(request.getAudience(), existing::setAudience);
+        Patch.apply(request.getAllowUploads(), existing::setAllowUploads);
         BoardEvent saved = boardEventRepository.save(existing);
         log.info("Updated event: id={}", eventId);
         boardStream.contentChanged("events");

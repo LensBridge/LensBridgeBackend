@@ -16,9 +16,7 @@ import org.springframework.security.core.GrantedAuthority;
  */
 public enum Role implements GrantedAuthority {
 
-    // ---------- Legacy media sharing ----------
-    USER("Upload and manage your own media submissions"),
-    ADMIN("Moderate media submissions and read the audit log"),
+    USER("Authenticated end-user: profile, uploads, orders, tickets"),
 
     // ---------- MusallahBoard ----------
     BOARD_VIEWER("View board content, config, and device status; change nothing"),
@@ -56,7 +54,6 @@ public enum Role implements GrantedAuthority {
     @Deprecated
     public interface Authority {
         String USER = "USER";
-        String ADMIN = "ADMIN";
         String ROOT = "ROOT";
     }
 

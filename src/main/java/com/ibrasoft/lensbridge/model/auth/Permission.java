@@ -24,7 +24,6 @@ public enum Permission implements GrantedAuthority {
     MEDIA_UPLOAD_SELF(Authority.MEDIA_UPLOAD_SELF),
     MEDIA_UPLOAD_MODERATE(Authority.MEDIA_UPLOAD_MODERATE),
     MEDIA_UPLOAD_READ(Authority.MEDIA_UPLOAD_READ),
-    MEDIA_EVENT_WRITE(Authority.MEDIA_EVENT_WRITE),
 
     // ==================== MusallahBoard content ====================
 
@@ -63,10 +62,9 @@ public enum Permission implements GrantedAuthority {
     BOARD_COMMAND_INSPECT(Authority.BOARD_COMMAND_INSPECT),
 
     // ==================== Ticketing (tcketmanage-core) ====================
-    // Deliberately their own namespace rather than reusing media:event:write or
-    // board:event:write. Those name a media event and a MusallahBoard calendar event
-    // respectively -- neither is a ticketed event, and mapping ticketing onto either would
-    // hand ticket issuance and payment settlement to every board editor and media moderator.
+    // Deliberately their own namespace rather than reusing board:event:write. A board event
+    // is a calendar entry, not a ticketed event, and mapping ticketing onto it would hand
+    // ticket issuance and payment settlement to every board editor.
 
     /** Scan and validate tickets at the door, and read scan history. */
     TCKET_SCAN(Authority.TCKET_SCAN),
@@ -102,7 +100,6 @@ public enum Permission implements GrantedAuthority {
         String MEDIA_UPLOAD_SELF = "media:upload:self";
         String MEDIA_UPLOAD_MODERATE = "media:upload:moderate";
         String MEDIA_UPLOAD_READ = "media:upload:read";
-        String MEDIA_EVENT_WRITE = "media:event:write";
 
         String BOARD_CONTENT_READ = "board:content:read";
         String BOARD_POSTER_WRITE = "board:poster:write";

@@ -14,4 +14,5 @@ public class UpdateCalendarEventRequest {
     private Instant endTime;
     private Boolean allDay;
     private Audience audience;
+    private Boolean allowUploads;
 }

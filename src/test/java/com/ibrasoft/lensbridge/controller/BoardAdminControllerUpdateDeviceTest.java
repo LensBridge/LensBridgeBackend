@@ -9,6 +9,7 @@ import com.ibrasoft.lensbridge.service.AdminAuditService;
 import com.ibrasoft.lensbridge.service.BoardService;
 import com.ibrasoft.lensbridge.service.PosterService;
 import com.ibrasoft.lensbridge.service.PromotableSocialMediaService;
+import com.ibrasoft.lensbridge.service.UploadService;
 import com.ibrasoft.lensbridge.service.UserService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,6 +58,8 @@ class BoardAdminControllerUpdateDeviceTest {
     private AdminAuditService auditService;
     @MockitoBean
     private BoardStreamHandler boardStreamHandler;
+    @MockitoBean
+    private UploadService uploadService;
 
     /** WebConfig registers CurrentUserArgumentResolver, which needs this in the slice. */
     @MockitoBean

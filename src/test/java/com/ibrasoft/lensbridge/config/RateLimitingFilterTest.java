@@ -48,7 +48,7 @@ class RateLimitingFilterTest {
         filter = new RateLimitingFilter();
         ReflectionTestUtils.setField(filter, "maxRequests", 3);
         ReflectionTestUtils.setField(filter, "durationMinutes", 1);
-        ReflectionTestUtils.setField(filter, "exemptRoles", List.of(Role.ROOT, Role.ADMIN));
+        ReflectionTestUtils.setField(filter, "exemptRoles", List.of(Role.ROOT));
     }
 
     @AfterEach
@@ -116,17 +116,18 @@ class RateLimitingFilterTest {
     }
 
     @Test
-    void adminRoleIsExemptFromRateLimiting() throws Exception {
-        authenticateWith(Role.ADMIN);
+    void nonExemptAdminRoleIsRateLimited() throws Exception {
+        authenticateWith(Role.BOARD_ADMIN);
         FilterChain chain = mock(FilterChain.class);
 
-        for (int i = 0; i < 10; i++) {
-            MockHttpServletResponse response = new MockHttpServletResponse();
-            filter.doFilter(requestFromIp("10.0.0.4"), response, chain);
-            assertThat(response.getStatus()).isEqualTo(HttpStatus.OK.value());
+        for (int i = 0; i < 3; i++) {
+            filter.doFilter(requestFromIp("10.0.0.4"), new MockHttpServletResponse(), chain);
         }
+        MockHttpServletResponse blocked = new MockHttpServletResponse();
+        filter.doFilter(requestFromIp("10.0.0.4"), blocked, chain);
 
-        verify(chain, times(10)).doFilter(any(), any());
+        assertThat(blocked.getStatus()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS.value());
+        verify(chain, times(3)).doFilter(any(), any());
     }
 
     @Test

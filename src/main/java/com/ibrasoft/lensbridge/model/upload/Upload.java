@@ -8,6 +8,7 @@ import lombok.Setter;
 import jakarta.persistence.Id;
 
 import com.ibrasoft.lensbridge.model.auth.User;
+import com.ibrasoft.lensbridge.model.minbar.BoardEvent;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -52,7 +53,7 @@ public class Upload {
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "event_id")
-    private MediaEvent mediaEvent;
+    private BoardEvent boardEvent;
 
     private Instant createdDate;
 

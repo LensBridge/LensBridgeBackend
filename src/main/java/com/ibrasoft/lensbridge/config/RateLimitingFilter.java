@@ -35,7 +35,7 @@ public class RateLimitingFilter extends OncePerRequestFilter {
     @Value("${ratelimit.duration.minutes:1}")
     private int durationMinutes;
 
-    @Value("${ratelimit.exemptRoles:ROOT,ADMIN}")
+    @Value("${ratelimit.exemptRoles:ROOT}")
     private List<Role> exemptRoles;
 
     private final Cache<String, Bucket> bucketCache = Caffeine.newBuilder()

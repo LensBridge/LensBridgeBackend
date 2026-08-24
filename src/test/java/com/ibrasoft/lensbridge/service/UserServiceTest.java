@@ -250,9 +250,9 @@ class UserServiceTest {
     void addRoleRejectsDuplicateRole() {
         rootActor();
         UUID id = UUID.randomUUID();
-        target(id).addRole(Role.ADMIN);
+        target(id).addRole(Role.BOARD_ADMIN);
 
-        assertThatThrownBy(() -> userService.addRole(ROOT_EMAIL, id, Role.ADMIN))
+        assertThatThrownBy(() -> userService.addRole(ROOT_EMAIL, id, Role.BOARD_ADMIN))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("already has role");
     }
@@ -263,9 +263,9 @@ class UserServiceTest {
         UUID id = UUID.randomUUID();
         target(id);
 
-        User result = userService.addRole(ROOT_EMAIL, id, Role.ADMIN);
+        User result = userService.addRole(ROOT_EMAIL, id, Role.BOARD_ADMIN);
 
-        assertThat(result.hasRole(Role.ADMIN)).isTrue();
+        assertThat(result.hasRole(Role.BOARD_ADMIN)).isTrue();
     }
 
     @Test
@@ -274,7 +274,7 @@ class UserServiceTest {
         UUID id = UUID.randomUUID();
         target(id);
 
-        assertThatThrownBy(() -> userService.removeRole(ROOT_EMAIL, id, Role.ADMIN))
+        assertThatThrownBy(() -> userService.removeRole(ROOT_EMAIL, id, Role.BOARD_ADMIN))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("does not have role");
     }
@@ -283,11 +283,11 @@ class UserServiceTest {
     void removeRoleRemovesExistingRole() {
         rootActor();
         UUID id = UUID.randomUUID();
-        target(id).addRole(Role.ADMIN);
+        target(id).addRole(Role.BOARD_ADMIN);
 
-        User result = userService.removeRole(ROOT_EMAIL, id, Role.ADMIN);
+        User result = userService.removeRole(ROOT_EMAIL, id, Role.BOARD_ADMIN);
 
-        assertThat(result.hasRole(Role.ADMIN)).isFalse();
+        assertThat(result.hasRole(Role.BOARD_ADMIN)).isFalse();
     }
 
     @Test
@@ -296,7 +296,7 @@ class UserServiceTest {
         // The target lookup happens first, and when you target yourself it succeeds.
         when(userRepository.findById(root.getId())).thenReturn(Optional.of(root));
 
-        assertThatThrownBy(() -> userService.addRole(ROOT_EMAIL, root.getId(), Role.ADMIN))
+        assertThatThrownBy(() -> userService.addRole(ROOT_EMAIL, root.getId(), Role.BOARD_ADMIN))
                 .isInstanceOf(SecurityException.class)
                 .hasMessageContaining("your own roles");
     }
