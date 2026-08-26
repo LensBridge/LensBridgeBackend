@@ -345,6 +345,16 @@ public class R2StorageService {
     }
 
     /**
+     * How long a presigned download URL stays valid.
+     * <p>
+     * Exposed so callers that hand a presigned URL to a client can also tell the client
+     * when it dies, instead of leaving it to discover the expiry via a 403.
+     */
+    public Duration getDownloadUrlExpiration() {
+        return Duration.ofMinutes(urlExpirationMinutes);
+    }
+
+    /**
      * Generate a presigned download URL for an object, with access control.
      * Throws SecurityException if the content is unapproved and the caller is not admin.
      */

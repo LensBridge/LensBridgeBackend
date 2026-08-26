@@ -4,6 +4,7 @@ import com.ibrasoft.lensbridge.dto.upload.response.AdminUploadDto;
 import com.ibrasoft.lensbridge.dto.upload.response.UploadDto;
 import com.ibrasoft.lensbridge.dto.auth.response.UserStatsResponse;
 import com.ibrasoft.lensbridge.exception.FileProcessingException;
+import com.ibrasoft.lensbridge.model.auth.Permission;
 import com.ibrasoft.lensbridge.model.auth.User;
 import com.ibrasoft.lensbridge.model.minbar.BoardEvent;
 import com.ibrasoft.lensbridge.model.upload.Upload;
@@ -16,6 +17,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -154,7 +158,8 @@ public class UploadService {
     }
 
     public Optional<UploadDto> getUploadByIdAsDto(UUID id) {
-        return uploadRepository.findById(id).map(this::toUploadDto);
+        UploadViewer viewer = currentViewer();
+        return uploadRepository.findById(id).map(upload -> toUploadDto(upload, viewer));
     }
 
     public Page<Upload> getAllUploads(Pageable pageable) {
@@ -170,13 +175,17 @@ public class UploadService {
     public Page<UploadDto> getUploadsByEventAsDto(UUID eventId, Pageable pageable) {
         BoardEvent boardEvent = boardEventRepository.findById(eventId)
                 .orElseThrow(() -> new IllegalArgumentException("Event not found"));
-        return uploadRepository.findByBoardEventAndDeletedAtIsNull(boardEvent, pageable).map(this::toUploadDto);
+        UploadViewer viewer = currentViewer();
+        return uploadRepository.findByBoardEventAndDeletedAtIsNull(boardEvent, pageable)
+                .map(upload -> toUploadDto(upload, viewer));
     }
 
     public Page<UploadDto> getUserUploads(UUID userId, Pageable pageable) {
         User user = userService.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
-        return uploadRepository.findByUploadedByAndDeletedAtIsNull(user, pageable).map(this::toUploadDto);
+        UploadViewer viewer = currentViewer();
+        return uploadRepository.findByUploadedByAndDeletedAtIsNull(user, pageable)
+                .map(upload -> toUploadDto(upload, viewer));
     }
 
     public Page<AdminUploadDto> getAllUploadsForAdmin(Pageable pageable) {
@@ -222,23 +231,117 @@ public class UploadService {
                 .orElseThrow(() -> new IllegalArgumentException("Upload not found: " + id));
     }
 
+    /**
+     * Who is asking for a {@link UploadDto}, and what they are allowed to see.
+     * <p>
+     * Resolved once per query rather than once per row: a page of 50 uploads should cost one
+     * principal lookup, not 50.
+     *
+     * @param userId            the caller's account id, or {@code null} for an unauthenticated caller
+     * @param canReadAllUploads whether the caller holds {@code media:upload:read}
+     */
+    record UploadViewer(UUID userId, boolean canReadAllUploads) {
+
+        static UploadViewer anonymous() {
+            return new UploadViewer(null, false);
+        }
+
+        /** True when this viewer is the account that submitted the upload. */
+        boolean isUploader(Upload upload) {
+            return userId != null
+                    && upload.getUploadedBy() != null
+                    && userId.equals(upload.getUploadedBy().getId());
+        }
+
+        /**
+         * Whether the uploader's identity may be disclosed on an anonymous upload, and whether
+         * unapproved bytes may be presigned. Moderators need both to do review; the uploader
+         * needs both to see their own pending submission.
+         */
+        boolean isPrivilegedFor(Upload upload) {
+            return canReadAllUploads || isUploader(upload);
+        }
+    }
+
+    /**
+     * Resolve the caller from the security context. Never throws: an unresolvable principal
+     * degrades to the least-privileged viewer rather than failing the request.
+     */
+    UploadViewer currentViewer() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()
+                || authentication instanceof AnonymousAuthenticationToken) {
+            return UploadViewer.anonymous();
+        }
+
+        boolean canReadAll = authentication.getAuthorities().stream()
+                .anyMatch(a -> Permission.Authority.MEDIA_UPLOAD_READ.equals(a.getAuthority()));
+
+        UUID userId = userService.findByEmail(authentication.getName())
+                .map(User::getId)
+                .orElse(null);
+
+        return new UploadViewer(userId, canReadAll);
+    }
+
     // TODO: Consolidate this in UploadDTO class as from(Upload)
-    private UploadDto toUploadDto(Upload upload) {
-        return new UploadDto(
-                upload.getUuid(),
-                upload.getFileName(),
-                upload.getFileUrl(),
-                upload.getThumbnailUrl(),
-                upload.getUploadDescription(),
-                upload.getInstagramHandle(),
-                upload.getUploadedBy() != null ? upload.getUploadedBy().getId() : null,
-                upload.getBoardEvent() != null ? upload.getBoardEvent().getId() : null,
-                upload.getBoardEvent() != null ? upload.getBoardEvent().getName() : null,
-                upload.getCreatedDate(),
-                upload.isApproved(),
-                upload.isFeatured(),
-                upload.isAnon(),
-                upload.getContentType());
+    UploadDto toUploadDto(Upload upload, UploadViewer viewer) {
+        boolean privileged = viewer.isPrivilegedFor(upload);
+
+        UploadDto dto = new UploadDto();
+        dto.setUuid(upload.getUuid());
+        dto.setFileName(upload.getFileName());
+        dto.setUploadDescription(upload.getUploadDescription());
+        dto.setEventId(upload.getBoardEvent() != null ? upload.getBoardEvent().getId() : null);
+        dto.setEventName(upload.getBoardEvent() != null ? upload.getBoardEvent().getName() : null);
+        dto.setCreatedDate(upload.getCreatedDate());
+        dto.setApproved(upload.isApproved());
+        dto.setFeatured(upload.isFeatured());
+        dto.setAnon(upload.isAnon());
+        dto.setContentType(upload.getContentType());
+
+        // Anonymity is a promise made to the uploader at submit time. Only the uploader
+        // themselves and moderators (media:upload:read) get to see behind it.
+        boolean masked = upload.isAnon() && !privileged;
+        dto.setUploadedBy(masked || upload.getUploadedBy() == null
+                ? null
+                : upload.getUploadedBy().getId());
+        dto.setInstagramHandle(masked ? null : upload.getInstagramHandle());
+
+        applySecureUrls(dto, upload, privileged);
+        return dto;
+    }
+
+    /**
+     * Replace the stored R2 object keys with scoped, expiring presigned URLs.
+     * <p>
+     * The keys themselves never leave the server: the bucket is fronted by a public custom
+     * domain, so handing out a key is handing out the media. {@code getSecureUrl} is also where
+     * the approval gate lives -- it refuses unapproved content to unprivileged callers. A refusal
+     * (or any storage failure) nulls the URLs instead of failing the whole listing.
+     */
+    private void applySecureUrls(UploadDto dto, Upload upload, boolean privileged) {
+        try {
+            String fileKey = r2StorageService.extractObjectKey(upload.getFileUrl());
+            if (fileKey == null) {
+                return;
+            }
+
+            String fileUrl = r2StorageService.getSecureUrl(fileKey, upload.isApproved(), privileged);
+
+            String thumbKey = r2StorageService.extractObjectKey(upload.getThumbnailUrl());
+            String thumbUrl = thumbKey != null
+                    ? r2StorageService.getSecureThumbnailUrl(thumbKey, upload.isApproved(), privileged)
+                    : fileUrl;
+
+            dto.setFileUrl(fileUrl);
+            dto.setThumbnailUrl(thumbUrl);
+            dto.setUrlExpiresAt(Instant.now().plus(r2StorageService.getDownloadUrlExpiration()));
+        } catch (SecurityException e) {
+            log.debug("Withholding media URLs for upload {}: {}", upload.getUuid(), e.getMessage());
+        } catch (Exception e) {
+            log.error("Failed to generate secure URLs for upload {}: {}", upload.getUuid(), e.getMessage());
+        }
     }
 
     private AdminUploadDto toAdminDto(Upload upload) {
