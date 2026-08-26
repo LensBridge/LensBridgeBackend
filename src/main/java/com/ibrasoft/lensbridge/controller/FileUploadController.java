@@ -4,6 +4,7 @@ import com.ibrasoft.lensbridge.dto.upload.response.PresignedUploadResponse;
 import com.ibrasoft.lensbridge.dto.upload.response.UploadCompletionResponse;
 import com.ibrasoft.lensbridge.dto.upload.response.UploadDto;
 import com.ibrasoft.lensbridge.dto.upload.response.UploadLimitsResponse;
+import com.ibrasoft.lensbridge.model.auth.Permission;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.model.auth.User;
 import com.ibrasoft.lensbridge.security.CurrentUser;
@@ -16,6 +17,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -31,18 +33,37 @@ public class FileUploadController {
     private final UploadWorkflowService uploadWorkflowService;
     private final UploadLimitsService uploadLimitsService;
 
+    /**
+     * A caller who neither uploaded the file nor holds {@code media:upload:read} gets 404 for
+     * anything not yet approved. 404 rather than 403 on purpose: 403 would confirm the id exists.
+     */
     @GetMapping("/{uploadId}")
     @PreAuthorize("hasRole('" + Role.Authority.USER + "')")
-    public ResponseEntity<UploadDto> getUploadById(@PathVariable UUID uploadId) {
-        return uploadService.getUploadByIdAsDto(uploadId)
+    public ResponseEntity<UploadDto> getUploadById(@PathVariable UUID uploadId,
+                                                   @CurrentUser User user,
+                                                   Authentication authentication) {
+        return uploadService.getUploadByIdAsDto(uploadId, user.getId(), canReadAllUploads(authentication))
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
+    /** Ordinary callers see approved uploads plus their own; moderators see the full queue. */
     @GetMapping("/event/{eventId}")
     @PreAuthorize("hasRole('" + Role.Authority.USER + "')")
-    public ResponseEntity<Page<UploadDto>> getUploadsByEvent(@PathVariable UUID eventId, @ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(uploadService.getUploadsByEventAsDto(eventId, pageable));
+    public ResponseEntity<Page<UploadDto>> getUploadsByEvent(@PathVariable UUID eventId,
+                                                             @ParameterObject Pageable pageable,
+                                                             @CurrentUser User user,
+                                                             Authentication authentication) {
+        return ResponseEntity.ok(uploadService.getUploadsByEventAsDto(
+                eventId, pageable, user.getId(), canReadAllUploads(authentication)));
+    }
+
+    private static boolean canReadAllUploads(Authentication authentication) {
+        if (authentication == null) {
+            return false;
+        }
+        return authentication.getAuthorities().stream()
+                .anyMatch(granted -> Permission.Authority.MEDIA_UPLOAD_READ.equals(granted.getAuthority()));
     }
 
     @PostMapping("/{eventId}/direct/presign")
