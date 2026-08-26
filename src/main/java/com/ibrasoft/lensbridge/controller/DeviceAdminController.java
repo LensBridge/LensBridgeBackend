@@ -176,14 +176,29 @@ public class DeviceAdminController {
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
 
-    @Operation(operationId = "listDeviceCommands", summary = "Fetch the 50 most recent commands for a device")
+    /**
+     * Command metadata is fleet status, so {@code BOARD_DEVICE_READ} gates the endpoint. The
+     * {@code output} field is not: for {@code chrome.screenshot} it is an image of a physical
+     * display and for {@code logs.tail} it is agent internals, which
+     * {@link com.ibrasoft.lensbridge.config.stomp.StompJwtChannelInterceptor} already gates behind
+     * {@link Permission#BOARD_TELEMETRY_SUBSCRIBE} on the live topic. Without the same carve-out
+     * here, history replay would hand a plain fleet reader every screenshot ever captured of a
+     * board. Redact rather than refuse: a lower-privilege operator should still see that a
+     * screenshot was taken.
+     */
+    @Operation(operationId = "listDeviceCommands",
+            summary = "Fetch the 50 most recent commands for a device",
+            description = "Command output (a screenshot image, a log tail) is only included for callers "
+                    + "holding board:telemetry:subscribe, matching the live /topic/devices/** channel. "
+                    + "Other callers get the same metadata with output omitted and outputRedacted=true.")
     @GetMapping("/{deviceId}/commands")
     @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_DEVICE_READ + "')")
     public ResponseEntity<List<CommandView>> recentCommands(@PathVariable UUID deviceId) {
+        boolean includeOutput = currentUserHasAuthority(Permission.Authority.BOARD_TELEMETRY_SUBSCRIBE);
         List<CommandView> commands = commandRepository
                 .findTop50ByDeviceIdOrderByIssuedAtDesc(deviceId)
                 .stream()
-                .map(c -> CommandView.of(c, objectMapper))
+                .map(c -> CommandView.of(c, objectMapper, includeOutput))
                 .toList();
         return ResponseEntity.ok(commands);
     }
@@ -191,6 +206,16 @@ public class DeviceAdminController {
     private String getCurrentUserEmail() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         return authentication != null ? authentication.getName() : "unknown";
+    }
+
+    /** Fails closed: no authentication, or an unauthenticated one, holds nothing. */
+    private static boolean currentUserHasAuthority(String authority) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return false;
+        }
+        return authentication.getAuthorities().stream()
+                .anyMatch(granted -> authority.equals(granted.getAuthority()));
     }
 
     /** Audit detail for a command: the kind and its risk class, so the log distinguishes a reload from a screenshot. */
