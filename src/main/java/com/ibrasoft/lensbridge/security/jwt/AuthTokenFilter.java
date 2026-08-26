@@ -18,6 +18,7 @@ import org.springframework.security.web.authentication.WebAuthenticationDetailsS
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import com.ibrasoft.lensbridge.security.services.AuthenticatedUser;
 import com.ibrasoft.lensbridge.security.services.UserDetailsServiceImpl;
 
 public class AuthTokenFilter extends OncePerRequestFilter {
@@ -37,15 +38,28 @@ public class AuthTokenFilter extends OncePerRequestFilter {
       if (jwt != null && jwtUtils.validateJwtToken(jwt)) {
         String username = jwtUtils.getUserNameFromJwtToken(jwt);
 
+        // Authorities are resolved from the database, not read off the token, so a role or
+        // permission taken away takes effect on the next request rather than at expiry.
         UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-        UsernamePasswordAuthenticationToken authentication =
-            new UsernamePasswordAuthenticationToken(
-                userDetails,
-                null,
-                userDetails.getAuthorities());
-        authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
-        SecurityContextHolder.getContext().setAuthentication(authentication);
+        long presented = jwtUtils.getTokenVersionFromJwtToken(jwt);
+        long current = AuthenticatedUser.tokenVersionOf(userDetails);
+        if (presented != current) {
+          // The account's token generation moved on: password changed, or every session was
+          // signed out. The signature is still good and the clock has not run out, but the
+          // token is revoked. Leaving the context unauthenticated makes the entry point
+          // answer 401.
+          logger.debug("Rejecting access token for {}: stale token version", username);
+        } else {
+          UsernamePasswordAuthenticationToken authentication =
+              new UsernamePasswordAuthenticationToken(
+                  userDetails,
+                  null,
+                  userDetails.getAuthorities());
+          authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+          SecurityContextHolder.getContext().setAuthentication(authentication);
+        }
       }
     } catch (Exception e) {
       logger.error("Cannot set user authentication: {}", e);

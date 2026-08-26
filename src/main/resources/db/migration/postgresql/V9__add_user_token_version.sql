@@ -1,0 +1,22 @@
+--
+-- V9: add users.token_version, the generation counter that makes access tokens revocable.
+--
+-- A JWT is self-contained: changing a password revoked every refresh token but left the
+-- already-issued 15-minute access token working, so a stolen token stayed usable for up to
+-- 15 minutes after the victim changed their password specifically to stop it. Every token now
+-- carries the version current when it was minted, AuthTokenFilter compares the claim against
+-- this column on each request, and bumping the column kills every outstanding token for that
+-- account at once. The filter already loads the user on every request, so this costs no extra
+-- query.
+--
+-- Backfilled to 0 to match the entity default. Existing tokens carry no tokenVersion claim;
+-- AuthTokenFilter treats a missing claim as stale, so live sessions re-authenticate once at
+-- deploy -- the same one-off cost as the refresh-token hashing change.
+--
+-- Version 9 rather than 8: V8 is taken by the refresh-token hashing migration, which ships
+-- on its own branch. There is no ordering dependency between the two, and Flyway tolerates
+-- the gap if this lands first.
+--
+-- The SQLite twin of this file must stay at the same version.
+
+alter table users add column token_version bigint not null default 0;

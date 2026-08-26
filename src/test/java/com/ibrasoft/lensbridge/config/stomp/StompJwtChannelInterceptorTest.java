@@ -3,6 +3,7 @@ package com.ibrasoft.lensbridge.config.stomp;
 import com.ibrasoft.lensbridge.model.auth.Permission;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.security.jwt.JwtUtils;
+import com.ibrasoft.lensbridge.security.services.AuthenticatedUser;
 import com.ibrasoft.lensbridge.security.services.UserDetailsServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.springframework.messaging.Message;
@@ -167,11 +168,15 @@ class StompJwtChannelInterceptorTest {
 
     @Test
     void connectWithValidTokenAttachesThePrincipal() {
-        UserDetails user = User.withUsername("u@example.com")
-                .password("x")
-                .authorities(new SimpleGrantedAuthority(
-                        Permission.BOARD_TELEMETRY_SUBSCRIBE.getAuthority()))
-                .build();
+        // AuthenticatedUser, not the plain Spring principal: the interceptor now compares the
+        // token's generation against the account's, and AuthenticatedUser.tokenVersionOf fails
+        // closed at -1 for any principal that cannot report one.
+        UserDetails user = new AuthenticatedUser(
+                "u@example.com",
+                "x",
+                true,
+                List.of(new SimpleGrantedAuthority(Permission.BOARD_TELEMETRY_SUBSCRIBE.getAuthority())),
+                0L);
         when(jwtUtils.validateJwtToken("good")).thenReturn(true);
         when(jwtUtils.getUserNameFromJwtToken("good")).thenReturn("u@example.com");
         when(userDetailsService.loadUserByUsername("u@example.com")).thenReturn(user);
