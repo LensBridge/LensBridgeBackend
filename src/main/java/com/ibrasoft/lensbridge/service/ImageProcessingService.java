@@ -23,6 +23,7 @@ public class ImageProcessingService {
     private final R2StorageService r2StorageService;
     private final UploadRepository uploadRepository;
     private final ImageProcessingProperties properties;
+    private final ImageValidationService imageValidationService;
 
     @Async
     public CompletableFuture<String> generateThumbnail(Upload upload) {
@@ -31,6 +32,12 @@ public class ImageProcessingService {
             log.info("Generating thumbnail for upload {} (key: {})", upload.getUuid(), objectKey);
 
             byte[] originalBytes = r2StorageService.getObjectBytes(objectKey);
+
+            // Second line of defence. The upload path validates before an Upload row exists, but
+            // this worker runs on a shared async pool and will decode whatever the object holds —
+            // including bytes that reached R2 by some other route. Header-only, so it costs
+            // nothing and, crucially, runs before Thumbnailator allocates a raster.
+            imageValidationService.validateDimensions(originalBytes);
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             Thumbnails.of(new ByteArrayInputStream(originalBytes))

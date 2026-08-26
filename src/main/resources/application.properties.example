@@ -70,6 +70,11 @@ image-processing.thumbnail-width=400
 image-processing.thumbnail-height=400
 image-processing.thumbnail-quality=0.7
 image-processing.thumbnail-folder=thumbnails/
+# Largest input resolution the server will decode, in megapixels. Guards against
+# decompression bombs: a few KB on the wire that expand to gigabytes of raster once
+# ImageIO reads them, which no byte-size limit can catch. 50 MP is above any consumer
+# camera and caps one decode at roughly 200 MB of ARGB. Raise only with headroom to match.
+image-processing.max-megapixels=50
 
 # Rate limiting
 ratelimit.requests=100

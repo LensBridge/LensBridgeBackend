@@ -25,8 +25,17 @@ public class UploadLimitsService {
     private final UploadService uploadService;
     private final AuthorityResolver authorityResolver;
 
+    /**
+     * Pre-flight limits for the presign step.
+     * <p>
+     * {@code contentType} here is only ever a client-supplied string — no bytes exist yet — so
+     * this check keeps obviously-wrong requests from getting a signed URL and nothing more. The
+     * authoritative check is {@code ImageValidationService}, which sniffs the stored object at
+     * completion time.
+     */
     public void validateUpload(UUID userId, User user, long fileSize, String contentType) {
-        if (!uploadProperties.getAllowedFileTypes().contains(contentType)) {
+        String normalizedType = ImageValidationService.normalizeContentType(contentType);
+        if (normalizedType == null || !uploadProperties.getAllowedFileTypes().contains(normalizedType)) {
             throw new InvalidContentTypeException(contentType);
         }
 
