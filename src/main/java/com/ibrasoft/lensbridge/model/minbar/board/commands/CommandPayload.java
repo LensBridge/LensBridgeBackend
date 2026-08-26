@@ -10,6 +10,18 @@ import com.ibrasoft.lensbridge.model.minbar.board.frames.FrameConfig;
  * <p>
  * The discriminator is {@code kind} (e.g. {@code "chrome.reload"}). Stored as JSON in
  * {@code device_commands.payload_json} and re-parsed when delivering to the agent.
+ * <p>
+ * <b>This hierarchy is the single source of truth for payload shape on the issue path.</b>
+ * {@code CommandPayloadCodec} resolves the record from the request's {@code kind} via
+ * {@link CommandKind#getPayloadType()}, deserializes into it while rejecting unknown
+ * properties, runs Jakarta Bean Validation, and re-serializes the validated object as
+ * what gets persisted and pushed to the agent. Nothing an operator typed reaches the
+ * device verbatim, so a constraint annotation added to a component here is enforced on
+ * the wire with no further wiring. Declare bounds as constraint annotations rather than
+ * as compact-constructor checks: the codec reports the former as a clean 400.
+ * <p>
+ * The closed {@code @JsonSubTypes} registry below is a deliberate anti-gadget defence.
+ * Never replace it with {@code Id.CLASS}/{@code MINIMAL_CLASS} or enable default typing.
  */
 @JsonTypeInfo(
         use = JsonTypeInfo.Id.NAME,

@@ -12,30 +12,34 @@ import java.util.Optional;
  * {@code CommandDispatcher}, which duplicated the {@code @JsonSubTypes} registration on
  * {@link CommandPayload} with nothing keeping the two in step. Adding a command kind is
  * now: new record + new {@code @Type} entry + a constant here (which forces a risk
- * classification) + agent-side handler. {@code CommandKindTest} fails if the wire strings
- * here and the Jackson subtypes ever diverge.
+ * classification and names the payload record) + agent-side handler.
+ * {@code CommandKindTest} fails if the wire strings, the payload types and the Jackson
+ * subtypes ever diverge.
  * <p>
- * The dispatcher never deserializes the payload into a {@link CommandPayload}; it stores
- * the raw JSON and hands it to the agent so classification has to hang off the wire
- * string rather than the payload type.
+ * Each constant carries the {@link CommandPayload} record that defines its payload shape.
+ * {@code CommandPayloadCodec} uses that mapping to deserialize and Bean-Validate the
+ * incoming JSON before anything is stored or forwarded, so a bound declared on a payload
+ * component is enforced on the wire without any further wiring.
  */
 public enum CommandKind {
 
-    CHROME_RELOAD("chrome.reload", CommandRisk.BENIGN),
-    CONFIG_REFRESH("config.refresh", CommandRisk.BENIGN),
+    CHROME_RELOAD("chrome.reload", CommandRisk.BENIGN, ChromeReloadPayload.class),
+    CONFIG_REFRESH("config.refresh", CommandRisk.BENIGN, ConfigRefreshPayload.class),
 
-    KIOSK_RESTART("kiosk.restart", CommandRisk.DISRUPTIVE),
-    SYSTEM_REBOOT("system.reboot", CommandRisk.DISRUPTIVE),
+    KIOSK_RESTART("kiosk.restart", CommandRisk.DISRUPTIVE, KioskRestartPayload.class),
+    SYSTEM_REBOOT("system.reboot", CommandRisk.DISRUPTIVE, SystemRebootPayload.class),
 
-    CHROME_SCREENSHOT("chrome.screenshot", CommandRisk.INSPECT),
-    LOGS_TAIL("logs.tail", CommandRisk.INSPECT);
+    CHROME_SCREENSHOT("chrome.screenshot", CommandRisk.INSPECT, ChromeScreenshotPayload.class),
+    LOGS_TAIL("logs.tail", CommandRisk.INSPECT, LogsTailPayload.class);
 
     private final String wireName;
     private final CommandRisk risk;
+    private final Class<? extends CommandPayload> payloadType;
 
-    CommandKind(String wireName, CommandRisk risk) {
+    CommandKind(String wireName, CommandRisk risk, Class<? extends CommandPayload> payloadType) {
         this.wireName = wireName;
         this.risk = risk;
+        this.payloadType = payloadType;
     }
 
     /** The dotted discriminator sent over the wire, e.g. {@code chrome.reload}. */
@@ -45,6 +49,11 @@ public enum CommandKind {
 
     public CommandRisk getRisk() {
         return risk;
+    }
+
+    /** The record defining this kind's payload shape; the target type for validated deserialization. */
+    public Class<? extends CommandPayload> getPayloadType() {
+        return payloadType;
     }
 
     public Permission getRequiredPermission() {

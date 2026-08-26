@@ -1,6 +1,7 @@
 package com.ibrasoft.lensbridge.service.agent;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.validation.Validation;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ibrasoft.lensbridge.dto.board.agent.CommandAckFrame;
@@ -45,7 +46,9 @@ class CommandDispatcherTest {
         registry = new AgentSessionRegistry();
         mapper = new ObjectMapper();
         events = mock(DeviceEventPublisher.class);
-        dispatcher = new CommandDispatcher(commandRepo, deviceRepo, registry, mapper, events);
+        CommandPayloadCodec codec = new CommandPayloadCodec(
+                mapper, Validation.buildDefaultValidatorFactory().getValidator());
+        dispatcher = new CommandDispatcher(commandRepo, deviceRepo, registry, mapper, events, codec);
 
         when(commandRepo.save(any())).thenAnswer(inv -> {
             DeviceCommand c = inv.getArgument(0);
