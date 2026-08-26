@@ -4,6 +4,7 @@ import com.ibrasoft.lensbridge.dto.board.request.AgentEnrollRequest;
 import com.ibrasoft.lensbridge.dto.board.response.AgentEnrollResponse;
 import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
+import com.ibrasoft.lensbridge.security.ClientIpResolver;
 import com.ibrasoft.lensbridge.service.agent.DeviceEnrollmentService;
 import com.ibrasoft.lensbridge.service.agent.DeviceEnrollmentService.Outcome;
 import io.swagger.v3.oas.annotations.Operation;
@@ -36,6 +37,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AgentEnrollmentController {
 
     private final DeviceEnrollmentService enrollmentService;
+    private final ClientIpResolver clientIpResolver;
 
     @Value("${musallahboard.agent.websocketUrl}")
     private String websocketUrl;
@@ -54,7 +56,7 @@ public class AgentEnrollmentController {
     @PostMapping("/enroll")
     public ResponseEntity<AgentEnrollResponse> enroll(@Valid @RequestBody AgentEnrollRequest request,
                                     HttpServletRequest httpRequest) {
-        String remoteIp = resolveClientIp(httpRequest);
+        String remoteIp = clientIpResolver.resolveClientIp(httpRequest);
 
         Outcome outcome = enrollmentService.enroll(
                 request.getToken(),
@@ -75,14 +77,5 @@ public class AgentEnrollmentController {
             case Outcome.InvalidToken ignored -> throw new ApiResponseException(HttpStatus.UNAUTHORIZED,
                     new MessageResponse("Enrollment token is invalid, expired, or already used"));
         };
-    }
-
-    private static String resolveClientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            int comma = forwarded.indexOf(',');
-            return (comma > 0 ? forwarded.substring(0, comma) : forwarded).trim();
-        }
-        return request.getRemoteAddr();
     }
 }

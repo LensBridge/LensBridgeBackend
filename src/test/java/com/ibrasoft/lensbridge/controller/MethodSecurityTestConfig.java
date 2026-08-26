@@ -1,5 +1,7 @@
 package com.ibrasoft.lensbridge.controller;
 
+import com.ibrasoft.lensbridge.config.ClientIpProperties;
+import com.ibrasoft.lensbridge.security.ClientIpResolver;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpStatus;
@@ -18,10 +20,25 @@ import org.springframework.security.web.authentication.HttpStatusEntryPoint;
  * enforced (yielding 403 for wrong roles), and a filter chain that requires authentication for all
  * requests (yielding 401 for anonymous, matching the production entry-point behaviour). CSRF is
  * disabled, mirroring production.
+ *
+ * <p>It also supplies {@link ClientIpResolver}. {@code @WebMvcTest} picks up
+ * {@link com.ibrasoft.lensbridge.config.RateLimitingFilter} because it is a servlet filter,
+ * but not the resolver it depends on, which lives outside the slice. Without this bean every
+ * importer of this config fails to start its context. No trusted proxies are configured, so
+ * the resolver ignores {@code X-Forwarded-For} entirely and keys on the peer address --
+ * the safe default, and the right one for a slice test with no proxy in front of it.
  */
 @TestConfiguration
 @EnableMethodSecurity
 class MethodSecurityTestConfig {
+
+    @Bean
+    ClientIpResolver testClientIpResolver() {
+        // @PostConstruct on the resolver is honoured by the container for @Bean instances,
+        // so the trusted-proxy matchers are initialised without calling the (package-private)
+        // initialiser from here.
+        return new ClientIpResolver(new ClientIpProperties());
+    }
 
     @Bean
     SecurityFilterChain testFilterChain(HttpSecurity http) throws Exception {

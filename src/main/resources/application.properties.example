@@ -76,6 +76,19 @@ ratelimit.requests=100
 ratelimit.duration.minutes=1
 ratelimit.exempt-roles=ROLE_ROOT
 
+# Client IP resolution (used for rate-limit buckets, enrollment lastSeenIp, audit records).
+#
+# X-Forwarded-For is client-supplied. It is honoured ONLY when the request's real TCP peer matches
+# one of the CIDRs below, and even then the client IP is read `trusted-proxy-count` entries from the
+# RIGHT-hand end so hops the client prepended are skipped. Leave trusted-proxies empty (the default)
+# when the app is exposed directly -- the header is then ignored entirely and the peer address wins.
+#
+# Behind the docker-compose nginx, set this to the compose bridge network, e.g.:
+#   lensbridge.client-ip.trusted-proxies=172.16.0.0/12
+# The app container is not port-published, so only nginx can reach it on that network.
+lensbridge.client-ip.trusted-proxies=
+lensbridge.client-ip.trusted-proxy-count=1
+
 # Spring multipart cap
 spring.servlet.multipart.max-file-size=250MB
 spring.servlet.multipart.max-request-size=5000MB
