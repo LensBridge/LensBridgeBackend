@@ -1,0 +1,26 @@
+--
+-- V8: invalidate every pre-existing refresh token, because refresh_tokens.token_hash
+-- used to hold the raw token rather than a hash of it.
+--
+-- See the SQLite twin for the full reasoning. In short: the column named token_hash stored
+-- the base64 SecureRandom value verbatim and redemption was an equality lookup against it,
+-- so any read of this table yielded directly replayable 7-day sessions. The service now
+-- stores sha256(pepper || plaintext) hex-encoded and looks up by that digest, matching
+-- VerificationTokenService and EnrollmentTokenService.
+--
+-- Deleting rather than rehashing in place is deliberate. Postgres could do the rehash with
+-- pgcrypto's digest(), but that would require the extension on every deployment target and,
+-- more to the point, those values have sat at rest in plaintext for the life of the table:
+-- rehashing keeps any already-leaked copy valid for another 7 days. Deleting is the clean
+-- cut. Nothing here can be salvaged anyway -- an old token cannot match a hash column.
+--
+-- Consequence: everyone with a live session is logged out once, at deploy. Access tokens
+-- (15 min) keep working until they expire; the next refresh attempt returns 401 and the
+-- client re-authenticates. No user data is touched.
+--
+-- No schema change is needed: token_hash is already varchar(255) not null unique, and a
+-- SHA-256 hex digest is 64 chars.
+--
+-- The SQLite twin of this file must stay at the same version.
+
+delete from refresh_tokens;

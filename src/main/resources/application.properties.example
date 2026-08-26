@@ -105,6 +105,9 @@ lensbridge.app.jwtSecret=replace-with-base64-32-bytes
 lensbridge.app.jwtExpirationMs=900000
 lensbridge.app.refreshTokenExpirationMs=604800000
 lensbridge.app.maxRefreshTokensPerUser=5
+# Optional extra input to the refresh-token hash. Leave empty to disable.
+# Changing or setting this invalidates every existing refresh token (everyone signs in again).
+lensbridge.app.refreshTokenPepper=
 
 # Auth token TTLs
 auth.token.verification-expiration-ms=86400000
