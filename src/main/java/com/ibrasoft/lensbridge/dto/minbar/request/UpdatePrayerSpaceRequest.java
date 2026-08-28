@@ -57,6 +57,17 @@ public class UpdatePrayerSpaceRequest {
     @DecimalMax(value = "180.0", message = "Longitude must be between -180 and 180")
     private Double longitude;
 
+    /**
+     * Removes the map pin entirely.
+     * <p>
+     * The empty-string trick that clears a text field has no equivalent for a number, and
+     * null already means "unchanged" -- so without this a space that was pinned to the wrong
+     * building could be corrected but never un-pinned, and the only way back would be to
+     * delete it and type it in again. Ignored unless true, and rejected alongside a latitude
+     * or longitude in the same request, which asks for both at once.
+     */
+    private Boolean clearCoordinates;
+
     @URL(message = "Maps URL must be a valid URL")
     private String mapsUrl;
 

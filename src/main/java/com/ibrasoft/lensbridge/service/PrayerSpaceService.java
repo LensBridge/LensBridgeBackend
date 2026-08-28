@@ -124,6 +124,15 @@ public class PrayerSpaceService {
         clearable(request.getEntranceName(), space::setEntranceName);
         clearable(request.getEntranceDescription(), space::setEntranceDescription);
 
+        if (Boolean.TRUE.equals(request.getClearCoordinates())) {
+            if (request.getLatitude() != null || request.getLongitude() != null) {
+                throw new ApiResponseException(
+                        HttpStatus.BAD_REQUEST,
+                        ErrorResponse.of("Cannot clear and set coordinates in the same request"));
+            }
+            space.setLatitude(null);
+            space.setLongitude(null);
+        }
         Patch.apply(request.getLatitude(), space::setLatitude);
         Patch.apply(request.getLongitude(), space::setLongitude);
         validateCoordinates(space.getLatitude(), space.getLongitude());

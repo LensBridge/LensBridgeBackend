@@ -4551,6 +4551,7 @@ components:
           - UPLOAD
           - MUSALLAH_BOARD
           - DEVICE
+          - PRAYER_SPACE
           - EVENT
         timestamp:
           type: string
@@ -6641,6 +6642,8 @@ components:
           type: integer
           format: int32
           minimum: 0
+        clearCoordinates:
+          type: boolean
         directions:
           type: string
         entranceDescription:

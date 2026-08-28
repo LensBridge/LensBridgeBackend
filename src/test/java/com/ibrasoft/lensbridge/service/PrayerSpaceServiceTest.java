@@ -193,6 +193,53 @@ class PrayerSpaceServiceTest {
         assertThat(updated.getLongitude()).isEqualTo(-79.6620);
     }
 
+    @Test
+    void updateCanClearThePinEntirely() {
+        PrayerSpace space = existing();
+        space.setLatitude(43.5000);
+        space.setLongitude(-79.6620);
+        when(prayerSpaceRepository.findById(space.getId())).thenReturn(Optional.of(space));
+        echoSave();
+
+        PrayerSpaceView updated = service.update(space.getId(),
+                UpdatePrayerSpaceRequest.builder().clearCoordinates(true).build());
+
+        assertThat(updated.getLatitude()).isNull();
+        assertThat(updated.getLongitude()).isNull();
+    }
+
+    @Test
+    void updateRejectsClearingAndSettingCoordinatesAtOnce() {
+        PrayerSpace space = existing();
+        when(prayerSpaceRepository.findById(space.getId())).thenReturn(Optional.of(space));
+
+        assertThatThrownBy(() -> service.update(space.getId(), UpdatePrayerSpaceRequest.builder()
+                .clearCoordinates(true)
+                .latitude(43.55)
+                .longitude(-79.66)
+                .build()))
+                .isInstanceOf(ApiResponseException.class)
+                .satisfies(e -> assertThat(errorOf(e)).contains("same request"));
+
+        verify(prayerSpaceRepository, never()).save(any());
+    }
+
+    /** false is not a request to do anything, so an existing pin survives it. */
+    @Test
+    void updateLeavesThePinAloneWhenClearCoordinatesIsFalse() {
+        PrayerSpace space = existing();
+        space.setLatitude(43.5000);
+        space.setLongitude(-79.6620);
+        when(prayerSpaceRepository.findById(space.getId())).thenReturn(Optional.of(space));
+        echoSave();
+
+        PrayerSpaceView updated = service.update(space.getId(),
+                UpdatePrayerSpaceRequest.builder().clearCoordinates(false).build());
+
+        assertThat(updated.getLatitude()).isEqualTo(43.5000);
+        assertThat(updated.getLongitude()).isEqualTo(-79.6620);
+    }
+
     // ==================== Patch semantics ====================
 
     @Test
