@@ -28,6 +28,13 @@ public enum AuditAction {
     UPDATE_POSTER("Update Poster"),
     DELETE_POSTER("Delete Poster"),
 
+    // Prayer Space Actions (Minbar)
+    // Worth auditing separately from board content: these are walking directions inside
+    // buildings, and a bad edit is only discovered by someone standing in the wrong hallway.
+    CREATE_PRAYER_SPACE("Create Prayer Space"),
+    UPDATE_PRAYER_SPACE("Update Prayer Space"),
+    DELETE_PRAYER_SPACE("Delete Prayer Space"),
+
     // Promotable Social Media Actions
     CREATE_SOCIAL("Create Promotable Social Media"),
     UPDATE_SOCIAL("Update Promotable Social Media"),

@@ -78,6 +78,9 @@ paths:
           - CREATE_POSTER
           - UPDATE_POSTER
           - DELETE_POSTER
+          - CREATE_PRAYER_SPACE
+          - UPDATE_PRAYER_SPACE
+          - DELETE_PRAYER_SPACE
           - CREATE_SOCIAL
           - UPDATE_SOCIAL
           - DELETE_SOCIAL
@@ -175,6 +178,9 @@ paths:
                   - CREATE_POSTER
                   - UPDATE_POSTER
                   - DELETE_POSTER
+                  - CREATE_PRAYER_SPACE
+                  - UPDATE_PRAYER_SPACE
+                  - DELETE_PRAYER_SPACE
                   - CREATE_SOCIAL
                   - UPDATE_SOCIAL
                   - DELETE_SOCIAL
@@ -1706,6 +1712,133 @@ paths:
           description: Request failed; body carries a human-readable message
       tags:
       - board-admin-controller
+  /api/admin/minbar/prayer-spaces:
+    get:
+      operationId: listAdminPrayerSpaces
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PrayerSpaceView"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      summary: "List every prayer space, regardless of audience"
+      tags:
+      - prayer-space-admin-controller
+    post:
+      operationId: createPrayerSpace
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePrayerSpaceRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrayerSpaceView"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      summary: Create a prayer space
+      tags:
+      - prayer-space-admin-controller
+  /api/admin/minbar/prayer-spaces/{id}:
+    delete:
+      operationId: deletePrayerSpace
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      summary: Delete a prayer space and its directions
+      tags:
+      - prayer-space-admin-controller
+    get:
+      operationId: getAdminPrayerSpace
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrayerSpaceView"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      summary: Fetch one prayer space as an administrator
+      tags:
+      - prayer-space-admin-controller
+    patch:
+      operationId: updatePrayerSpace
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePrayerSpaceRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrayerSpaceView"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      summary: Update a prayer space; omitted fields are left unchanged
+      tags:
+      - prayer-space-admin-controller
   /api/admin/permissions:
     get:
       operationId: getAvailablePermissions
@@ -1867,6 +2000,7 @@ paths:
               - BOARD_SOCIAL_WRITE
               - BOARD_WEEKLY_WRITE
               - BOARD_TICKER_WRITE
+              - BOARD_PRAYER_SPACE_WRITE
               - BOARD_CONFIG_READ
               - BOARD_CONFIG_WRITE
               - BOARD_REFRESH
@@ -1966,6 +2100,7 @@ paths:
               - BOARD_SOCIAL_WRITE
               - BOARD_WEEKLY_WRITE
               - BOARD_TICKER_WRITE
+              - BOARD_PRAYER_SPACE_WRITE
               - BOARD_CONFIG_READ
               - BOARD_CONFIG_WRITE
               - BOARD_REFRESH
@@ -2494,7 +2629,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/PrayerSpace"
+                  $ref: "#/components/schemas/PrayerSpaceView"
           description: OK
         default:
           content:
@@ -2502,7 +2637,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
           description: Request failed; body carries a human-readable message
-      summary: List prayer spaces for an audience
+      summary: "List prayer spaces for an audience, with directions"
       tags:
       - minbar-controller
   /api/minbar/prayer-spaces/{id}:
@@ -2520,7 +2655,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PrayerSpace"
+                $ref: "#/components/schemas/PrayerSpaceView"
           description: OK
         default:
           content:
@@ -4241,6 +4376,10 @@ components:
       properties:
         zoneName:
           type: string
+          maxLength: 20
+          minLength: 0
+      required:
+      - zoneName
     AdminUploadDto:
       type: object
       properties:
@@ -4356,6 +4495,9 @@ components:
           - CREATE_POSTER
           - UPDATE_POSTER
           - DELETE_POSTER
+          - CREATE_PRAYER_SPACE
+          - UPDATE_PRAYER_SPACE
+          - DELETE_PRAYER_SPACE
           - CREATE_SOCIAL
           - UPDATE_SOCIAL
           - DELETE_SOCIAL
@@ -4665,7 +4807,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/OrderItemRequest"
-          minItems: 1
+          maxItems: 100
+          minItems: 0
         providerId:
           type: string
       required:
@@ -4706,6 +4849,103 @@ components:
       - imageFile
       - startTime
       - title
+    CreatePrayerSpaceRequest:
+      type: object
+      properties:
+        amenities:
+          type: array
+          items:
+            type: string
+            maxLength: 255
+            minLength: 0
+        audience:
+          type: string
+          enum:
+          - brothers
+          - sisters
+          - both
+        building:
+          type: string
+          maxLength: 255
+          minLength: 0
+        capacity:
+          type: integer
+          format: int32
+          minimum: 0
+        directions:
+          type: string
+        entranceDescription:
+          type: string
+          maxLength: 255
+          minLength: 0
+        entranceName:
+          type: string
+          maxLength: 255
+          minLength: 0
+        floor:
+          type: string
+          maxLength: 255
+          minLength: 0
+        imageUrl:
+          type: string
+          pattern: ""
+        latitude:
+          type: number
+          format: double
+          maximum: 90.0
+          minimum: -90.0
+        longitude:
+          type: number
+          format: double
+          maximum: 180.0
+          minimum: -180.0
+        mapsUrl:
+          type: string
+          pattern: ""
+        name:
+          type: string
+          maxLength: 255
+          minLength: 0
+        notes:
+          type: string
+        roomInfo:
+          type: string
+          maxLength: 255
+          minLength: 0
+        startingPoint:
+          type: string
+          maxLength: 255
+          minLength: 0
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/DirectionStepRequest"
+        tag:
+          type: string
+          maxLength: 255
+          minLength: 0
+        tips:
+          type: array
+          items:
+            type: string
+            maxLength: 255
+            minLength: 0
+        type:
+          type: string
+          enum:
+          - brothers
+          - sisters
+          - multifaith
+          - reflection
+        walkTimeMinutes:
+          type: integer
+          format: int32
+          minimum: 0
+      required:
+      - building
+      - name
+      - tag
+      - type
     CreatePromotableSocialMediaRequest:
       type: object
       properties:
@@ -4758,18 +4998,31 @@ components:
       properties:
         email:
           type: string
+          format: email
+          maxLength: 255
+          minLength: 0
         eventId:
           type: string
           format: uuid
         firstName:
           type: string
+          maxLength: 50
+          minLength: 0
         lastName:
           type: string
+          maxLength: 50
+          minLength: 0
         sendEmail:
           type: boolean
         ticketTypeId:
           type: string
           format: uuid
+      required:
+      - email
+      - eventId
+      - firstName
+      - lastName
+      - ticketTypeId
     CreateTicketTypeRequest:
       type: object
       properties:
@@ -4890,7 +5143,20 @@ components:
         revokedAt:
           type: string
           format: date-time
-    DirectionStep:
+    DirectionStepRequest:
+      type: object
+      properties:
+        instruction:
+          type: string
+          maxLength: 255
+          minLength: 0
+        subtext:
+          type: string
+          maxLength: 255
+          minLength: 0
+      required:
+      - instruction
+    DirectionStepView:
       type: object
       properties:
         id:
@@ -4898,7 +5164,7 @@ components:
           format: uuid
         instruction:
           type: string
-        stepOrder:
+        order:
           type: integer
           format: int32
         subtext:
@@ -5852,7 +6118,7 @@ components:
             type: string
           title:
             type: string
-    PrayerSpace:
+    PrayerSpaceView:
       type: object
       properties:
         amenities:
@@ -5870,6 +6136,8 @@ components:
         capacity:
           type: integer
           format: int32
+        directions:
+          type: string
         entranceDescription:
           type: string
         entranceName:
@@ -5879,24 +6147,41 @@ components:
         id:
           type: string
           format: uuid
-        location:
+        imageUrl:
           type: string
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
         mapsUrl:
           type: string
         name:
+          type: string
+        notes:
+          type: string
+        roomInfo:
           type: string
         startingPoint:
           type: string
         steps:
           type: array
           items:
-            $ref: "#/components/schemas/DirectionStep"
+            $ref: "#/components/schemas/DirectionStepView"
         tag:
           type: string
         tips:
           type: array
           items:
             type: string
+        type:
+          type: string
+          enum:
+          - brothers
+          - sisters
+          - multifaith
+          - reflection
         walkTimeMinutes:
           type: integer
           format: int32
@@ -6068,6 +6353,9 @@ components:
         zoneId:
           type: string
           format: uuid
+      required:
+      - ticketId
+      - zoneId
     ScanResult:
       type: object
       properties:
@@ -6330,6 +6618,98 @@ components:
           format: date-time
         title:
           type: string
+    UpdatePrayerSpaceRequest:
+      type: object
+      properties:
+        amenities:
+          type: array
+          items:
+            type: string
+            maxLength: 255
+            minLength: 0
+        audience:
+          type: string
+          enum:
+          - brothers
+          - sisters
+          - both
+        building:
+          type: string
+          maxLength: 255
+          minLength: 0
+        capacity:
+          type: integer
+          format: int32
+          minimum: 0
+        directions:
+          type: string
+        entranceDescription:
+          type: string
+          maxLength: 255
+          minLength: 0
+        entranceName:
+          type: string
+          maxLength: 255
+          minLength: 0
+        floor:
+          type: string
+          maxLength: 255
+          minLength: 0
+        imageUrl:
+          type: string
+          pattern: ""
+        latitude:
+          type: number
+          format: double
+          maximum: 90.0
+          minimum: -90.0
+        longitude:
+          type: number
+          format: double
+          maximum: 180.0
+          minimum: -180.0
+        mapsUrl:
+          type: string
+          pattern: ""
+        name:
+          type: string
+          maxLength: 255
+          minLength: 0
+        notes:
+          type: string
+        roomInfo:
+          type: string
+          maxLength: 255
+          minLength: 0
+        startingPoint:
+          type: string
+          maxLength: 255
+          minLength: 0
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/DirectionStepRequest"
+        tag:
+          type: string
+          maxLength: 255
+          minLength: 0
+        tips:
+          type: array
+          items:
+            type: string
+            maxLength: 255
+            minLength: 0
+        type:
+          type: string
+          enum:
+          - brothers
+          - sisters
+          - multifaith
+          - reflection
+        walkTimeMinutes:
+          type: integer
+          format: int32
+          minimum: 0
     UpdateProfileRequest:
       type: object
       properties:
@@ -6566,6 +6946,9 @@ components:
         zoneId:
           type: string
           format: uuid
+      required:
+      - ticketId
+      - zoneId
     ValidateResetTokenRequest:
       type: object
       properties:
