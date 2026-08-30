@@ -91,7 +91,7 @@ public class AuthController {
 
             loginAttemptService.recordSuccessfulAttempt(clientKey);
 
-            String jwt = jwtUtils.generateJwtToken(authentication);
+            String jwt = jwtUtils.generateJwtToken(authentication, user.getTokenVersion());
             RefreshToken refreshToken = refreshTokenService.createRefreshToken(
                     user.getId(), request.getHeader("User-Agent"), getClientIpAddress(request));
 
@@ -202,7 +202,8 @@ public class AuthController {
 
     @Operation(operationId = "changePassword",
             summary = "Change the signed-in user's password",
-            description = "Revokes every refresh token for the user, so all sessions must sign in again.")
+            description = "Revokes every refresh token for the user and invalidates every access token "
+                    + "already issued, so all sessions must sign in again immediately.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Password changed; all sessions revoked"),
             @ApiResponse(responseCode = "400", description = "Current password incorrect or new password rejected",
@@ -214,6 +215,9 @@ public class AuthController {
     @PreAuthorize("hasRole('" + Role.Authority.USER + "')")
     public ResponseEntity<MessageResponse> changePassword(@Valid @RequestBody ChangePasswordRequest changePasswordRequest,
                                             @CurrentUser User user) {
+        // User.setPassword bumps tokenVersion, and changePassword persists the entity, so the
+        // access tokens minted against the old password stop being accepted on the next request
+        // rather than at their 15-minute expiry. Refresh tokens live in their own table.
         userService.changePassword(user, changePasswordRequest);
         refreshTokenService.revokeAllUserTokens(user.getId());
         return ResponseEntity.ok(new MessageResponse("Password changed successfully. Please log in again."));
@@ -244,7 +248,7 @@ public class AuthController {
 
         List<GrantedAuthority> authorities = new ArrayList<>(user.getRoles());
         Authentication auth = new UsernamePasswordAuthenticationToken(user.getEmail(), null, authorities);
-        String newAccessToken = jwtUtils.generateJwtToken(auth);
+        String newAccessToken = jwtUtils.generateJwtToken(auth, user.getTokenVersion());
 
         refreshTokenService.revokeRefreshToken(requestRefreshToken);
         RefreshToken newRefreshToken = refreshTokenService.createRefreshToken(userId, "Token refresh", "System");
@@ -264,7 +268,10 @@ public class AuthController {
         return ResponseEntity.ok(new MessageResponse("Logged out successfully"));
     }
 
-    @Operation(operationId = "logoutAllDevices", summary = "Revoke every refresh token for the signed-in user")
+    @Operation(operationId = "logoutAllDevices",
+            summary = "End every session for the signed-in user",
+            description = "Revokes every refresh token and invalidates every access token already "
+                    + "issued, including the one used to make this call.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "All sessions ended"),
             @ApiResponse(responseCode = "403", description = "Not signed in",
@@ -273,6 +280,11 @@ public class AuthController {
     @PostMapping("/logout-all-devices")
     @PreAuthorize("hasRole('" + Role.Authority.USER + "')")
     public ResponseEntity<MessageResponse> logoutAllDevices(@CurrentUser User user) {
+        // "All devices" has to mean the access tokens too. Revoking only refresh tokens leaves a
+        // stolen JWT working for up to its full lifetime, which is the window the user pressed
+        // this button to close.
+        user.incrementTokenVersion();
+        userService.saveUser(user);
         refreshTokenService.revokeAllUserTokens(user.getId());
         return ResponseEntity.ok(new MessageResponse("Logged out from all devices successfully"));
     }

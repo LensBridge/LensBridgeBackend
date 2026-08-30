@@ -67,7 +67,23 @@ public class User {
   @Column()
   @Enumerated(EnumType.STRING)
   private Audience audience;
-  
+
+  /**
+   * Generation counter for this account's access tokens.
+   * <p>
+   * Every JWT carries the value that was current when it was minted; {@code AuthTokenFilter}
+   * compares the claim against this column on each request and rejects anything stale. Bumping
+   * it is therefore the only way to kill an access token before its 15-minute expiry — refresh
+   * tokens live in their own table and are revoked separately, but a JWT is self-contained and
+   * would otherwise stay usable after the victim changed their password precisely to stop it.
+   * <p>
+   * Not a security boundary on its own: it is a revocation counter, not a secret, and it only
+   * ever moves forward. Wrapping is not a concern at {@code long} width.
+   */
+  @JsonIgnore
+  @Column(nullable = false)
+  private long tokenVersion = 0L;
+
   public User(String firstName, String lastName, String email, String passwordHash) {
     this.firstName = firstName;
     this.lastName = lastName;
@@ -83,8 +99,29 @@ public class User {
     return passwordHash;
   }
 
+  /**
+   * Sets the stored hash and invalidates every access token minted against the old one.
+   * <p>
+   * The bump lives here rather than in the callers because this is the single chokepoint every
+   * credential change goes through — self-service change-password, the emailed reset link, and
+   * the admin-initiated reset all land on this setter. A caller that forgot to bump would leave
+   * a 15-minute window in which the old password's tokens still work, which is the whole bug
+   * this counter exists to close.
+   * <p>
+   * JPA hydration writes the field directly, not through this setter, so loading a row does not
+   * move the counter.
+   */
   public void setPassword(String passwordHash) {
     this.passwordHash = passwordHash;
+    incrementTokenVersion();
+  }
+
+  /**
+   * Invalidates every access token issued for this account so far. The caller must persist the
+   * entity for it to take effect.
+   */
+  public void incrementTokenVersion() {
+    this.tokenVersion++;
   }
 
   public void addRole(Role role) {

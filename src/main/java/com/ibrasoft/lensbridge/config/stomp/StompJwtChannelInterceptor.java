@@ -2,6 +2,7 @@ package com.ibrasoft.lensbridge.config.stomp;
 
 import com.ibrasoft.lensbridge.model.auth.Permission;
 import com.ibrasoft.lensbridge.security.jwt.JwtUtils;
+import com.ibrasoft.lensbridge.security.services.AuthenticatedUser;
 import com.ibrasoft.lensbridge.security.services.UserDetailsServiceImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -94,6 +95,15 @@ public class StompJwtChannelInterceptor implements ChannelInterceptor {
 
         String username = jwtUtils.getUserNameFromJwtToken(token);
         UserDetails user = userDetailsService.loadUserByUsername(username);
+
+        // Same revocation check the HTTP filter makes. A WebSocket is a long-lived
+        // connection authenticated once at CONNECT, so honouring a token the account has
+        // already invalidated would outlive the JWT's own expiry, not just precede it.
+        if (jwtUtils.getTokenVersionFromJwtToken(token) != AuthenticatedUser.tokenVersionOf(user)) {
+            log.warn("STOMP CONNECT rejected: stale token version for {}", username);
+            throw new IllegalArgumentException("Revoked JWT on STOMP CONNECT");
+        }
+
         UsernamePasswordAuthenticationToken auth =
                 new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
         accessor.setUser(auth);
