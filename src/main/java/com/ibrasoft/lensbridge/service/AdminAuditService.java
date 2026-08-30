@@ -120,6 +120,7 @@ public class AdminAuditService {
             case "poster", "calendarevent", "boardevent", "musallah board",
                  "boardconfig", "weeklycontent" -> AuditEntityType.MUSALLAH_BOARD;
             case "device" -> AuditEntityType.DEVICE;
+            case "prayerspace" -> AuditEntityType.PRAYER_SPACE;
             default -> AuditEntityType.EVENT;
         };
     }

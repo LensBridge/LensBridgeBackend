@@ -5,6 +5,8 @@ public enum AuditEntityType {
     UPLOAD("Upload"),
     MUSALLAH_BOARD("Musallah Board"),
     DEVICE("Device"),
+    /** A prayer space and its walking directions. */
+    PRAYER_SPACE("Prayer Space"),
     EVENT("Event");
 
 

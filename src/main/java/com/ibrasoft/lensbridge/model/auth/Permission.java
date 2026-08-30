@@ -36,6 +36,13 @@ public enum Permission implements GrantedAuthority {
     BOARD_WEEKLY_WRITE(Authority.BOARD_WEEKLY_WRITE),
     /** Ticker copy only. Deliberately not BOARD_CONFIG_WRITE, which can move the board's coordinates. */
     BOARD_TICKER_WRITE(Authority.BOARD_TICKER_WRITE),
+    /**
+     * The prayer spaces the app navigates people to. Its own permission rather than
+     * BOARD_CONTENT_READ's write twin, because these are wayfinding instructions a
+     * student follows through a building at Maghrib -- getting them wrong sends someone
+     * to the wrong floor, which is a different kind of wrong from a stale poster.
+     */
+    BOARD_PRAYER_SPACE_WRITE(Authority.BOARD_PRAYER_SPACE_WRITE),
 
     // ==================== MusallahBoard configuration ====================
 
@@ -107,6 +114,7 @@ public enum Permission implements GrantedAuthority {
         String BOARD_SOCIAL_WRITE = "board:social:write";
         String BOARD_WEEKLY_WRITE = "board:weekly:write";
         String BOARD_TICKER_WRITE = "board:ticker:write";
+        String BOARD_PRAYER_SPACE_WRITE = "board:prayerspace:write";
 
         String BOARD_CONFIG_READ = "board:config:read";
         String BOARD_CONFIG_WRITE = "board:config:write";

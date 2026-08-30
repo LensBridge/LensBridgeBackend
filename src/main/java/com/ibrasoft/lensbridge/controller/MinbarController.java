@@ -3,9 +3,9 @@ package com.ibrasoft.lensbridge.controller;
 import com.ibrasoft.lensbridge.dto.board.response.frames.EventView;
 import com.ibrasoft.lensbridge.model.minbar.Audience;
 import com.ibrasoft.lensbridge.model.minbar.BoardEvent;
-import com.ibrasoft.lensbridge.model.minbar.PrayerSpace;
-import com.ibrasoft.lensbridge.repository.sql.PrayerSpaceRepository;
+import com.ibrasoft.lensbridge.dto.minbar.response.PrayerSpaceView;
 import com.ibrasoft.lensbridge.service.BoardService;
+import com.ibrasoft.lensbridge.service.PrayerSpaceService;
 import com.ibrasoft.tcketmanagebackend.model.ticket.TicketType;
 import com.ibrasoft.tcketmanagebackend.repository.TicketTypeRepository;
 import io.swagger.v3.oas.annotations.Operation;
@@ -27,14 +27,14 @@ import java.util.stream.Collectors;
 public class MinbarController {
 
     private final BoardService boardService;
-    private final PrayerSpaceRepository prayerSpaceRepository;
+    private final PrayerSpaceService prayerSpaceService;
     private final TicketTypeRepository ticketTypeRepository;
 
     MinbarController(BoardService boardService,
-                     PrayerSpaceRepository prayerSpaceRepository,
+                     PrayerSpaceService prayerSpaceService,
                      ObjectProvider<TicketTypeRepository> ticketTypeRepoProvider) {
         this.boardService = boardService;
-        this.prayerSpaceRepository = prayerSpaceRepository;
+        this.prayerSpaceService = prayerSpaceService;
         this.ticketTypeRepository = ticketTypeRepoProvider.getIfAvailable();
     }
 
@@ -69,20 +69,25 @@ public class MinbarController {
         return ResponseEntity.ok(events);
     }
 
+    /**
+     * Every space carries its full walking directions. The list used to omit them -- the
+     * endpoint returned the entity and {@code steps} is lazy -- which forced clients into
+     * a follow-up request per space just to render a directions sheet. There are single
+     * digits of prayer spaces on a campus; serving them whole is cheaper than the fan-out
+     * was.
+     */
     @GetMapping("/prayer-spaces")
-    @Operation(operationId = "getMinbarPrayerSpaces", summary = "List prayer spaces for an audience")
-    public ResponseEntity<List<PrayerSpace>> getPrayerSpaces(@RequestParam Audience audience) {
+    @Operation(operationId = "getMinbarPrayerSpaces", summary = "List prayer spaces for an audience, with directions")
+    public ResponseEntity<List<PrayerSpaceView>> getPrayerSpaces(@RequestParam Audience audience) {
         log.debug("Minbar fetching prayer spaces for {}", audience);
-        return ResponseEntity.ok(prayerSpaceRepository.findByAudienceOrBoth(audience));
+        return ResponseEntity.ok(prayerSpaceService.getSpacesForAudience(audience));
     }
 
     @GetMapping("/prayer-spaces/{id}")
     @Operation(operationId = "getMinbarPrayerSpaceById", summary = "Fetch a single prayer space with directions")
-    public ResponseEntity<PrayerSpace> getPrayerSpaceById(@PathVariable UUID id) {
+    public ResponseEntity<PrayerSpaceView> getPrayerSpaceById(@PathVariable UUID id) {
         log.debug("Minbar fetching prayer space {}", id);
-        return prayerSpaceRepository.findById(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        return ResponseEntity.ok(prayerSpaceService.getSpace(id));
     }
 
     private Map<UUID, List<TicketType>> loadTicketTypes(List<BoardEvent> boardEvents) {

@@ -44,6 +44,7 @@ final class RolePermissions {
                 Permission.BOARD_SOCIAL_WRITE,
                 Permission.BOARD_WEEKLY_WRITE,
                 Permission.BOARD_TICKER_WRITE,
+                Permission.BOARD_PRAYER_SPACE_WRITE,
                 Permission.BOARD_REFRESH));
 
         // Owns the board product. Note the absence of everything under iam: — owning the

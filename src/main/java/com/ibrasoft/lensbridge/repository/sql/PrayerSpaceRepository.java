@@ -15,4 +15,7 @@ public interface PrayerSpaceRepository extends JpaRepository<PrayerSpace, UUID> 
 
     @Query("SELECT ps FROM PrayerSpace ps WHERE ps.audience = :aud OR ps.audience = com.ibrasoft.lensbridge.model.minbar.Audience.BOTH ORDER BY ps.name ASC")
     List<PrayerSpace> findByAudienceOrBoth(@Param("aud") Audience audience);
+
+    /** Every space regardless of audience — the console manages all of them. */
+    List<PrayerSpace> findAllByOrderByNameAsc();
 }
