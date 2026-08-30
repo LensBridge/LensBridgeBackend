@@ -45,6 +45,11 @@ musallahboard.enrollment.tokenPepper=
 musallahboard.defaultTimezone=America/Toronto
 # How often undelivered device commands are expired and in-flight ones timed out.
 musallahboard.command.reaperIntervalMs=60000
+# Board refresh stream (/api/refresh-musallahboard). A connection has no authority until it
+# completes the Ed25519 challenge-response; these bound how long it may sit there trying.
+# The deadline is enforced by a sweep, so the effective ceiling is the sum of the two.
+musallahboard.stream.authTimeoutMs=15000
+musallahboard.stream.authReaperIntervalMs=5000
 
 # Cloudflare R2
 cloudflare.r2.endpoint=https://<account-id>.r2.cloudflarestorage.com
