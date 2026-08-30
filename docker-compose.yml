@@ -44,6 +44,12 @@ services:
       FRONTEND_BASEURL: ${FRONTEND_BASEURL}
       MUSALLAHBOARD_BASEURL: ${MUSALLAHBOARD_BASEURL}
       SPRINGDOC_API_DOCS_ENABLED: ${SPRINGDOC_API_DOCS_ENABLED:-false}
+      # Only nginx can reach this container (it is not port-published), so the compose bridge
+      # network is the trusted-proxy range. Without this the app ignores X-Forwarded-For and
+      # rate-limits every caller under nginx's single address. See lensbridge.client-ip.* in
+      # application.properties.example.
+      LENSBRIDGE_CLIENTIP_TRUSTEDPROXIES: ${CLIENT_IP_TRUSTED_PROXIES:-172.16.0.0/12}
+      LENSBRIDGE_CLIENTIP_TRUSTEDPROXYCOUNT: ${CLIENT_IP_TRUSTED_PROXY_COUNT:-1}
     volumes:
       - thumbnails:/app/thumbnails
     networks:
