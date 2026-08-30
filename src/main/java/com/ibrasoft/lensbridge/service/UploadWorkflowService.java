@@ -5,6 +5,8 @@ import com.ibrasoft.lensbridge.dto.upload.response.PresignedUploadResponse;
 import com.ibrasoft.lensbridge.dto.upload.response.UploadCompletionResponse;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
 import com.ibrasoft.lensbridge.exception.EventNotAcceptingUploadsException;
+import com.ibrasoft.lensbridge.exception.ImageDimensionsExceededException;
+import com.ibrasoft.lensbridge.exception.InvalidContentTypeException;
 import com.ibrasoft.lensbridge.model.auth.User;
 import com.ibrasoft.lensbridge.model.minbar.BoardEvent;
 import com.ibrasoft.lensbridge.model.upload.Upload;
@@ -16,8 +18,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.UUID;
 
 @Service
@@ -30,6 +35,7 @@ public class UploadWorkflowService {
     private final UploadLimitsService uploadLimitsService;
     private final BoardEventRepository boardEventRepository;
     private final ImageProcessingService imageProcessingService;
+    private final ImageValidationService imageValidationService;
 
     @Value("${lensbridge.app.daysCutoffForPastEvent:7}")
     private int daysCutoffForPastEvent;
@@ -86,8 +92,8 @@ public class UploadWorkflowService {
         }
 
         try {
-            verifyIntegrity(objectKey, fileSize, expectedSha256);
-        } catch (ApiResponseException e) {
+            verifyIntegrity(objectKey, fileSize, expectedSha256, contentType);
+        } catch (ApiResponseException | InvalidContentTypeException | ImageDimensionsExceededException e) {
             r2StorageService.deleteObject(objectKey);
             throw e;
         }
@@ -129,7 +135,18 @@ public class UploadWorkflowService {
         }
     }
 
-    private void verifyIntegrity(String objectKey, long expectedSize, String expectedSha256) {
+    /**
+     * Establishes that the stored object is what the client said it uploaded.
+     * <p>
+     * Size and hash only prove the bytes are the ones the client intended to send — they say
+     * nothing about whether those bytes are an image at all. {@link ImageValidationService} then
+     * sniffs the real container type and reads the image header, so a ZIP declared as
+     * {@code image/png} and a decompression bomb are both rejected here, before the object gets
+     * an {@code Upload} row and before the async thumbnail worker tries to decode it.
+     */
+    private void verifyIntegrity(String objectKey, long expectedSize, String expectedSha256,
+            String declaredContentType) {
+        byte[] bytes;
         try {
             long storedSize = r2StorageService.getObjectMetadata(objectKey).contentLength();
             if (storedSize != expectedSize) {
@@ -139,7 +156,11 @@ public class UploadWorkflowService {
                         "File size mismatch");
             }
 
-            String actualHash = r2StorageService.calculateSha256Hash(objectKey);
+            // One fetch serves both the hash and the content checks below; the size check above
+            // has already bounded how much we are about to pull into the heap.
+            bytes = r2StorageService.getObjectBytes(objectKey);
+
+            String actualHash = sha256Hex(bytes);
             if (!actualHash.equalsIgnoreCase(expectedSha256)) {
                 throw new ApiResponseException(
                         HttpStatus.BAD_REQUEST,
@@ -156,5 +177,14 @@ public class UploadWorkflowService {
                     ErrorResponse.of("Failed to verify file integrity"),
                     "Integrity verification error");
         }
+
+        // Outside the catch above: these throw their own mapped exceptions, and wrapping them in
+        // a generic "failed to verify integrity" would hide why the upload was refused.
+        imageValidationService.validateImageBytes(bytes, declaredContentType);
+    }
+
+    private static String sha256Hex(byte[] bytes) throws NoSuchAlgorithmException {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        return HexFormat.of().formatHex(digest.digest(bytes));
     }
 }

@@ -196,6 +196,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 .body(ErrorResponse.of(ex.getMessage()));
     }
 
+    @ExceptionHandler(ImageDimensionsExceededException.class)
+    public ResponseEntity<Object> handleImageDimensionsExceeded(ImageDimensionsExceededException ex) {
+        log.warn("Rejected oversized image: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(ErrorResponse.of(ex.getMessage()));
+    }
+
     @ExceptionHandler(EventNotAcceptingUploadsException.class)
     public ResponseEntity<Object> handleEventNotAcceptingUploads(EventNotAcceptingUploadsException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
