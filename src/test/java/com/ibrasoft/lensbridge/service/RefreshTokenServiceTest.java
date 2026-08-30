@@ -14,7 +14,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -47,11 +50,22 @@ class RefreshTokenServiceTest {
     void setUp() {
         ReflectionTestUtils.setField(service, "refreshTokenDurationMs", 604_800_000L);
         ReflectionTestUtils.setField(service, "maxRefreshTokensPerUser", 5);
+        ReflectionTestUtils.setField(service, "pepper", "");
         userId = UUID.randomUUID();
         user = new User("A", "B", "a@b.ca", "p");
         user.setId(userId);
         lenient().when(refreshTokenRepository.save(any(RefreshToken.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
+    }
+
+    /** Independent SHA-256 hex, so the test does not just re-run the implementation. */
+    private static String sha256Hex(String plaintext) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(plaintext.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     private RefreshToken token(Instant created, boolean revoked) {
@@ -72,12 +86,56 @@ class RefreshTokenServiceTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
         Instant before = Instant.now();
-        RefreshToken created = service.createRefreshToken(userId, "device", "1.2.3.4");
+        RefreshToken created = service.createRefreshToken(userId, "device", "1.2.3.4").token();
 
         long ttlSeconds = created.getExpiryDate().getEpochSecond() - before.getEpochSecond();
         assertThat(ttlSeconds).isCloseTo(604_800L, org.assertj.core.data.Offset.offset(5L));
         assertThat(created.isRevoked()).isFalse();
         assertThat(created.getTokenHash()).isNotBlank();
+    }
+
+    @Test
+    void createRefreshTokenStoresHashNeverThePlaintext() {
+        when(refreshTokenRepository.findByUser_Id(userId)).thenReturn(List.of());
+        when(refreshTokenRepository.countByUser_IdAndRevokedFalse(userId)).thenReturn(0L);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        RefreshTokenService.IssuedRefreshToken issued = service.createRefreshToken(userId, "device", "1.2.3.4");
+
+        ArgumentCaptor<RefreshToken> saved = ArgumentCaptor.forClass(RefreshToken.class);
+        verify(refreshTokenRepository).save(saved.capture());
+
+        assertThat(issued.plaintext()).isNotBlank();
+        assertThat(saved.getValue().getTokenHash())
+                .isNotEqualTo(issued.plaintext())
+                .isEqualTo(sha256Hex(issued.plaintext()))
+                .hasSize(64);
+    }
+
+    @Test
+    void createRefreshTokenGeneratesADistinctPlaintextEachTime() {
+        when(refreshTokenRepository.findByUser_Id(userId)).thenReturn(List.of());
+        when(refreshTokenRepository.countByUser_IdAndRevokedFalse(userId)).thenReturn(0L);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        String first = service.createRefreshToken(userId, "device", "1.2.3.4").plaintext();
+        String second = service.createRefreshToken(userId, "device", "1.2.3.4").plaintext();
+
+        assertThat(first).isNotEqualTo(second);
+    }
+
+    @Test
+    void pepperIsMixedIntoTheStoredHash() {
+        ReflectionTestUtils.setField(service, "pepper", "a-secret-pepper");
+        when(refreshTokenRepository.findByUser_Id(userId)).thenReturn(List.of());
+        when(refreshTokenRepository.countByUser_IdAndRevokedFalse(userId)).thenReturn(0L);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        RefreshTokenService.IssuedRefreshToken issued = service.createRefreshToken(userId, "device", "1.2.3.4");
+
+        assertThat(issued.token().getTokenHash())
+                .isNotEqualTo(sha256Hex(issued.plaintext()))
+                .isEqualTo(sha256Hex("a-secret-pepper" + issued.plaintext()));
     }
 
     @Test
@@ -87,7 +145,6 @@ class RefreshTokenServiceTest {
         when(refreshTokenRepository.findByUser_Id(userId)).thenReturn(List.of());
         when(refreshTokenRepository.countByUser_IdAndRevokedFalse(userId)).thenReturn(5L);
         when(refreshTokenRepository.findByUser_IdAndRevokedFalse(userId)).thenReturn(List.of(newer, oldest));
-        when(refreshTokenRepository.findByTokenHash(oldest.getTokenHash())).thenReturn(Optional.of(oldest));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
         service.createRefreshToken(userId, "device", "1.2.3.4");
@@ -152,23 +209,50 @@ class RefreshTokenServiceTest {
     }
 
     @Test
-    void revokeRefreshTokenMarksTokenRevoked() {
+    void revokeRefreshTokenHashesThePlaintextBeforeLookup() {
         RefreshToken t = token(Instant.now(), false);
-        when(refreshTokenRepository.findByTokenHash(t.getTokenHash())).thenReturn(Optional.of(t));
+        when(refreshTokenRepository.findByTokenHash(sha256Hex("the-plaintext"))).thenReturn(Optional.of(t));
 
-        service.revokeRefreshToken(t.getTokenHash());
+        service.revokeRefreshToken("the-plaintext");
 
         assertThat(t.isRevoked()).isTrue();
         verify(refreshTokenRepository).save(t);
+        verify(refreshTokenRepository, never()).findByTokenHash("the-plaintext");
     }
 
     @Test
     void revokeRefreshTokenIsNoOpForUnknownToken() {
-        when(refreshTokenRepository.findByTokenHash("nope")).thenReturn(Optional.empty());
+        when(refreshTokenRepository.findByTokenHash(sha256Hex("nope"))).thenReturn(Optional.empty());
 
         service.revokeRefreshToken("nope");
 
         verify(refreshTokenRepository, never()).save(any());
+    }
+
+    @Test
+    void revokeRefreshTokenIsNoOpForNullOrBlank() {
+        service.revokeRefreshToken(null);
+        service.revokeRefreshToken("   ");
+
+        verify(refreshTokenRepository, never()).findByTokenHash(any());
+        verify(refreshTokenRepository, never()).save(any());
+    }
+
+    @Test
+    void findByTokenLooksUpTheHashNotThePlaintext() {
+        RefreshToken t = token(Instant.now(), false);
+        when(refreshTokenRepository.findByTokenHash(sha256Hex("client-token"))).thenReturn(Optional.of(t));
+
+        assertThat(service.findByToken("client-token")).contains(t);
+        verify(refreshTokenRepository, never()).findByTokenHash("client-token");
+    }
+
+    @Test
+    void findByTokenReturnsEmptyForNullOrBlankWithoutTouchingTheRepository() {
+        assertThat(service.findByToken(null)).isEmpty();
+        assertThat(service.findByToken("  ")).isEmpty();
+
+        verify(refreshTokenRepository, never()).findByTokenHash(any());
     }
 
     @Test

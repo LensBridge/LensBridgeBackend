@@ -1,0 +1,33 @@
+--
+-- V8: invalidate every pre-existing refresh token, because refresh_tokens.token_hash
+-- used to hold the raw token rather than a hash of it.
+--
+-- RefreshTokenService generated 64 bytes of SecureRandom, base64'd it, handed it to the
+-- client, and stored that exact string in a column named token_hash. Redemption was a
+-- direct equality lookup against the value the client holds, so anything that could read
+-- the table -- a backup, a replica, SQL injection elsewhere, ORM debug logging -- came away
+-- with usable 7-day sessions needing no further work. The service now stores
+-- sha256(pepper || plaintext) hex-encoded, matching VerificationTokenService and
+-- EnrollmentTokenService, and looks up by that digest.
+--
+-- The rows already in the table are plaintext and cannot be distinguished from hashes by
+-- the lookup path -- a client presenting its old token would hash it, miss, and be rejected
+-- anyway. Rather than leave dead plaintext secrets sitting in the table, they are deleted.
+--
+-- We could instead have rehashed in place (update ... set token_hash = sha256(token_hash)),
+-- which would have kept every session alive. We deliberately did not: neither SQLite nor a
+-- stock Postgres install has SHA-256 available in plain SQL without an extension, and more
+-- importantly those values have been at rest in plaintext for the life of the table. Any
+-- copy already taken stays valid for up to 7 days if we preserve them. Deleting is the
+-- clean cut.
+--
+-- Consequence: everyone with a live session is logged out once, at deploy. Access tokens
+-- (15 min) keep working until they expire; the next refresh attempt returns 401 and the
+-- client re-authenticates. No user data is touched.
+--
+-- No schema change is needed: token_hash is already varchar(255) not null unique, and a
+-- SHA-256 hex digest is 64 chars.
+--
+-- The postgres twin of this file must stay at the same version.
+
+delete from refresh_tokens;

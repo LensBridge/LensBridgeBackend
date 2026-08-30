@@ -92,7 +92,7 @@ public class AuthController {
             loginAttemptService.recordSuccessfulAttempt(clientKey);
 
             String jwt = jwtUtils.generateJwtToken(authentication);
-            RefreshToken refreshToken = refreshTokenService.createRefreshToken(
+            RefreshTokenService.IssuedRefreshToken issuedRefreshToken = refreshTokenService.createRefreshToken(
                     user.getId(), request.getHeader("User-Agent"), getClientIpAddress(request));
 
             // TODO: This is probably slow and should be fitted in the data model somewhere
@@ -109,7 +109,7 @@ public class AuthController {
                     .collect(Collectors.toList());
 
             return ResponseEntity.ok(new JwtResponse(jwt,
-                    refreshToken.getTokenHash(),
+                    issuedRefreshToken.plaintext(),
                     user.getFirstName(),
                     user.getLastName(),
                     user.getId(),
@@ -247,9 +247,10 @@ public class AuthController {
         String newAccessToken = jwtUtils.generateJwtToken(auth);
 
         refreshTokenService.revokeRefreshToken(requestRefreshToken);
-        RefreshToken newRefreshToken = refreshTokenService.createRefreshToken(userId, "Token refresh", "System");
+        RefreshTokenService.IssuedRefreshToken newRefreshToken =
+                refreshTokenService.createRefreshToken(userId, "Token refresh", "System");
 
-        return ResponseEntity.ok(new TokenRefreshResponse(newAccessToken, newRefreshToken.getToken()));
+        return ResponseEntity.ok(new TokenRefreshResponse(newAccessToken, newRefreshToken.plaintext()));
     }
 
     @Operation(operationId = "logout",

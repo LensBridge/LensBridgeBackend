@@ -29,6 +29,10 @@ public class RefreshToken {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
     
+    /**
+     * SHA-256 (hex) of the token handed to the client — never the token itself. See
+     * {@code RefreshTokenService#resolveHash}.
+     */
     @NotBlank
     @Column(nullable = false, unique = true)
     private String tokenHash;
@@ -48,10 +52,6 @@ public class RefreshToken {
     
     @Column(nullable = false)
     private boolean revoked;
-
-    public String getToken() {
-        return tokenHash;
-    }
 
     public UUID getUserId() {
         return user != null ? user.getId() : null;
