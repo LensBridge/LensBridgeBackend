@@ -34,7 +34,11 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-        // Path is the deployed kiosk's; boards scope themselves with ?deviceId=<uuid>.
+        // Boards authenticate per-frame inside the channel (Ed25519 challenge-response), the
+        // same way agents do. The origin list is kept as browser-only defence in depth: it
+        // constrains a page running in someone's browser and nothing else, so it must never
+        // be the reason a connection is trusted. Non-browser clients send no Origin header,
+        // which Spring allows.
         registry.addHandler(boardStreamHandler, "/api/refresh-musallahboard")
                 .setAllowedOrigins(frontendBaseUrl, musallahBoardBaseUrl);
 

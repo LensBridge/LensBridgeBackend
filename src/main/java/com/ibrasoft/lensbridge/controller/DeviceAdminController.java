@@ -20,6 +20,7 @@ import com.ibrasoft.lensbridge.service.agent.AgentSessionRegistry;
 import com.ibrasoft.lensbridge.service.agent.CommandDispatcher;
 import com.ibrasoft.lensbridge.service.agent.EnrollmentTokenService;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
+import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
 import com.ibrasoft.lensbridge.service.agent.EnrollmentTokenService.Issued;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -60,6 +61,7 @@ public class DeviceAdminController {
     private final CommandDispatcher commandDispatcher;
     private final ObjectMapper objectMapper;
     private final AgentSessionRegistry sessionRegistry;
+    private final BoardStreamHandler boardStream;
     private final AdminAuditService auditService;
 
     @Operation(operationId = "listDevices", summary = "List every enrolled board device")
@@ -118,7 +120,7 @@ public class DeviceAdminController {
 
     @Operation(operationId = "revokeDevice",
             summary = "Revoke a device's enrollment",
-            description = "Closes any live agent session. Idempotent: re-revoking an already revoked device is a no-op.")
+            description = "Closes any live agent session and refresh-stream session. Idempotent: re-revoking an already revoked device is a no-op.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Device revoked"),
             @ApiResponse(responseCode = "404", description = "No device with that id",
@@ -137,7 +139,10 @@ public class DeviceAdminController {
         if (d.getRevokedAt() == null) {
             d.setRevokedAt(Instant.now());
             deviceRepository.save(d);
-            sessionRegistry.closeIfPresent(deviceId, CloseStatus.POLICY_VIOLATION.withReason("device_revoked"));
+            CloseStatus revoked = CloseStatus.POLICY_VIOLATION.withReason("device_revoked");
+            sessionRegistry.closeIfPresent(deviceId, revoked);
+            // A revoked board must lose the refresh stream too, not just the command channel.
+            boardStream.closeIfPresent(deviceId, revoked);
             log.warn("Device {} revoked by {}", deviceId, getCurrentUserEmail());
 
             auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.REVOKE_DEVICE,

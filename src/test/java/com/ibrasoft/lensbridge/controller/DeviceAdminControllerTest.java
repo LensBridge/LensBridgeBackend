@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ibrasoft.lensbridge.model.audit.AuditAction;
 import com.ibrasoft.lensbridge.model.minbar.Audience;
 import com.ibrasoft.lensbridge.model.minbar.board.Device;
+import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
 import com.ibrasoft.lensbridge.service.AdminAuditService;
 import com.ibrasoft.lensbridge.repository.sql.DeviceCommandRepository;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
@@ -43,6 +44,7 @@ class DeviceAdminControllerTest {
         DeviceCommandRepository commandRepository = mock(DeviceCommandRepository.class);
         CommandDispatcher commandDispatcher = mock(CommandDispatcher.class);
         AgentSessionRegistry registry = new AgentSessionRegistry();
+        BoardStreamHandler boardStream = mock(BoardStreamHandler.class);
         AdminAuditService auditService = mock(AdminAuditService.class);
 
         DeviceAdminController controller = new DeviceAdminController(
@@ -52,6 +54,7 @@ class DeviceAdminControllerTest {
                 commandDispatcher,
                 new ObjectMapper(),
                 registry,
+                boardStream,
                 auditService);
 
         UUID deviceId = UUID.randomUUID();
@@ -81,6 +84,11 @@ class DeviceAdminControllerTest {
         verify(transport).close(argThat(status ->
                 status.getCode() == CloseStatus.POLICY_VIOLATION.getCode()
                         && "device_revoked".equals(status.getReason())));
+        // Revocation must drop the refresh stream too, not just the command channel —
+        // otherwise a revoked board keeps receiving pushes until it happens to reconnect.
+        verify(boardStream).closeIfPresent(eq(deviceId), argThat(status ->
+                status.getCode() == CloseStatus.POLICY_VIOLATION.getCode()
+                        && "device_revoked".equals(status.getReason())));
         verify(auditService).logAuditEvent(
                 eq("root@example.com"), eq(AuditAction.REVOKE_DEVICE),
                 eq("Device"), eq(deviceId), eq("10.0.0.1"));
@@ -98,6 +106,7 @@ class DeviceAdminControllerTest {
                 mock(CommandDispatcher.class),
                 new ObjectMapper(),
                 new AgentSessionRegistry(),
+                mock(BoardStreamHandler.class),
                 auditService);
 
         UUID deviceId = UUID.randomUUID();
