@@ -15,6 +15,6 @@ RUN useradd -r -u 1001 -g root lensbridge \
  && chown -R lensbridge:root /app
 COPY --from=build /build/app.jar /app/app.jar
 USER lensbridge
-EXPOSE 8080
+EXPOSE 8085
 ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0"
 ENTRYPOINT ["sh","-c","exec java $JAVA_OPTS -jar /app/app.jar"]

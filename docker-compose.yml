@@ -44,31 +44,21 @@ services:
       FRONTEND_BASEURL: ${FRONTEND_BASEURL}
       MUSALLAHBOARD_BASEURL: ${MUSALLAHBOARD_BASEURL}
       SPRINGDOC_API_DOCS_ENABLED: ${SPRINGDOC_API_DOCS_ENABLED:-false}
+      MUSALLAHBOARD_ENROLLMENT_TOKEN_PEPPER: ${MUSALLAHBOARD_ENROLLMENT_TOKEN_PEPPER}
+      MUSALLAHBOARD_AGENT_WS_URL: ${MUSALLAHBOARD_AGENT_WS_URL}
+      OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY}
     volumes:
       - thumbnails:/app/thumbnails
+    ports:
+      - "8085:8085"
     networks:
       - lensbridge-net
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O- http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:8085/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10
       start_period: 60s
-
-  nginx:
-    image: nginx:1.27-alpine
-    restart: unless-stopped
-    depends_on:
-      lensbridge:
-        condition: service_healthy
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./docker/nginx/certs:/etc/nginx/certs:ro
-    networks:
-      - lensbridge-net
 
 networks:
   lensbridge-net:
