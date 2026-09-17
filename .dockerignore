@@ -1,0 +1,17 @@
+target/
+.idea/
+.vscode/
+.git/
+.gitignore
+.claude/
+.mvn/wrapper/maven-wrapper.jar
+*.db
+*.log
+docs/
+README.md
+Dockerfile
+docker-compose.yml
+docker/
+.env
+.env.*
+!.env.example

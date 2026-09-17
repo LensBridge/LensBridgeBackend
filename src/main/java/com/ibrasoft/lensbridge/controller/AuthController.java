@@ -1,70 +1,83 @@
 package com.ibrasoft.lensbridge.controller;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
-import com.ibrasoft.lensbridge.model.auth.*;
-
-import com.ibrasoft.lensbridge.dto.request.*;
-import com.ibrasoft.lensbridge.dto.response.*;
-
-import com.ibrasoft.lensbridge.security.jwt.JwtUtils;
-import com.ibrasoft.lensbridge.security.services.UserDetailsImpl;
-import com.ibrasoft.lensbridge.security.LoginAttemptService;
-import com.ibrasoft.lensbridge.service.UserService;
-import com.ibrasoft.lensbridge.service.RefreshTokenService;
+import com.ibrasoft.lensbridge.dto.auth.request.ChangePasswordRequest;
+import com.ibrasoft.lensbridge.dto.auth.request.LoginRequest;
+import com.ibrasoft.lensbridge.dto.auth.request.ResetPasswordRequest;
+import com.ibrasoft.lensbridge.dto.auth.request.ValidateResetTokenRequest;
+import com.ibrasoft.lensbridge.dto.auth.request.SignupRequest;
+import com.ibrasoft.lensbridge.dto.auth.request.TokenRefreshRequest;
+import com.ibrasoft.lensbridge.dto.auth.request.VerifyEmailRequest;
+import com.ibrasoft.lensbridge.dto.auth.response.JwtResponse;
+import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
+import com.ibrasoft.lensbridge.dto.auth.response.TokenRefreshResponse;
+import com.ibrasoft.lensbridge.dto.auth.response.TokenValidationResponse;
+import com.ibrasoft.lensbridge.exception.ApiResponseException;
+import com.ibrasoft.lensbridge.exception.RefreshTokenException;
+import com.ibrasoft.lensbridge.model.auth.Permission;
 import com.ibrasoft.lensbridge.model.auth.RefreshToken;
-
-import jakarta.servlet.http.HttpServletRequest;
+import com.ibrasoft.lensbridge.model.auth.Role;
+import com.ibrasoft.lensbridge.model.auth.User;
+import com.ibrasoft.lensbridge.security.services.AuthorityResolver;
+import com.ibrasoft.lensbridge.security.CurrentUser;
+import com.ibrasoft.lensbridge.security.LoginAttemptService;
+import com.ibrasoft.lensbridge.security.jwt.JwtUtils;
+import com.ibrasoft.lensbridge.service.RefreshTokenService;
+import com.ibrasoft.lensbridge.service.UserService;
 
 @RestController
 @RequestMapping("/api/auth")
+@RequiredArgsConstructor
+@Slf4j
 public class AuthController {
-    private static final Logger log = LoggerFactory.getLogger(AuthController.class);
-    
-    @Autowired
-    AuthenticationManager authenticationManager;
 
-    @Autowired
-    UserService userService;
+    private final AuthenticationManager authenticationManager;
+    private final UserService userService;
+    private final JwtUtils jwtUtils;
+    private final LoginAttemptService loginAttemptService;
+    private final RefreshTokenService refreshTokenService;
+    private final AuthorityResolver authorityResolver;
 
-    @Autowired
-    JwtUtils jwtUtils;
-
-    @Autowired
-    LoginAttemptService loginAttemptService;
-
-    @Autowired
-    RefreshTokenService refreshTokenService;
-
+    @Operation(operationId = "signIn", summary = "Authenticate with email and password")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Authenticated; access and refresh tokens issued"),
+            @ApiResponse(responseCode = "401", description = "Bad credentials or disabled account",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+            @ApiResponse(responseCode = "429", description = "Too many failed attempts; account temporarily locked",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class)))
+    })
     @PostMapping("/signin")
-    public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest, HttpServletRequest request) {
-
+    public ResponseEntity<JwtResponse> authenticateUser(@Valid @RequestBody LoginRequest loginRequest,
+                                              HttpServletRequest request) {
         String clientKey = loginRequest.getEmail();
 
-        // Check if account is temporarily locked due to failed attempts
         if (loginAttemptService.isBlocked(clientKey)) {
-            return ResponseEntity.status(429) // Too Many Requests
-                    .body(new MessageResponse("Account temporarily locked due to too many failed login attempts. Please try again later."));
+            throw new ApiResponseException(HttpStatus.TOO_MANY_REQUESTS,
+                    new MessageResponse("Account temporarily locked due to too many failed login attempts. Please try again later."));
         }
 
         try {
@@ -73,279 +86,231 @@ public class AuthController {
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
-            // Check if user's email is verified
-            UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-            User user = userService.findByEmail(userDetails.getUsername()).orElse(null);
+            User user = userService.findByEmail(authentication.getName())
+                    .orElseThrow(() -> new RuntimeException("Authenticated user not found in database"));
 
-            if (user != null && !user.isVerified()) {
-                return ResponseEntity.badRequest()
-                        .body(new MessageResponse("Please verify your email before logging in."));
-            }
-
-            // Record successful login
             loginAttemptService.recordSuccessfulAttempt(clientKey);
 
             String jwt = jwtUtils.generateJwtToken(authentication);
-            
-            // Create refresh token
-            String deviceInfo = request.getHeader("User-Agent");
-            String ipAddress = getClientIpAddress(request);
             RefreshToken refreshToken = refreshTokenService.createRefreshToken(
-                userDetails.getId(), deviceInfo, ipAddress);
-            
-            log.debug("Created refresh token for user {}: {}", userDetails.getId(), refreshToken.getToken());
-            
-            List<String> roles = userDetails.getAuthorities().stream()
-                    .map(item -> item.getAuthority())
+                    user.getId(), request.getHeader("User-Agent"), getClientIpAddress(request));
+
+            // TODO: This is probably slow and should be fitted in the data model somewhere
+            // Replace with a more efficient way to get roles and permissions if performance becomes an issue
+            List<String> authorities = authentication.getAuthorities().stream()
+                    .map(GrantedAuthority::getAuthority)
+                    .toList();
+            List<String> roles = authorities.stream()
+                    .filter(a -> a.startsWith("ROLE_"))
+                    .collect(Collectors.toList());
+            List<String> permissions = authorities.stream()
+                    .filter(a -> !a.startsWith("ROLE_"))
+                    .sorted()
                     .collect(Collectors.toList());
 
             return ResponseEntity.ok(new JwtResponse(jwt,
-                    refreshToken.getToken(),
-                    userDetails.getFirstName(),
-                    userDetails.getLastName(),
-                    userDetails.getId(),
-                    userDetails.getEmail(),
-                    roles));
+                    refreshToken.getTokenHash(),
+                    user.getFirstName(),
+                    user.getLastName(),
+                    user.getId(),
+                    user.getEmail(),
+                    roles,
+                    permissions));
         } catch (Exception e) {
-            // Record failed login attempt
             loginAttemptService.recordFailedAttempt(clientKey);
-            throw e; // Let global exception handler deal with it
+            throw e;
         }
     }
 
+    @Operation(operationId = "signUp", summary = "Register a new account")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Account created; verification email sent"),
+            @ApiResponse(responseCode = "400", description = "Validation failed or email already registered",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class)))
+    })
     @PostMapping("/signup")
-    public ResponseEntity<?> registerUser(@Valid @RequestBody SignupRequest signUpRequest) throws Exception {
-        try {
-            userService.createUser(signUpRequest);
-            return ResponseEntity.ok(new MessageResponse("User registered successfully! Please check your email to verify your account."));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(new MessageResponse("Error: " + e.getMessage()));
-        }
+    public ResponseEntity<MessageResponse> registerUser(@Valid @RequestBody SignupRequest signUpRequest) {
+        userService.createUser(signUpRequest);
+        return ResponseEntity.ok(new MessageResponse("User registered successfully! Please check your email to verify your account."));
     }
 
+    @Operation(operationId = "verifyEmail", summary = "Confirm an email address using the token from the verification email")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Email verified"),
+            @ApiResponse(responseCode = "400", description = "Missing, invalid or expired token",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class)))
+    })
     @PostMapping("/verify-email")
-    public ResponseEntity<?> verifyEmail(@RequestBody(required = true) java.util.Map<String, String> payload) {
-        String token = payload.get("token");
-        if (token == null || token.isEmpty()) {
-            return ResponseEntity.badRequest().body(new MessageResponse("Invalid verification token."));
-        }
-
-        try {
-            userService.verifyUserEmail(token);
-            return ResponseEntity.ok(new MessageResponse("Email verified successfully!"));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
-        }
+    public ResponseEntity<MessageResponse> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
+        userService.verifyUserEmail(request.getToken());
+        return ResponseEntity.ok(new MessageResponse("Email verified successfully!"));
     }
 
+    @Operation(operationId = "requestPasswordReset",
+            summary = "Send a password reset email",
+            description = "Always reports success so the response cannot be used to probe which addresses are registered.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Request accepted"),
+            @ApiResponse(responseCode = "400", description = "Email missing",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class)))
+    })
     @PostMapping("/forgot-password")
-    public ResponseEntity<?> requestPasswordReset(@RequestParam String email) {
+    public ResponseEntity<MessageResponse> requestPasswordReset(@RequestParam String email) {
         if (email == null || email.isEmpty()) {
-            return ResponseEntity.badRequest().body(new MessageResponse("Email is required."));
+            throw new IllegalArgumentException("Email is required.");
         }
-
         userService.requestPasswordReset(email);
-
         return ResponseEntity.ok(new MessageResponse("If an account with that email exists, a password reset email has been sent."));
     }
 
-    @GetMapping("/validate-reset-token")
-    public ResponseEntity<?> validateResetToken(@RequestParam String token) {
-        if (token == null || token.isEmpty()) {
-            return ResponseEntity.badRequest().body(new MessageResponse("Token is required."));
+    @Operation(operationId = "validateResetToken",
+            summary = "Check whether a password reset token is still usable",
+            description = "A POST despite being a read: the token is a credential, and only a body keeps it "
+                    + "out of access logs, proxy logs and browser history. Being a POST also stops the "
+                    + "result being cached by an intermediary.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Token is valid"),
+            @ApiResponse(responseCode = "400", description = "Token missing, invalid or expired",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class)))
+    })
+    @PostMapping("/validate-reset-token")
+    public ResponseEntity<MessageResponse> validateResetToken(@Valid @RequestBody ValidateResetTokenRequest request) {
+        // Presence is enforced by bean validation; GlobalExceptionHandler renders
+        // both that and the rejection below as a MessageResponse.
+        if (!userService.validateResetToken(request.getToken())) {
+            throw new IllegalArgumentException("Invalid or expired token.");
         }
-
-        if (userService.validateResetToken(token)) {
-            return ResponseEntity.ok(new MessageResponse("Token is valid."));
-        } else {
-            return ResponseEntity.badRequest().body(new MessageResponse("Invalid or expired token."));
-        }
+        return ResponseEntity.ok(new MessageResponse("Token is valid."));
     }
 
+    @Operation(operationId = "resetPassword",
+            summary = "Set a new password using a reset token",
+            description = "The token and password travel in the request body, not the query string: "
+                    + "query strings are recorded in access logs, proxies and browser history.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Password reset"),
+            @ApiResponse(responseCode = "400", description = "Token or password missing, invalid or expired",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class)))
+    })
     @PostMapping("/reset-password")
-    public ResponseEntity<?> resetPassword(@RequestParam String token, @RequestParam String newPassword) {
-        if (token == null || token.isEmpty() || newPassword == null || newPassword.isEmpty()) {
-            return ResponseEntity.badRequest().body(new MessageResponse("Token and new password are required."));
-        }
-
-        try {
-            userService.resetPassword(token, newPassword);
-            return ResponseEntity.ok(new MessageResponse("Password reset successfully."));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
-        }
+    public ResponseEntity<MessageResponse> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        // Presence and length are enforced by bean validation; MethodArgumentNotValidException
+        // is translated to a MessageResponse by GlobalExceptionHandler.
+        userService.resetPassword(request.getToken(), request.getNewPassword());
+        return ResponseEntity.ok(new MessageResponse("Password reset successfully."));
     }
 
+    @Operation(operationId = "changePassword",
+            summary = "Change the signed-in user's password",
+            description = "Revokes every refresh token for the user, so all sessions must sign in again.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Password changed; all sessions revoked"),
+            @ApiResponse(responseCode = "400", description = "Current password incorrect or new password rejected",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Not signed in",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class)))
+    })
     @PostMapping("/change-password")
-    public ResponseEntity<?> changePassword(@Valid @RequestBody ChangePasswordRequest changePasswordRequest,
-                                            Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return ResponseEntity.badRequest().body(new MessageResponse("You must be logged in to change your password."));
-        }
-
-        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-        User user = userService.findByEmail(userDetails.getUsername()).orElse(null);
-
-        if (user == null) {
-            return ResponseEntity.badRequest().body(new MessageResponse("User not found."));
-        }
-
-        try {
-            userService.changePassword(user, changePasswordRequest);
-            refreshTokenService.revokeAllUserTokens(user.getId());
-            // Create new refresh token + jwt and return to user.... at some point
-            return ResponseEntity.ok(new MessageResponse("Password changed successfully. Please log in again."));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
-        }
+    @PreAuthorize("hasRole('" + Role.Authority.USER + "')")
+    public ResponseEntity<MessageResponse> changePassword(@Valid @RequestBody ChangePasswordRequest changePasswordRequest,
+                                            @CurrentUser User user) {
+        userService.changePassword(user, changePasswordRequest);
+        refreshTokenService.revokeAllUserTokens(user.getId());
+        return ResponseEntity.ok(new MessageResponse("Password changed successfully. Please log in again."));
     }
 
+    @Operation(operationId = "refreshToken",
+            summary = "Exchange a refresh token for a new access token",
+            description = "Rotates the refresh token: the supplied one is revoked and a new one returned.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "New access and refresh tokens issued"),
+            @ApiResponse(responseCode = "401", description = "Refresh token unknown, expired or already revoked",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class)))
+    })
     @PostMapping("/refresh-token")
-    public ResponseEntity<?> refreshToken(@Valid @RequestBody TokenRefreshRequest request) {
+    public ResponseEntity<TokenRefreshResponse> refreshToken(@Valid @RequestBody TokenRefreshRequest request) {
         String requestRefreshToken = request.getRefreshToken();
-        
-        log.debug("Attempting to refresh token: {}", requestRefreshToken);
 
-        try {
-            Optional<RefreshToken> refreshTokenOpt = refreshTokenService.findByToken(requestRefreshToken);
-            
-            if (refreshTokenOpt.isEmpty()) {
-                log.warn("Refresh token not found in database: {}", requestRefreshToken);
-                return ResponseEntity.status(401)
-                    .body(new MessageResponse("Refresh token is not in database. Please login again."));
-            }
-            
-            RefreshToken refreshToken = refreshTokenOpt.get();
-            log.debug("Found refresh token for user: {}", refreshToken.getUserId());
-            
-            // Verify token is not expired or revoked
-            RefreshToken verifiedToken = refreshTokenService.verifyExpiration(refreshToken);
-            
-            UUID userId = verifiedToken.getUserId();
-            User user = userService.findById(userId).orElse(null);
-            
-            if (user == null) {
-                log.warn("User not found for refresh token: {}", userId);
-                return ResponseEntity.status(401)
-                    .body(new MessageResponse("User not found. Please login again."));
-            }
-            
-            // Create new access token
-            UserDetailsImpl userDetails = UserDetailsImpl.build(user);
-            Authentication auth = new UsernamePasswordAuthenticationToken(
-                userDetails, null, userDetails.getAuthorities());
-            String newAccessToken = jwtUtils.generateJwtToken(auth);
-            
-            // Rotate refresh token (recommended for security)
-            refreshTokenService.revokeRefreshToken(requestRefreshToken);
-            RefreshToken newRefreshToken = refreshTokenService.createRefreshToken(
-                userId, "Token refresh", "System");
+        RefreshToken refreshToken = refreshTokenService.findByToken(requestRefreshToken)
+                .orElseThrow(() -> new RefreshTokenException(
+                        "Refresh token not found. Please login again.", HttpStatus.UNAUTHORIZED));
 
-            log.debug("Successfully refreshed token for user: {}, new refresh token: {}", userId, newRefreshToken.getToken());
+        RefreshToken verifiedToken = refreshTokenService.verifyExpiration(refreshToken);
 
-            return ResponseEntity.ok(new TokenRefreshResponse(
-                newAccessToken, newRefreshToken.getToken()));
-                
-        } catch (RuntimeException e) {
-            // Handle expired or revoked tokens
-            if (e.getMessage().contains("expired") || e.getMessage().contains("revoked")) {
-                log.warn("Refresh token expired or revoked: {}", e.getMessage());
-                return ResponseEntity.status(401)
-                    .body(new MessageResponse("Refresh token expired or revoked. Please login again."));
-            }
-            
-            // Log unexpected errors
-            log.error("Error refreshing token: {}", e.getMessage(), e);
-            return ResponseEntity.status(500)
-                .body(new MessageResponse("An error occurred while refreshing token. Please try again."));
-        }
+        UUID userId = verifiedToken.getUserId();
+        User user = userService.findById(userId)
+                .orElseThrow(() -> new RefreshTokenException(
+                        "User not found. Please login again.", HttpStatus.UNAUTHORIZED));
+
+        List<GrantedAuthority> authorities = new ArrayList<>(user.getRoles());
+        Authentication auth = new UsernamePasswordAuthenticationToken(user.getEmail(), null, authorities);
+        String newAccessToken = jwtUtils.generateJwtToken(auth);
+
+        refreshTokenService.revokeRefreshToken(requestRefreshToken);
+        RefreshToken newRefreshToken = refreshTokenService.createRefreshToken(userId, "Token refresh", "System");
+
+        return ResponseEntity.ok(new TokenRefreshResponse(newAccessToken, newRefreshToken.getToken()));
     }
 
+    @Operation(operationId = "logout",
+            summary = "Revoke a single refresh token",
+            description = "Succeeds even when no token is supplied, so signing out is idempotent.")
+    @ApiResponse(responseCode = "200", description = "Session ended")
     @PostMapping("/logout")
-    public ResponseEntity<?> logout(@RequestBody(required = false) TokenRefreshRequest request, 
-                                   Authentication authentication) {
-        try {
-            // Revoke refresh token if provided
-            if (request != null && request.getRefreshToken() != null) {
-                refreshTokenService.revokeRefreshToken(request.getRefreshToken());
-            }
-            
-            // If user is authenticated, we could also revoke all their tokens
-            if (authentication != null && authentication.isAuthenticated()) {
-                // Optionally revoke all user tokens here if needed
-                // UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-                // refreshTokenService.revokeAllUserTokens(userDetails.getId());
-            }
-            
-            return ResponseEntity.ok(new MessageResponse("Logged out successfully"));
-        } catch (Exception e) {
-            return ResponseEntity.ok(new MessageResponse("Logged out successfully")); // Always return success for logout
+    public ResponseEntity<MessageResponse> logout(@RequestBody(required = false) TokenRefreshRequest request) {
+        if (request != null && request.getRefreshToken() != null) {
+            refreshTokenService.revokeRefreshToken(request.getRefreshToken());
         }
+        return ResponseEntity.ok(new MessageResponse("Logged out successfully"));
     }
 
+    @Operation(operationId = "logoutAllDevices", summary = "Revoke every refresh token for the signed-in user")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "All sessions ended"),
+            @ApiResponse(responseCode = "403", description = "Not signed in",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class)))
+    })
     @PostMapping("/logout-all-devices")
-    public ResponseEntity<?> logoutAllDevices(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return ResponseEntity.badRequest().body(new MessageResponse("You must be logged in."));
-        }
-
-        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-        refreshTokenService.revokeAllUserTokens(userDetails.getId());
-        
+    @PreAuthorize("hasRole('" + Role.Authority.USER + "')")
+    public ResponseEntity<MessageResponse> logoutAllDevices(@CurrentUser User user) {
+        refreshTokenService.revokeAllUserTokens(user.getId());
         return ResponseEntity.ok(new MessageResponse("Logged out from all devices successfully"));
     }
 
-    @PostMapping("/validate-token")
-    public ResponseEntity<?> validateToken(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return ResponseEntity.status(401)
-                .body(new MessageResponse("Invalid or expired token"));
-        }
-
-        try {
-            UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-            User user = userService.findById(userDetails.getId()).orElse(null);
-            
-            if (user == null) {
-                return ResponseEntity.status(401)
-                    .body(new MessageResponse("User not found"));
-            }
-            
-            // Return user information if token is valid
-            return ResponseEntity.ok(new TokenValidationResponse(
-                true,
-                userDetails.getId(),
-                userDetails.getFirstName(),
-                userDetails.getLastName(),
-                userDetails.getEmail(),
-                userDetails.isVerified(),
-                userDetails.getAuthorities().stream()
-                    .map(authority -> authority.getAuthority())
-                    .collect(Collectors.toList())
-            ));
-            
-        } catch (Exception e) {
-            log.error("Error validating token: {}", e.getMessage(), e);
-            return ResponseEntity.status(401)
-                .body(new MessageResponse("Invalid or expired token"));
-        }
-    }
-
+    @Operation(operationId = "validateToken",
+            summary = "Check the current access token and return the user it belongs to")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Token valid; user returned"),
+            @ApiResponse(responseCode = "401", description = "Token missing, expired, or user no longer exists",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class)))
+    })
     @GetMapping("/validate-token")
-    public ResponseEntity<?> validateTokenGet(Authentication authentication) {
-        return validateToken(authentication);
+    public ResponseEntity<TokenValidationResponse> validateToken(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new ApiResponseException(HttpStatus.UNAUTHORIZED, new MessageResponse("Invalid or expired token"));
+        }
+        User user = userService.findByEmail(authentication.getName()).orElse(null);
+        if (user == null) {
+            throw new ApiResponseException(HttpStatus.UNAUTHORIZED, new MessageResponse("User not found"));
+        }
+        return ResponseEntity.ok(new TokenValidationResponse(
+                true,
+                user.getId(),
+                user.getFirstName(),
+                user.getLastName(),
+                user.getEmail(),
+                user.isVerified(),
+                user.getRoles().stream().map(Role::getAuthority).collect(Collectors.toList()),
+                authorityResolver.resolvePermissions(user).stream()
+                        .map(Permission::getAuthority).sorted().collect(Collectors.toList())
+        ));
     }
 
-    /**
-     * Helper method to get client IP address
-     */
     private String getClientIpAddress(HttpServletRequest request) {
-        String xForwardedForHeader = request.getHeader("X-Forwarded-For");
-        if (xForwardedForHeader == null) {
+        String xForwardedFor = request.getHeader("X-Forwarded-For");
+        if (xForwardedFor == null) {
             return request.getRemoteAddr();
-        } else {
-            // X-Forwarded-For can contain multiple IPs, get the first one
-            return xForwardedForHeader.split(",")[0].trim();
         }
+        return xForwardedFor.split(",")[0].trim();
     }
 }

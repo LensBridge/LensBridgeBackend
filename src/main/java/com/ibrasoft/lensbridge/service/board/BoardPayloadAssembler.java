@@ -1,67 +1,74 @@
 package com.ibrasoft.lensbridge.service.board;
 
-import com.ibrasoft.lensbridge.dto.response.MusallahBoardPayload;
-import com.ibrasoft.lensbridge.model.board.BoardConfig;
-import com.ibrasoft.lensbridge.model.board.BoardLocation;
-import com.ibrasoft.lensbridge.model.board.Event;
-import com.ibrasoft.lensbridge.model.board.Poster;
-import com.ibrasoft.lensbridge.model.board.WeeklyContent;
+import com.ibrasoft.lensbridge.dto.board.response.MusallahBoardPayload;
+import com.ibrasoft.lensbridge.dto.upload.response.ErrorResponse;
+import com.ibrasoft.lensbridge.exception.ApiResponseException;
+import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.model.board.frames.FrameDefinition;
-import com.ibrasoft.lensbridge.service.BoardService;
-import com.ibrasoft.lensbridge.service.PosterService;
-import com.ibrasoft.lensbridge.service.board.transformer.EventListFrameTransformer;
-import com.ibrasoft.lensbridge.service.board.transformer.PosterFrameTransformer;
-import com.ibrasoft.lensbridge.service.board.transformer.WeeklyContentFrameTransformer;
-import lombok.RequiredArgsConstructor;
+import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
+import com.ibrasoft.lensbridge.service.OpenWeatherService;
+import com.ibrasoft.lensbridge.service.board.producer.FrameProducer;
+
+import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
+import java.time.ZoneId;
 import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
+@AllArgsConstructor
 public class BoardPayloadAssembler {
 
-    private final BoardService boardService;
-    private final PosterService posterService;
-    private final PosterFrameTransformer posterTransformer;
-    private final EventListFrameTransformer eventListTransformer;
-    private final WeeklyContentFrameTransformer weeklyContentTransformer;
+    private final DeviceRepository deviceRepository;
+    private final OpenWeatherService openWeatherService;
 
-    public MusallahBoardPayload assemble(BoardLocation location) {
-        BoardConfig config = boardService.getBoardConfig(location).orElse(null);
-        BoardContext ctx = BoardContext.of(location, config);
+    /**
+     * Every registered {@link FrameProducer}, Spring-ordered via {@code @Order} on each
+     * implementation. 
+     */
+    private final List<FrameProducer> frameProducers;
 
-        List<FrameDefinition> frames = new ArrayList<>();
-        frames.addAll(posterFrames(ctx));
-        frames.addAll(eventFrames(ctx));
-        frames.addAll(weeklyContentFrames(ctx));
+    private final ZoneId defaultZone;
+
+    public MusallahBoardPayload assemble(UUID deviceId) {
+        Device device = deviceRepository.findById(deviceId)
+                .orElseThrow(() -> new ApiResponseException(
+                        HttpStatus.NOT_FOUND,
+                        ErrorResponse.of("Device not found: " + deviceId)));
+
+        BoardContext ctx = BoardContext.of(device, defaultZone);
+
+        List<FrameDefinition> frames = frameProducers.stream()
+                .flatMap(producer -> produceSafely(producer, ctx).stream())
+                .collect(Collectors.toList());
 
         return MusallahBoardPayload.builder()
-                .boardConfig(config)
+                .deviceConfig(ctx.getConfig())
                 .frames(frames)
+                .weather(openWeatherService.getCurrentWeather())
                 .build();
     }
 
-    private List<FrameDefinition> posterFrames(BoardContext ctx) {
-        List<Poster> posters = posterService.getActivePosterFramesForBoard(ctx.getLocation());
-        List<FrameDefinition> out = new ArrayList<>(posters.size());
-        for (Poster p : posters) out.add(posterTransformer.transform(p, ctx));
-        return out;
-    }
-
-    private List<FrameDefinition> eventFrames(BoardContext ctx) {
-        long weekStart = ctx.currentWeekStart().toEpochMilli();
-        long weekEnd = ctx.currentWeekEnd().toEpochMilli();
-        List<Event> events = boardService.getEventsForBoardInRange(ctx.getLocation(), weekStart, weekEnd);
-        if (events.isEmpty()) return List.of();
-        return List.of(eventListTransformer.transform(events, ctx));
-    }
-
-    private List<FrameDefinition> weeklyContentFrames(BoardContext ctx) {
-        WeeklyContent content = boardService.getCurrentWeeklyContent().orElse(null);
-        return weeklyContentTransformer.transform(content, ctx);
+    /**
+     * Runs one producer, absorbing anything it throws so the rest of the payload still ships.
+     * <p>
+     * These boards are unattended wall displays. A producer whose query fails should cost the
+     * board that producer's slides. A single producer failing should not make the entire API
+     * 500
+     */
+    private List<FrameDefinition> produceSafely(FrameProducer producer, BoardContext ctx) {
+        try {
+            List<FrameDefinition> frames = producer.produce(ctx);
+            return frames == null ? List.of() : frames;
+        } catch (RuntimeException e) {
+            log.error("Frame producer {} failed for device {}; omitting its frames from this payload",
+                    producer.getClass().getSimpleName(), ctx.getDevice().getId(), e);
+            return List.of();
+        }
     }
 }

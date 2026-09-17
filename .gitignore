@@ -1,6 +1,7 @@
 node_modules
 HELP.md
 target/
+docs/
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
@@ -15,6 +16,11 @@ target/
 .sts4-cache
 
 *.properties
+
+# Test configuration holds no secrets and must be committed: CI checks out a tree with no
+# application.properties at all, so without this the test suite runs on the inline @Value
+# defaults and behaves differently there than on a developer machine.
+!src/test/resources/application.properties
 
 ### IntelliJ IDEA ###
 .idea
@@ -34,3 +40,13 @@ build/
 
 ### VS Code ###
 .vscode/
+
+lensbridge-dev.db
+
+# Docker
+.env
+.env.*
+!.env.example
+docker/nginx/certs/*
+!docker/nginx/certs/.gitkeep
+.claude/worktrees/*

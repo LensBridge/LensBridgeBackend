@@ -1,62 +1,62 @@
 package com.ibrasoft.lensbridge.model.auth;
 
+import java.util.Set;
+
+import org.springframework.security.core.GrantedAuthority;
+
 /**
- * Enum representing user roles in the system.
- * This enum provides type safety and prevents typos in role names.
+ * A named bundle of {@link Permission}s. Roles are what you assign to a person, because
+ * "make them a board editor" is how humans think — but nothing in this codebase branches
+ * on a role name. Every {@code @PreAuthorize} checks a permission.
+ * <p>
+ * The bundles themselves are in {@link RolePermissions}.
+ * <p>
+ * Role authorities are still emitted as {@code ROLE_*} alongside the expanded permission
+ * set, so any surviving {@code hasRole(...)} check keeps working.
  */
-public enum Role {
-    ROLE_USER("ROLE_USER"),
-    ROLE_MODERATOR("ROLE_MODERATOR"), 
-    ROLE_ADMIN("ROLE_ADMIN"),
-    ROLE_VERIFIED("ROLE_VERIFIED"),
-    ROLE_ROOT("ROLE_ROOT");
+public enum Role implements GrantedAuthority {
 
-    // Static constants for use in @PreAuthorize annotations
-    public static final String USER = "ROLE_USER";
-    public static final String MODERATOR = "ROLE_MODERATOR";
-    public static final String ADMIN = "ROLE_ADMIN";
-    public static final String VERIFIED = "ROLE_VERIFIED";
-    public static final String ROOT = "ROLE_ROOT";
+    // ---------- Legacy media sharing ----------
+    USER("Upload and manage your own media submissions"),
+    ADMIN("Moderate media submissions and read the audit log"),
 
-    private final String authority;
+    // ---------- MusallahBoard ----------
+    BOARD_VIEWER("View board content, config, and device status; change nothing"),
+    BOARD_EDITOR("Create and edit everything that appears on a board"),
+    BOARD_ADMIN("Full control of boards and devices, including enrollment and remote commands"),
 
-    Role(String authority) {
-        this.authority = authority;
+    // ---------- Everything ----------
+    ROOT("Unrestricted, including granting roles to other users");
+
+    private final String description;
+
+    Role(String description) {
+        this.description = description;
     }
 
-    /**
-     * Gets the authority string used by Spring Security.
-     * @return the authority string (e.g., "ROLE_USER")
-     */
-    public String getAuthority() {
-        return authority;
+    public String getDescription() {
+        return description;
     }
 
-    /**
-     * Gets the role name without the ROLE_ prefix.
-     * @return the role name (e.g., "USER")
-     */
-    public String getRoleName() {
-        return authority.substring(5); 
+    /** The permissions this role confers. Never null; may not be modified. */
+    public Set<Permission> getPermissions() {
+        return RolePermissions.of(this);
     }
 
-    /**
-     * Converts a string to a Role enum.
-     * @param authority the authority string
-     * @return the corresponding Role enum
-     * @throws IllegalArgumentException if the authority is not recognized
-     */
-    public static Role fromAuthority(String authority) {
-        for (Role role : values()) {
-            if (role.authority.equals(authority)) {
-                return role;
-            }
-        }
-        throw new IllegalArgumentException("Unknown role authority: " + authority);
+    // String constants for @PreAuthorize("hasRole('" + Role.Authority.ADMIN + "')")
+    // Spring Security's hasRole() prepends ROLE_ automatically, so these are just the name.
+    // These will be removed once media-related 
+    // features are stripped from the codebase - they are here purely for back-compat until I fully 
+    // transition over to Minbar
+    @Deprecated
+    public interface Authority {
+        String USER = "USER";
+        String ADMIN = "ADMIN";
+        String ROOT = "ROOT";
     }
 
     @Override
-    public String toString() {
-        return authority;
+    public String getAuthority() {
+        return "ROLE_" + name();
     }
 }

@@ -1,19 +1,15 @@
 package com.ibrasoft.lensbridge.model.board.frames;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
 
+/**
+ * Marker config for {@link FrameType#NEXT_PRAYER}. Carries no fields: the backend holds no
+ * prayer-time source, so the board computes the countdown itself from
+ * {@code deviceConfig.location}. This class exists only so the frame has a real position and
+ * {@code durationInSeconds} in the sequence, instead of being synthesized client-side.
+ */
 @Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
 @EqualsAndHashCode(callSuper = true)
 public class NextPrayerFrameConfig extends FrameConfig {
-
-    private String locationCity;
-    private String timezone;
-    private String calculationMethod;
 }

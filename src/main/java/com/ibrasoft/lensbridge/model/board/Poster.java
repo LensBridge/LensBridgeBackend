@@ -1,40 +1,40 @@
 package com.ibrasoft.lensbridge.model.board;
 
-import java.time.LocalDate;
+import jakarta.persistence.*;
+import lombok.*;
+import java.time.Instant;
 import java.util.UUID;
 
-import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.mapping.Document;
-
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-@Document(collection = "posters")
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
+@Entity
+@Table(name = "posters")
+@Data @Builder @NoArgsConstructor @AllArgsConstructor
 public class Poster {
     @Id
-    public UUID id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
+    @Column(nullable = false)
     private String title;
 
+    @Column(nullable = false)
     private String image;
 
+    @Column(nullable = false)
     private int duration;
 
-    /**
-     * The date from which the poster becomes active (inclusive)
-     */
-    private LocalDate startDate;
+    @Column(nullable = false)
+    private Instant startTime;
 
-    /**
-     * The date until which the poster remains active (exclusive)
-     */
-    private LocalDate endDate;
+    @Column(nullable = false)
+    private Instant endTime;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private Audience audience;
+
+    /**
+     * Optional URL for the associated signup page. If provided, the frontend will show a QR Code linking to this URL.
+     */
+    @Column(nullable = true)
+    private String signupUrl;
 }

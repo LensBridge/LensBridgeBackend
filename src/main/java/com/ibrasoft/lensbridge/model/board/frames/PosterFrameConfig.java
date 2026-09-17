@@ -26,4 +26,11 @@ public class PosterFrameConfig extends FrameConfig {
      * The title of the poster (optional, for accessibility/logging).
      */
     private String title;
+
+    /**
+     * Optional sign-up link. When present the board renders the poster beside a
+     * QR code encoding this URL rather than full-bleed, so someone walking past
+     * can register without typing anything.
+     */
+    private String signupUrl;
 }
