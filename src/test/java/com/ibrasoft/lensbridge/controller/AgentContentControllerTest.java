@@ -27,6 +27,11 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.context.WebApplicationContext;
+import com.ibrasoft.lensbridge.service.agent.http.AuthenticatedDeviceArgumentResolver;
+import com.ibrasoft.lensbridge.service.agent.http.DeviceAuthInterceptor;
+import com.ibrasoft.lensbridge.service.agent.http.DeviceBodyCachingFilter;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
@@ -60,12 +65,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * MockMvc with the real {@link DeviceRequestAuthenticator}: requests are signed with a real
  * device key exactly as the agent signs them.
  * <p>
- * Filters are off: these paths are {@code permitAll} in production, so the security chain has
- * no say, and authentication is the controller's own job, which is what this exercises.
+ * The security chain is off (these paths are {@code permitAll}; device authentication is not
+ * Spring Security's job). MockMvc is built by hand so the one filter that matters,
+ * {@link DeviceBodyCachingFilter}, still runs, together with the real interceptor and resolver.
  */
 @WebMvcTest(controllers = {AgentContentController.class, AgentEnrollmentController.class})
 @AutoConfigureMockMvc(addFilters = false)
-@Import({DeviceRequestAuthenticator.class, Ed25519Verifier.class})
+@Import({DeviceRequestAuthenticator.class, Ed25519Verifier.class, DeviceAuthInterceptor.class,
+        AuthenticatedDeviceArgumentResolver.class, DeviceBodyCachingFilter.class})
 @TestPropertySource(properties = "musallahboard.agent.websocketUrl=wss://example.test/api/agent/ws")
 class AgentContentControllerTest {
 
@@ -75,6 +82,10 @@ class AgentContentControllerTest {
     private static final String SHA_B = "0123456789abcdef".repeat(4);
 
     @Autowired
+    private WebApplicationContext context;
+    @Autowired
+    private DeviceBodyCachingFilter bodyCachingFilter;
+
     private MockMvc mockMvc;
 
     @MockitoBean
@@ -96,6 +107,7 @@ class AgentContentControllerTest {
 
     @BeforeEach
     void setUp() {
+        mockMvc = MockMvcBuilders.webAppContextSetup(context).addFilters(bodyCachingFilter).build();
         keys = Ed25519TestUtil.generate();
         device = Device.builder()
                 .id(DEVICE_ID)
@@ -231,6 +243,23 @@ class AgentContentControllerTest {
                 .andExpect(status().isBadRequest());
         mockMvc.perform(signedPost("{\"days\": \"a week\"}"))
                 .andExpect(status().isBadRequest());
+        verifyNoInteractions(offlineBundleService);
+    }
+
+    @Test
+    void anUnsignedMalformedBodyIsA401NotA400() throws Exception {
+        // Authentication runs before the body is bound, so an unauthenticated caller learns
+        // nothing about the body format.
+        mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content("{\"days\": "))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(offlineBundleService);
+    }
+
+    @Test
+    void aBodyOverOneMebibyteIsRefusedBeforeAuthentication() throws Exception {
+        byte[] huge = new byte[1024 * 1024 + 1];
+        mockMvc.perform(signedPost(URL, URL, huge, huge, System.currentTimeMillis()))
+                .andExpect(status().isPayloadTooLarge());
         verifyNoInteractions(offlineBundleService);
     }
 

@@ -1,30 +1,24 @@
 package com.ibrasoft.lensbridge.controller;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
 import com.ibrasoft.lensbridge.dto.board.request.ContentBundleRequest;
 import com.ibrasoft.lensbridge.dto.board.response.AgentWeatherResponse;
 import com.ibrasoft.lensbridge.dto.board.response.SigningKeysResponse;
-import com.ibrasoft.lensbridge.exception.ApiResponseException;
 import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.service.OpenWeatherService;
-import com.ibrasoft.lensbridge.service.agent.http.DeviceRequestAuthenticator;
+import com.ibrasoft.lensbridge.service.agent.http.AuthenticatedDevice;
 import com.ibrasoft.lensbridge.service.board.offline.ContentSigningService;
 import com.ibrasoft.lensbridge.service.board.offline.OfflineBundle;
 import com.ibrasoft.lensbridge.service.board.offline.OfflineBundleService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.Parameters;
-import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ContentDisposition;
@@ -39,10 +33,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
 import java.time.Instant;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.regex.Pattern;
 
 /**
  * Endpoints a board's agent calls on its own behalf once enrolled: fetching signed content
@@ -60,19 +50,14 @@ import java.util.regex.Pattern;
 @Slf4j
 public class AgentContentController {
 
-    private static final Pattern SHA256_HEX = Pattern.compile("^[0-9a-f]{64}$");
-
-    private final DeviceRequestAuthenticator deviceAuthenticator;
     private final OfflineBundleService offlineBundleService;
     private final ContentSigningService signingService;
     private final OpenWeatherService openWeatherService;
-    private final ObjectMapper objectMapper;
 
     /**
-     * The body is taken as raw bytes and parsed here, after authentication, so the signature
-     * check hashes exactly what the device sent. Order of checks: device auth (401), then the
-     * body (400), then building (404/409 in theory, 503 without a signing key, 502 for an
-     * unfetchable poster).
+     * The device is authenticated before the body is even bound (see {@link AuthenticatedDevice}),
+     * so the order of checks is: device (401), body (400), building (503 without a signing key,
+     * 502 for an unfetchable poster).
      * <p>
      * Like the admin download, the package is built completely and then written straight to
      * the servlet response, so every failure is still a JSON error rather than a truncated zip.
@@ -89,25 +74,11 @@ public class AgentContentController {
                     + "timezone. Media whose SHA-256 is in haveMedia is listed and signed in mbu.json but "
                     + "left out of the zip.")
     @SecurityRequirements
-    @Parameters({
-            @Parameter(in = ParameterIn.HEADER, name = DeviceRequestAuthenticator.DEVICE_ID_HEADER, required = true,
-                    description = "Enrolled device id", schema = @Schema(type = "string", format = "uuid")),
-            @Parameter(in = ParameterIn.HEADER, name = DeviceRequestAuthenticator.TIMESTAMP_HEADER, required = true,
-                    description = "Unix milliseconds; must be within 5 minutes of the server clock",
-                    schema = @Schema(type = "integer", format = "int64")),
-            @Parameter(in = ParameterIn.HEADER, name = DeviceRequestAuthenticator.SIGNATURE_HEADER, required = true,
-                    description = "Base64 Ed25519 signature by the device key", schema = @Schema(type = "string"))
-    })
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(required = false, content = @Content(
-            mediaType = "application/json", schema = @Schema(implementation = ContentBundleRequest.class)))
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "The signed content package",
                     content = @Content(mediaType = OfflineBundleService.MBU_CONTENT_TYPE,
                             schema = @Schema(type = "string", format = "binary"))),
             @ApiResponse(responseCode = "400", description = "Malformed body, days outside 1-31, or a bad haveMedia entry",
-                    content = @Content(schema = @Schema(implementation = MessageResponse.class))),
-            @ApiResponse(responseCode = "401", description = "Missing or bad device signature, clock skew over 5 minutes, "
-                    + "or an unknown or revoked device",
                     content = @Content(schema = @Schema(implementation = MessageResponse.class))),
             @ApiResponse(responseCode = "502", description = "A poster image could not be fetched; the message names the poster",
                     content = @Content(schema = @Schema(implementation = MessageResponse.class))),
@@ -115,16 +86,11 @@ public class AgentContentController {
                     content = @Content(schema = @Schema(implementation = MessageResponse.class)))
     })
     @PostMapping("/content-bundle")
-    public void contentBundle(@RequestBody(required = false) byte[] body,
-                              HttpServletRequest request,
+    public void contentBundle(@AuthenticatedDevice Device device,
+                              @Valid @RequestBody(required = false) ContentBundleRequest body,
                               HttpServletResponse response) throws IOException {
-        Device device = deviceAuthenticator.authenticate(request, body);
-        ContentBundleRequest parsed = parse(body);
-
-        int days = parsed.getDays() == null ? ContentBundleRequest.DEFAULT_DAYS : parsed.getDays();
-        Set<String> haveMedia = haveMedia(parsed.getHaveMedia());
-
-        OfflineBundle bundle = offlineBundleService.build(device.getId(), days, haveMedia);
+        ContentBundleRequest request = body == null ? new ContentBundleRequest() : body;
+        OfflineBundle bundle = offlineBundleService.build(device.getId(), request.daysOrDefault(), request.haveMediaSet());
         response.setStatus(HttpStatus.OK.value());
         response.setContentType(OfflineBundleService.MBU_CONTENT_TYPE);
         response.setHeader(HttpHeaders.CONTENT_DISPOSITION,
@@ -147,7 +113,7 @@ public class AgentContentController {
     /**
      * Current weather for the board to overlay on its installed content. Weather is never in a
      * content package (packages are built days ahead), so this is the one live fetch a board
-     * makes. A GET has no body, so the signature covers the SHA-256 of the empty string.
+     * makes.
      * <p>
      * Unavailable weather is a 200 with {@code "weather": null}, never a 5xx: a board without a
      * forecast just hides the widget.
@@ -159,25 +125,12 @@ public class AgentContentController {
                     + "weather JSON exactly as the server last fetched it, or null when the server has none. "
                     + "`fetchedAt` is when the server answered.")
     @SecurityRequirements
-    @Parameters({
-            @Parameter(in = ParameterIn.HEADER, name = DeviceRequestAuthenticator.DEVICE_ID_HEADER, required = true,
-                    description = "Enrolled device id", schema = @Schema(type = "string", format = "uuid")),
-            @Parameter(in = ParameterIn.HEADER, name = DeviceRequestAuthenticator.TIMESTAMP_HEADER, required = true,
-                    description = "Unix milliseconds; must be within 5 minutes of the server clock",
-                    schema = @Schema(type = "integer", format = "int64")),
-            @Parameter(in = ParameterIn.HEADER, name = DeviceRequestAuthenticator.SIGNATURE_HEADER, required = true,
-                    description = "Base64 Ed25519 signature by the device key", schema = @Schema(type = "string"))
-    })
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Current weather, or null weather when unavailable",
-                    content = @Content(schema = @Schema(implementation = AgentWeatherResponse.class))),
-            @ApiResponse(responseCode = "401", description = "Missing or bad device signature, clock skew over 5 minutes, "
-                    + "or an unknown or revoked device",
-                    content = @Content(schema = @Schema(implementation = MessageResponse.class)))
+                    content = @Content(schema = @Schema(implementation = AgentWeatherResponse.class)))
     })
     @GetMapping("/weather")
-    public ResponseEntity<AgentWeatherResponse> weather(HttpServletRequest request) {
-        deviceAuthenticator.authenticate(request, new byte[0]);
+    public ResponseEntity<AgentWeatherResponse> weather(@AuthenticatedDevice Device device) {
         return ResponseEntity.ok(new AgentWeatherResponse(currentWeather(), Instant.now()));
     }
 
@@ -189,37 +142,5 @@ public class AgentContentController {
             log.warn("Weather lookup failed; answering with null weather", e);
             return null;
         }
-    }
-
-    /** An absent or empty body means all defaults. Unknown fields are ignored (forward compatible). */
-    private ContentBundleRequest parse(byte[] body) {
-        if (body == null || body.length == 0) {
-            return new ContentBundleRequest();
-        }
-        try {
-            ContentBundleRequest parsed = objectMapper.readValue(body, ContentBundleRequest.class);
-            return parsed == null ? new ContentBundleRequest() : parsed;
-        } catch (IOException e) {
-            throw badRequest("Request body must be a JSON object like {\"days\": 7, \"haveMedia\": []}");
-        }
-    }
-
-    private static Set<String> haveMedia(List<String> hashes) {
-        if (hashes == null) return Set.of();
-        if (hashes.size() > ContentBundleRequest.MAX_HAVE_MEDIA) {
-            throw badRequest("haveMedia may list at most " + ContentBundleRequest.MAX_HAVE_MEDIA + " hashes");
-        }
-        Set<String> set = new LinkedHashSet<>();
-        for (String hash : hashes) {
-            if (hash == null || !SHA256_HEX.matcher(hash).matches()) {
-                throw badRequest("haveMedia entries must be 64 lowercase hex characters (SHA-256)");
-            }
-            set.add(hash);
-        }
-        return set;
-    }
-
-    private static ApiResponseException badRequest(String message) {
-        return new ApiResponseException(HttpStatus.BAD_REQUEST, new MessageResponse(message));
     }
 }

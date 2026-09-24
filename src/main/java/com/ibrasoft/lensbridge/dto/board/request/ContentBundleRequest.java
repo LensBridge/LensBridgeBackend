@@ -2,31 +2,46 @@ package com.ibrasoft.lensbridge.dto.board.request;
 
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
- * Body of {@code POST /api/agent/content-bundle}. Both fields are optional.
- * <p>
- * Parsed by hand from the raw request bytes rather than bound by Spring, because the device
- * signature covers the exact bytes that were sent; see
- * {@link com.ibrasoft.lensbridge.service.agent.http.DeviceRequestAuthenticator}.
+ * Body of {@code POST /api/agent/content-bundle}. Both fields are optional; an absent body
+ * means all defaults. Unknown fields are ignored, so newer agents can send more.
  */
 @Data
 public class ContentBundleRequest {
 
     public static final int DEFAULT_DAYS = 7;
     public static final int MAX_HAVE_MEDIA = 2000;
+    private static final String SHA256_HEX = "^[0-9a-f]{64}$";
 
     /** Days in the package, starting today in the device's timezone. */
     @Schema(minimum = "1", maximum = "31", defaultValue = "" + DEFAULT_DAYS)
+    @Min(1)
+    @Max(31)
     private Integer days;
 
     /**
      * SHA-256 (64 lowercase hex) of media the board's store already holds. Those files are left
      * out of the zip but stay listed, and signed, in {@code mbu.json}.
      */
-    @ArraySchema(maxItems = MAX_HAVE_MEDIA, schema = @Schema(pattern = "^[0-9a-f]{64}$"))
-    private List<String> haveMedia;
+    @ArraySchema(maxItems = MAX_HAVE_MEDIA, schema = @Schema(pattern = SHA256_HEX))
+    @Size(max = MAX_HAVE_MEDIA)
+    private List<@Pattern(regexp = SHA256_HEX, message = "must be 64 lowercase hex characters (SHA-256)") String> haveMedia;
+
+    public int daysOrDefault() {
+        return days == null ? DEFAULT_DAYS : days;
+    }
+
+    public Set<String> haveMediaSet() {
+        return haveMedia == null ? Set.of() : new LinkedHashSet<>(haveMedia);
+    }
 }
