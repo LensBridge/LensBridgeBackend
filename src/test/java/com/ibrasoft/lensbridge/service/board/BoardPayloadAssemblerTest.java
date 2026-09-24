@@ -12,7 +12,10 @@ import com.ibrasoft.lensbridge.service.board.producer.FrameProducer;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -21,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -141,5 +145,47 @@ class BoardPayloadAssemblerTest {
 
         assertThatThrownBy(() -> assembler.assemble(missing))
                 .isInstanceOf(ApiResponseException.class);
+    }
+
+    // ==================== assembleForDay ====================
+
+    private static Device device() {
+        return Device.builder().id(DEVICE_ID).displayName("test-board").audience(Audience.BOTH).build();
+    }
+
+    @Test
+    void assembleForDayRunsProducersAtThatDaysMidnightWithoutWeather() {
+        List<BoardContext> seen = new ArrayList<>();
+        BoardPayloadAssembler assembler = new BoardPayloadAssembler(
+                deviceRepository, weatherService, List.of(ctx -> {
+                    seen.add(ctx);
+                    return List.of();
+                }, emitting("x")), DEFAULT_ZONE);
+
+        MusallahBoardPayload payload = assembler.assembleForDay(device(), LocalDate.of(2026, 9, 24));
+
+        assertThat(frameIdsOf(payload)).containsExactly("x");
+        assertThat(payload.getWeather()).isNull();
+        assertThat(seen).singleElement().satisfies(ctx -> {
+            assertThat(ctx.isWholeDay()).isTrue();
+            assertThat(ctx.getNow()).isEqualTo(ZonedDateTime.of(2026, 9, 24, 0, 0, 0, 0, DEFAULT_ZONE));
+        });
+        verifyNoInteractions(weatherService);
+    }
+
+    /**
+     * A bundle carries its gaps for weeks with nobody watching, so the lenient per-producer
+     * isolation of the live path does not apply.
+     */
+    @Test
+    void assembleForDayPropagatesAProducerFailure() {
+        BoardPayloadAssembler assembler = new BoardPayloadAssembler(
+                deviceRepository, weatherService,
+                List.of(emitting("a"), throwing(new IllegalStateException("poster query blew up"))),
+                DEFAULT_ZONE);
+
+        assertThatThrownBy(() -> assembler.assembleForDay(device(), LocalDate.of(2026, 9, 24)))
+                .isInstanceOf(ApiResponseException.class)
+                .hasCauseInstanceOf(IllegalStateException.class);
     }
 }

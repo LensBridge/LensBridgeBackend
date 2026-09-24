@@ -11,6 +11,7 @@ import com.ibrasoft.lensbridge.service.agent.AgentSession;
 import com.ibrasoft.lensbridge.service.agent.AgentSessionRegistry;
 import com.ibrasoft.lensbridge.service.agent.CommandDispatcher;
 import com.ibrasoft.lensbridge.service.agent.EnrollmentTokenService;
+import com.ibrasoft.lensbridge.service.board.offline.OfflineBundleService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -52,7 +53,8 @@ class DeviceAdminControllerTest {
                 commandDispatcher,
                 new ObjectMapper(),
                 registry,
-                auditService);
+                auditService,
+                mock(OfflineBundleService.class));
 
         UUID deviceId = UUID.randomUUID();
         Device device = Device.builder()
@@ -98,7 +100,8 @@ class DeviceAdminControllerTest {
                 mock(CommandDispatcher.class),
                 new ObjectMapper(),
                 new AgentSessionRegistry(),
-                auditService);
+                auditService,
+                mock(OfflineBundleService.class));
 
         UUID deviceId = UUID.randomUUID();
         Instant revokedAt = Instant.now().minusSeconds(3600);

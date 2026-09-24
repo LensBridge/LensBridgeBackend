@@ -35,6 +35,14 @@ public class BoardContext {
     DeviceConfig config;
     ZonedDateTime now;
 
+    /**
+     * True when this context stands for a whole calendar day rather than a live moment — the
+     * offline bundle assembles one payload per day, and a poster that starts at 14:00 must be
+     * in that day's payload even though {@link #now} is midnight.
+     */
+    @Builder.Default
+    boolean wholeDay = false;
+
     /** The device's timezone, already resolved into {@link #now}. */
     public ZoneId zone() {
         return now.getZone();
@@ -70,6 +78,16 @@ public class BoardContext {
     }
 
     /**
+     * First instant of the next day in the device's zone — the exclusive end of today. Use this
+     * rather than {@link #currentDayEnd()} for half-open ranges: a 23:59:59.999999999 bound
+     * gets rounded up to midnight by databases that store microseconds. Correct on DST
+     * change days (23 or 25 hours after {@link #currentDayStart()}).
+     */
+    public Instant nextDayStart() {
+        return today().plusDays(1).atStartOfDay(zone()).toInstant();
+    }
+
+    /**
      * @param defaultZone used when the device has no timezone configured or the configured
      *                    one is unparseable. Pass the deployment's default, not
      *                    {@code ZoneId.systemDefault()} — the JVM's zone is an accident of
@@ -83,6 +101,27 @@ public class BoardContext {
                 .config(config)
                 .now(ZonedDateTime.now(zone))
                 .build();
+    }
+
+    /**
+     * A context standing for all of {@code day} in the device's timezone: {@link #now} is that
+     * day's first instant and posters are those active at any point during it. Used to build
+     * offline bundles ahead of time.
+     */
+    public static BoardContext of(Device device, ZoneId defaultZone, LocalDate day) {
+        DeviceConfig config = device.getConfig();
+        ZoneId zone = resolveZone(device, config, defaultZone);
+        return BoardContext.builder()
+                .device(device)
+                .config(config)
+                .now(day.atStartOfDay(zone))
+                .wholeDay(true)
+                .build();
+    }
+
+    /** The zone {@link #of} would use for this device. */
+    public static ZoneId zoneFor(Device device, ZoneId defaultZone) {
+        return resolveZone(device, device.getConfig(), defaultZone);
     }
 
     private static ZoneId resolveZone(Device device, DeviceConfig config, ZoneId defaultZone) {

@@ -169,4 +169,46 @@ class BoardContextTest {
 
         assertThat(ctx.today()).isEqualTo(LocalDate.of(2026, 5, 13));
     }
+
+    // ==================== Whole-day contexts ====================
+
+    @Test
+    void builtContextIsNotWholeDay() {
+        assertThat(at(WEDNESDAY).isWholeDay()).isFalse();
+    }
+
+    @Test
+    void ofLiveIsNotWholeDay() {
+        assertThat(BoardContext.of(deviceWithTimezone("Asia/Dubai"), DEFAULT_ZONE).isWholeDay()).isFalse();
+    }
+
+    @Test
+    void ofDayStartsAtMidnightInTheDeviceZoneAndSpansTheDay() {
+        BoardContext ctx = BoardContext.of(deviceWithTimezone("Asia/Dubai"), DEFAULT_ZONE,
+                LocalDate.of(2026, 5, 13));
+
+        assertThat(ctx.isWholeDay()).isTrue();
+        assertThat(ctx.getNow()).isEqualTo(ZonedDateTime.of(2026, 5, 13, 0, 0, 0, 0, ZoneId.of("Asia/Dubai")));
+        assertThat(ctx.today()).isEqualTo(LocalDate.of(2026, 5, 13));
+        assertThat(ctx.currentDayStart()).isEqualTo(Instant.parse("2026-05-12T20:00:00Z"));
+        assertThat(ctx.nextDayStart()).isEqualTo(Instant.parse("2026-05-13T20:00:00Z"));
+    }
+
+    /** Toronto leaves DST on 2026-11-01, so that day's window is 25 hours, not 24. */
+    @Test
+    void dayWindowIsTwentyFiveHoursOnTheDayDstEnds() {
+        BoardContext ctx = BoardContext.of(deviceWithTimezone("America/Toronto"), DEFAULT_ZONE,
+                LocalDate.of(2026, 11, 1));
+
+        assertThat(ctx.currentDayStart()).isEqualTo(Instant.parse("2026-11-01T04:00:00Z"));
+        assertThat(ctx.nextDayStart()).isEqualTo(Instant.parse("2026-11-02T05:00:00Z"));
+    }
+
+    @Test
+    void zoneForMatchesTheZoneOfWouldResolve() {
+        assertThat(BoardContext.zoneFor(deviceWithTimezone("Asia/Dubai"), DEFAULT_ZONE))
+                .isEqualTo(ZoneId.of("Asia/Dubai"));
+        assertThat(BoardContext.zoneFor(deviceWithTimezone("Bogus/Zone"), DEFAULT_ZONE))
+                .isEqualTo(DEFAULT_ZONE);
+    }
 }

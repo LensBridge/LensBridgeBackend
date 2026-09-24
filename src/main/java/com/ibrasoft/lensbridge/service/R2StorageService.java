@@ -336,6 +336,36 @@ public class R2StorageService {
     }
 
     /**
+     * Download an object's bytes together with its stored content type (may be null).
+     */
+    public R2Object getObject(String objectKey) throws IOException {
+        GetObjectRequest getRequest = GetObjectRequest.builder()
+                .bucket(bucketName)
+                .key(objectKey)
+                .build();
+        try (ResponseInputStream<GetObjectResponse> stream = s3Client.getObject(getRequest)) {
+            return new R2Object(objectKey, stream.readAllBytes(), stream.response().contentType());
+        }
+    }
+
+    /**
+     * Object key for a URL built as {@code <public-url>/<objectKey>}, the way poster images
+     * are stored. Falls back to {@link #extractObjectKey} for anything else.
+     */
+    public String objectKeyFromPublicUrl(String url) {
+        if (url != null && publicUrl != null && !publicUrl.isBlank()) {
+            String prefix = publicUrl.endsWith("/") ? publicUrl : publicUrl + "/";
+            if (url.startsWith(prefix)) {
+                // A public-url configured with a trailing slash yields "<base>//<key>".
+                String key = url.substring(prefix.length());
+                while (key.startsWith("/")) key = key.substring(1);
+                return key;
+            }
+        }
+        return extractObjectKey(url);
+    }
+
+    /**
      * Compute the SHA-256 hex digest of a stored object.
      */
     public String calculateSha256Hash(String objectKey) throws Exception {
@@ -364,6 +394,9 @@ public class R2StorageService {
         }
         return generatePresignedDownloadUrl(thumbnailKey);
     }
+
+    /** An object's contents as downloaded. */
+    public record R2Object(String objectKey, byte[] bytes, String contentType) {}
 
     /**
      * Lightweight immutable metadata DTO.

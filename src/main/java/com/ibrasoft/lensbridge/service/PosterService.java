@@ -69,6 +69,13 @@ public class PosterService {
     }
 
     /**
+     * Posters for the audience (or BOTH) active at any point in {@code [from, to)}.
+     */
+    public List<Poster> getPostersForAudienceOverlapping(Audience audience, Instant from, Instant to) {
+        return posterRepository.findPostersForAudienceOverlapping(from, to, audience);
+    }
+
+    /**
      * Get all active posters (currently within their viewing window).
      */
     public List<Poster> getActivePosters() {

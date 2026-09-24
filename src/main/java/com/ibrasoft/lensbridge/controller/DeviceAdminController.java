@@ -20,15 +20,20 @@ import com.ibrasoft.lensbridge.service.agent.CommandDispatcher;
 import com.ibrasoft.lensbridge.service.agent.EnrollmentTokenService;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
 import com.ibrasoft.lensbridge.service.agent.EnrollmentTokenService.Issued;
+import com.ibrasoft.lensbridge.service.board.offline.OfflineBundle;
+import com.ibrasoft.lensbridge.service.board.offline.OfflineBundleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -37,6 +42,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.socket.CloseStatus;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -60,6 +66,7 @@ public class DeviceAdminController {
     private final ObjectMapper objectMapper;
     private final AgentSessionRegistry sessionRegistry;
     private final AdminAuditService auditService;
+    private final OfflineBundleService offlineBundleService;
 
     @Operation(operationId = "listDevices", summary = "List every enrolled board device")
     @GetMapping
@@ -185,6 +192,51 @@ public class DeviceAdminController {
                 .map(c -> CommandView.of(c, objectMapper))
                 .toList();
         return ResponseEntity.ok(commands);
+    }
+
+    /**
+     * The bundle is built completely before the first byte goes out, so every failure (bad
+     * {@code days}, unknown or revoked device, an unfetchable poster image) is still a normal
+     * JSON error response rather than a truncated zip.
+     * <p>
+     * Written straight to the servlet response on the request thread. A
+     * {@code StreamingResponseBody} would finish on an ASYNC re-dispatch, where
+     * {@code AuthTokenFilter} (a {@code OncePerRequestFilter}) does not run, so the
+     * authorization filter would reject the dispatch and append a 401 body to the zip.
+     * No {@code produces} on the mapping either: it would stop Spring rendering the JSON
+     * error bodies, since the only producible type would be the zip.
+     */
+    @Operation(operationId = "downloadOfflineBundle",
+            summary = "Download a content bundle for a board with no internet",
+            description = "A zip holding one fully assembled payload per day, starting today in the "
+                    + "device's timezone, plus every poster image those payloads reference. Pushed to "
+                    + "the board by hand with mbpush.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The bundle",
+                    content = @Content(mediaType = "application/zip",
+                            schema = @Schema(type = "string", format = "binary"))),
+            @ApiResponse(responseCode = "400", description = "days outside 1-31",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+            @ApiResponse(responseCode = "404", description = "No device with that id",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+            @ApiResponse(responseCode = "409", description = "Device is revoked",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+            @ApiResponse(responseCode = "502", description = "A poster image could not be fetched; the message names the poster",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class)))
+    })
+    @GetMapping("/{deviceId}/offline-bundle")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_DEVICE_READ + "')")
+    public void offlineBundle(
+            @PathVariable UUID deviceId,
+            @RequestParam(defaultValue = "" + OfflineBundleService.DEFAULT_DAYS) int days,
+            HttpServletResponse response) throws IOException {
+        OfflineBundle bundle = offlineBundleService.build(deviceId, days);
+        response.setStatus(HttpStatus.OK.value());
+        response.setContentType("application/zip");
+        response.setHeader(HttpHeaders.CONTENT_DISPOSITION,
+                ContentDisposition.attachment().filename(bundle.filename()).build().toString());
+        bundle.writeTo(response.getOutputStream());
+        response.flushBuffer();
     }
 
     private String getCurrentUserEmail() {

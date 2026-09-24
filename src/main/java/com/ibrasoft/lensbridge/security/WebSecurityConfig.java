@@ -69,6 +69,8 @@ public class WebSecurityConfig {
     configuration.setAllowedOrigins(Arrays.asList(frontendBaseUrl, musallahBoardBaseUrl));
     configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
     configuration.setAllowedHeaders(Arrays.asList("*"));
+    // So the admin frontend can read the offline bundle's filename from a fetch() response.
+    configuration.setExposedHeaders(Arrays.asList("Content-Disposition"));
     configuration.setAllowCredentials(true);
     
     UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

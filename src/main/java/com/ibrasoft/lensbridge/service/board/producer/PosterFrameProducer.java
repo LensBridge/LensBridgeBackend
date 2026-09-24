@@ -1,5 +1,6 @@
 package com.ibrasoft.lensbridge.service.board.producer;
 
+import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.Poster;
 import com.ibrasoft.lensbridge.model.board.frames.FrameDefinition;
 import com.ibrasoft.lensbridge.model.board.frames.FrameType;
@@ -22,10 +23,17 @@ public class PosterFrameProducer implements FrameProducer {
 
     private final PosterService posterService;
 
+    /**
+     * A live board gets posters active right now. A whole-day context (an offline bundle day)
+     * gets every poster active at any point during that day in the device's zone.
+     */
     @Override
     public List<FrameDefinition> produce(BoardContext ctx) {
-        List<Poster> posters =
-                posterService.getActivePosterFramesForAudience(ctx.getDevice().getAudience());
+        Audience audience = ctx.getDevice().getAudience();
+        List<Poster> posters = ctx.isWholeDay()
+                ? posterService.getPostersForAudienceOverlapping(
+                        audience, ctx.currentDayStart(), ctx.nextDayStart())
+                : posterService.getActivePosterFramesForAudience(audience);
         return posters.stream().map(p -> transform(p, ctx)).collect(Collectors.toList());
     }
 
