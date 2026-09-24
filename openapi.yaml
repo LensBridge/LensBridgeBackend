@@ -2259,6 +2259,58 @@ paths:
       summary: Public content signing keys boards should trust
       tags:
       - agent-content-controller
+  /api/agent/weather:
+    get:
+      description: "Device-authenticated with the X-MB-* headers, like the content\
+        \ bundle; the signed body hash is the SHA-256 of the empty string. `weather`\
+        \ is the OpenWeatherMap current weather JSON exactly as the server last fetched\
+        \ it, or null when the server has none. `fetchedAt` is when the server answered."
+      operationId: getAgentWeather
+      parameters:
+      - description: Enrolled device id
+        in: header
+        name: X-MB-Device-Id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - description: Unix milliseconds; must be within 5 minutes of the server clock
+        in: header
+        name: X-MB-Timestamp
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - description: Base64 Ed25519 signature by the device key
+        in: header
+        name: X-MB-Signature
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentWeatherResponse"
+          description: "Current weather, or null weather when unavailable"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: "Missing or bad device signature, clock skew over 5 minutes,\
+            \ or an unknown or revoked device"
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      security: []
+      summary: Current weather for this board
+      tags:
+      - agent-content-controller
   /api/auth/change-password:
     post:
       description: "Revokes every refresh token for the user, so all sessions must\
@@ -2845,31 +2897,6 @@ paths:
           description: Request failed; body carries a human-readable message
       tags:
       - musallah-board-controller
-  /api/musallah/payload:
-    get:
-      operationId: getBoardPayload
-      parameters:
-      - in: query
-        name: deviceId
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MusallahBoardPayload"
-          description: OK
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: Request failed; body carries a human-readable message
-      tags:
-      - musallah-board-controller
   /api/musallah/weekly-content:
     get:
       operationId: getCurrentWeeklyContent
@@ -3356,6 +3383,19 @@ components:
           format: uuid
         websocketUrl:
           type: string
+    AgentWeatherResponse:
+      type: object
+      properties:
+        fetchedAt:
+          type: string
+          format: date-time
+          example: 2026-09-24T14:05:00Z
+        weather:
+          $ref: "#/components/schemas/JsonNode"
+          description: "OpenWeatherMap current weather JSON, verbatim; null when unavailable"
+      required:
+      - fetchedAt
+      - weather
     AuditEventDto:
       type: object
       properties:
@@ -4074,6 +4114,10 @@ components:
           type: string
     MusallahBoardPayload:
       type: object
+      description: "Format of each payloads/<date>.json file inside a signed content\
+        \ package (.mbu). Not returned by any endpoint; boards read it from installed\
+        \ packages. weather is always null here: boards fetch current weather from\
+        \ GET /api/agent/weather."
       properties:
         deviceConfig:
           $ref: "#/components/schemas/DeviceConfig"

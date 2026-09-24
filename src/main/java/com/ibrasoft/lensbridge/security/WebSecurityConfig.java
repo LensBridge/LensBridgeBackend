@@ -95,6 +95,7 @@ public class WebSecurityConfig {
             // Public keys, and device-signed requests authenticated in the controller.
             .requestMatchers("/api/agent/signing-keys").permitAll()
             .requestMatchers("/api/agent/content-bundle").permitAll()
+            .requestMatchers("/api/agent/weather").permitAll()
             .requestMatchers("/api/dashboard/ws/**").permitAll()
             // Disable these endpoints in production; they are only for local dev and CI.
             .requestMatchers("/swagger-ui/**", "/swagger-ui.html",

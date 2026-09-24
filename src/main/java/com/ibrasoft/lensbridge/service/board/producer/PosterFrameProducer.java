@@ -23,17 +23,12 @@ public class PosterFrameProducer implements FrameProducer {
 
     private final PosterService posterService;
 
-    /**
-     * A live board gets posters active right now. A whole-day context (an offline bundle day)
-     * gets every poster active at any point during that day in the device's zone.
-     */
+    /** Every poster active at any point during the context's day in the device's zone. */
     @Override
     public List<FrameDefinition> produce(BoardContext ctx) {
         Audience audience = ctx.getDevice().getAudience();
-        List<Poster> posters = ctx.isWholeDay()
-                ? posterService.getPostersForAudienceOverlapping(
-                        audience, ctx.currentDayStart(), ctx.nextDayStart())
-                : posterService.getActivePosterFramesForAudience(audience);
+        List<Poster> posters = posterService.getPostersForAudienceOverlapping(
+                audience, ctx.currentDayStart(), ctx.nextDayStart());
         return posters.stream().map(p -> transform(p, ctx)).collect(Collectors.toList());
     }
 

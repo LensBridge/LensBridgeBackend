@@ -18,14 +18,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -89,22 +85,9 @@ class PosterFrameProducerTest {
         return Device.builder().id(UUID.randomUUID()).displayName("d").audience(Audience.SISTERS).build();
     }
 
-    /** The online board's behaviour is unchanged: posters active at this instant, nothing wider. */
+    /** A package day: anything active at any point between this midnight and the next. */
     @Test
-    void liveContextAsksForPostersActiveRightNow() {
-        ZonedDateTime now = ZonedDateTime.of(2026, 5, 13, 15, 0, 0, 0, TORONTO);
-        BoardContext ctx = BoardContext.builder().device(device()).now(now).build();
-        Poster p = poster("Now", "u", 10);
-        when(posterService.getActivePosterFramesForAudience(Audience.SISTERS)).thenReturn(List.of(p));
-
-        assertThat(transformer.produce(ctx)).extracting(FrameDefinition::getFrameId)
-                .containsExactly("poster:" + p.getId());
-        verify(posterService, never()).getPostersForAudienceOverlapping(any(), any(), any());
-    }
-
-    /** An offline bundle day: anything active at any point between this midnight and the next. */
-    @Test
-    void wholeDayContextAsksForPostersOverlappingTheDay() {
+    void asksForPostersOverlappingTheContextsDay() {
         BoardContext ctx = BoardContext.of(device(), TORONTO, LocalDate.of(2026, 5, 13));
         Poster p = poster("Today", "u", 10);
         when(posterService.getPostersForAudienceOverlapping(Audience.SISTERS,
@@ -113,6 +96,5 @@ class PosterFrameProducerTest {
 
         assertThat(transformer.produce(ctx)).extracting(FrameDefinition::getFrameId)
                 .containsExactly("poster:" + p.getId());
-        verify(posterService, never()).getActivePosterFramesForAudience(any());
     }
 }

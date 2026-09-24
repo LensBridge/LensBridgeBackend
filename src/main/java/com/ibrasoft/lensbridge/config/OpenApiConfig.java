@@ -4,7 +4,9 @@ import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
+import com.ibrasoft.lensbridge.dto.board.response.MusallahBoardPayload;
 import com.ibrasoft.lensbridge.security.CurrentUser;
+import io.swagger.v3.core.converter.ModelConverters;
 import io.swagger.v3.oas.models.media.Content;
 import io.swagger.v3.oas.models.media.MediaType;
 import io.swagger.v3.oas.models.media.Schema;
@@ -54,6 +56,28 @@ public class OpenApiConfig {
                         ApiResponses responses = operation.getResponses();
                         if (responses != null && responses.getDefault() == null) {
                             responses.addApiResponse("default", fallback);
+                        }
+                    });
+        };
+    }
+
+    /**
+     * No endpoint returns {@link MusallahBoardPayload} any more, but it is still the format of
+     * each {@code payloads/<date>.json} inside a content package, and the board generates its
+     * types from this spec. Registered by hand so springdoc does not drop it as unreferenced.
+     * Schemas already present are left alone.
+     */
+    @Bean
+    public OpenApiCustomizer contentPackageSchemasCustomizer() {
+        return openApi -> {
+            if (openApi.getComponents() == null) {
+                openApi.setComponents(new Components());
+            }
+            ModelConverters.getInstance(true).readAll(MusallahBoardPayload.class)
+                    .forEach((name, schema) -> {
+                        if (openApi.getComponents().getSchemas() == null
+                                || !openApi.getComponents().getSchemas().containsKey(name)) {
+                            openApi.getComponents().addSchemas(name, schema);
                         }
                     });
         };

@@ -106,15 +106,6 @@ class PosterServiceTest {
     }
 
     @Test
-    void getActivePosterFramesForAudienceQueriesActiveForAudience() {
-        List<Poster> expected = List.of(poster("a"));
-        when(posterRepository.findActivePostersForAudienceAt(any(Instant.class), any(Audience.class)))
-                .thenReturn(expected);
-
-        assertThat(service.getActivePosterFramesForAudience(Audience.BROTHERS)).isEqualTo(expected);
-    }
-
-    @Test
     void getActivePostersQueriesActiveAtNow() {
         List<Poster> expected = List.of(poster("a"));
         when(posterRepository.findActivePostersAt(any(Instant.class))).thenReturn(expected);

@@ -33,15 +33,12 @@ public class BoardContext {
 
     Device device;
     DeviceConfig config;
-    ZonedDateTime now;
-
     /**
-     * True when this context stands for a whole calendar day rather than a live moment — the
-     * offline bundle assembles one payload per day, and a poster that starts at 14:00 must be
-     * in that day's payload even though {@link #now} is midnight.
+     * The moment this context is evaluated at, in the device's timezone. Contexts from
+     * {@link #of} stand for a whole calendar day and put this at its first instant; a poster
+     * that starts at 14:00 still belongs in that day's payload.
      */
-    @Builder.Default
-    boolean wholeDay = false;
+    ZonedDateTime now;
 
     /** The device's timezone, already resolved into {@link #now}. */
     public ZoneId zone() {
@@ -88,25 +85,14 @@ public class BoardContext {
     }
 
     /**
-     * @param defaultZone used when the device has no timezone configured or the configured
-     *                    one is unparseable. Pass the deployment's default, not
-     *                    {@code ZoneId.systemDefault()} — the JVM's zone is an accident of
-     *                    the container image.
-     */
-    public static BoardContext of(Device device, ZoneId defaultZone) {
-        DeviceConfig config = device.getConfig();
-        ZoneId zone = resolveZone(device, config, defaultZone);
-        return BoardContext.builder()
-                .device(device)
-                .config(config)
-                .now(ZonedDateTime.now(zone))
-                .build();
-    }
-
-    /**
      * A context standing for all of {@code day} in the device's timezone: {@link #now} is that
      * day's first instant and posters are those active at any point during it. Used to build
-     * offline bundles ahead of time.
+     * content packages ahead of time.
+     *
+     * @param defaultZone used when the device has no timezone configured or the configured
+     *                    one is unparseable. Pass the deployment's default, not
+     *                    {@code ZoneId.systemDefault()}: the JVM's zone is an accident of
+     *                    the container image.
      */
     public static BoardContext of(Device device, ZoneId defaultZone, LocalDate day) {
         DeviceConfig config = device.getConfig();
@@ -115,7 +101,6 @@ public class BoardContext {
                 .device(device)
                 .config(config)
                 .now(day.atStartOfDay(zone))
-                .wholeDay(true)
                 .build();
     }
 

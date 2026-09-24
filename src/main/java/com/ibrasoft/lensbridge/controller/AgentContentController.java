@@ -1,12 +1,15 @@
 package com.ibrasoft.lensbridge.controller;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
 import com.ibrasoft.lensbridge.dto.board.request.ContentBundleRequest;
+import com.ibrasoft.lensbridge.dto.board.response.AgentWeatherResponse;
 import com.ibrasoft.lensbridge.dto.board.response.SigningKeysResponse;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
 import com.ibrasoft.lensbridge.model.board.Device;
+import com.ibrasoft.lensbridge.service.OpenWeatherService;
 import com.ibrasoft.lensbridge.service.agent.http.DeviceRequestAuthenticator;
 import com.ibrasoft.lensbridge.service.board.offline.ContentSigningService;
 import com.ibrasoft.lensbridge.service.board.offline.OfflineBundle;
@@ -35,6 +38,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -42,11 +46,11 @@ import java.util.regex.Pattern;
 
 /**
  * Endpoints a board's agent calls on its own behalf once enrolled: fetching signed content
- * for online sync, and fetching the content keys to pin. See MusallahBoard
- * {@code agent/docs/architecture.md}, sections 9.1 to 9.3.
+ * for online sync, fetching the content keys to pin, and fetching current weather. See
+ * MusallahBoard {@code agent/docs/architecture.md}, sections 9.1 to 9.3.
  * <p>
- * Both paths are {@code permitAll} in {@code WebSecurityConfig}. The signing keys are public
- * by nature; the content bundle authenticates the device itself with
+ * All paths are {@code permitAll} in {@code WebSecurityConfig}. The signing keys are public
+ * by nature; the content bundle and weather authenticate the device themselves with
  * {@link DeviceRequestAuthenticator}, which needs the raw body and so cannot sit behind the
  * JWT filter chain.
  */
@@ -61,6 +65,7 @@ public class AgentContentController {
     private final DeviceRequestAuthenticator deviceAuthenticator;
     private final OfflineBundleService offlineBundleService;
     private final ContentSigningService signingService;
+    private final OpenWeatherService openWeatherService;
     private final ObjectMapper objectMapper;
 
     /**
@@ -137,6 +142,53 @@ public class AgentContentController {
     @GetMapping("/signing-keys")
     public ResponseEntity<SigningKeysResponse> signingKeys() {
         return ResponseEntity.ok(new SigningKeysResponse(signingService.publicKeys()));
+    }
+
+    /**
+     * Current weather for the board to overlay on its installed content. Weather is never in a
+     * content package (packages are built days ahead), so this is the one live fetch a board
+     * makes. A GET has no body, so the signature covers the SHA-256 of the empty string.
+     * <p>
+     * Unavailable weather is a 200 with {@code "weather": null}, never a 5xx: a board without a
+     * forecast just hides the widget.
+     */
+    @Operation(operationId = "getAgentWeather",
+            summary = "Current weather for this board",
+            description = "Device-authenticated with the X-MB-* headers, like the content bundle; the signed "
+                    + "body hash is the SHA-256 of the empty string. `weather` is the OpenWeatherMap current "
+                    + "weather JSON exactly as the server last fetched it, or null when the server has none. "
+                    + "`fetchedAt` is when the server answered.")
+    @SecurityRequirements
+    @Parameters({
+            @Parameter(in = ParameterIn.HEADER, name = DeviceRequestAuthenticator.DEVICE_ID_HEADER, required = true,
+                    description = "Enrolled device id", schema = @Schema(type = "string", format = "uuid")),
+            @Parameter(in = ParameterIn.HEADER, name = DeviceRequestAuthenticator.TIMESTAMP_HEADER, required = true,
+                    description = "Unix milliseconds; must be within 5 minutes of the server clock",
+                    schema = @Schema(type = "integer", format = "int64")),
+            @Parameter(in = ParameterIn.HEADER, name = DeviceRequestAuthenticator.SIGNATURE_HEADER, required = true,
+                    description = "Base64 Ed25519 signature by the device key", schema = @Schema(type = "string"))
+    })
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Current weather, or null weather when unavailable",
+                    content = @Content(schema = @Schema(implementation = AgentWeatherResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Missing or bad device signature, clock skew over 5 minutes, "
+                    + "or an unknown or revoked device",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class)))
+    })
+    @GetMapping("/weather")
+    public ResponseEntity<AgentWeatherResponse> weather(HttpServletRequest request) {
+        deviceAuthenticator.authenticate(request, new byte[0]);
+        return ResponseEntity.ok(new AgentWeatherResponse(currentWeather(), Instant.now()));
+    }
+
+    /** {@link OpenWeatherService#getCurrentWeather()} should never throw; if it does, no weather. */
+    private JsonNode currentWeather() {
+        try {
+            return openWeatherService.getCurrentWeather();
+        } catch (RuntimeException e) {
+            log.warn("Weather lookup failed; answering with null weather", e);
+            return null;
+        }
     }
 
     /** An absent or empty body means all defaults. Unknown fields are ignored (forward compatible). */

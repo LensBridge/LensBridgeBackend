@@ -1,11 +1,13 @@
 package com.ibrasoft.lensbridge.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ibrasoft.lensbridge.dto.board.response.SigningKeyView;
 import com.ibrasoft.lensbridge.dto.upload.response.ErrorResponse;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
+import com.ibrasoft.lensbridge.service.OpenWeatherService;
 import com.ibrasoft.lensbridge.service.UserService;
 import com.ibrasoft.lensbridge.service.agent.DeviceEnrollmentService;
 import com.ibrasoft.lensbridge.service.agent.Ed25519TestUtil;
@@ -31,6 +33,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -52,11 +55,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * {@code POST /api/agent/content-bundle} and {@code GET /api/agent/signing-keys}, through
+ * {@code POST /api/agent/content-bundle}, {@code GET /api/agent/weather} and
+ * {@code GET /api/agent/signing-keys}, through
  * MockMvc with the real {@link DeviceRequestAuthenticator}: requests are signed with a real
  * device key exactly as the agent signs them.
  * <p>
- * Filters are off: both paths are {@code permitAll} in production, so the security chain has
+ * Filters are off: these paths are {@code permitAll} in production, so the security chain has
  * no say, and authentication is the controller's own job, which is what this exercises.
  */
 @WebMvcTest(controllers = {AgentContentController.class, AgentEnrollmentController.class})
@@ -81,6 +85,8 @@ class AgentContentControllerTest {
     private DeviceRepository deviceRepository;
     @MockitoBean
     private DeviceEnrollmentService enrollmentService;
+    @MockitoBean
+    private OpenWeatherService openWeatherService;
     /** Needed by WebConfig's CurrentUserArgumentResolver; see BoardAdminControllerPermissionTest. */
     @MockitoBean
     private UserService userService;
@@ -236,6 +242,88 @@ class AgentContentControllerTest {
         mockMvc.perform(signedPost("{}"))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.message").value("Content signing is not configured on this server"));
+    }
+
+    // ==================== weather ====================
+
+    private static final String WEATHER_URL = "/api/agent/weather";
+
+    /** GET signed as the agent signs it: no body, so the hash is of the empty string. */
+    private MockHttpServletRequestBuilder signedWeatherGet(byte[] signedBody) {
+        long timestamp = System.currentTimeMillis();
+        byte[] message = DeviceRequestAuthenticator.message("GET", WEATHER_URL, DEVICE_ID, timestamp, signedBody);
+        return get(WEATHER_URL)
+                .header(DeviceRequestAuthenticator.DEVICE_ID_HEADER, DEVICE_ID.toString())
+                .header(DeviceRequestAuthenticator.TIMESTAMP_HEADER, Long.toString(timestamp))
+                .header(DeviceRequestAuthenticator.SIGNATURE_HEADER,
+                        Base64.getEncoder().encodeToString(Ed25519TestUtil.sign(keys.getPrivate(), message)));
+    }
+
+    @Test
+    void weatherReturnsTheCachedWeatherVerbatimWithFetchedAt() throws Exception {
+        when(openWeatherService.getCurrentWeather()).thenReturn(new ObjectMapper().readTree(
+                "{\"name\":\"Mississauga\",\"main\":{\"temp\":12.5},\"weather\":[{\"icon\":\"04d\"}]}"));
+        Instant before = Instant.now();
+
+        MvcResult result = mockMvc.perform(signedWeatherGet(new byte[0]))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.weather.name").value("Mississauga"))
+                .andExpect(jsonPath("$.weather.main.temp").value(12.5))
+                .andExpect(jsonPath("$.weather.weather[0].icon").value("04d"))
+                .andReturn();
+
+        String fetchedAt = new ObjectMapper().readTree(result.getResponse().getContentAsString())
+                .get("fetchedAt").asText();
+        assertThat(fetchedAt).endsWith("Z");
+        assertThat(Instant.parse(fetchedAt)).isBetween(before, Instant.now());
+    }
+
+    @Test
+    void weatherIsAnExplicitNullWhenTheServerHasNone() throws Exception {
+        when(openWeatherService.getCurrentWeather()).thenReturn(null);
+
+        mockMvc.perform(signedWeatherGet(new byte[0]))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.weather").hasJsonPath())
+                .andExpect(jsonPath("$.weather").doesNotExist())
+                .andExpect(jsonPath("$.fetchedAt").isString());
+    }
+
+    @Test
+    void weatherIsNullNotA5xxWhenTheServiceFails() throws Exception {
+        when(openWeatherService.getCurrentWeather()).thenThrow(new IllegalStateException("upstream down"));
+
+        mockMvc.perform(signedWeatherGet(new byte[0]))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.weather").hasJsonPath())
+                .andExpect(jsonPath("$.weather").doesNotExist())
+                .andExpect(jsonPath("$.fetchedAt").isString());
+    }
+
+    @Test
+    void weatherWithoutHeadersIsA401() throws Exception {
+        mockMvc.perform(get(WEATHER_URL))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").exists());
+        verifyNoInteractions(openWeatherService);
+    }
+
+    /** The signature must cover the empty body; one over any other body is rejected. */
+    @Test
+    void weatherWithABadSignatureIsA401() throws Exception {
+        mockMvc.perform(signedWeatherGet("{}".getBytes(StandardCharsets.UTF_8)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Device authentication failed: bad signature"));
+        verifyNoInteractions(openWeatherService);
+    }
+
+    @Test
+    void weatherForARevokedDeviceIsA401() throws Exception {
+        device.setRevokedAt(Instant.now());
+        mockMvc.perform(signedWeatherGet(new byte[0]))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Device authentication failed: unknown or revoked device"));
+        verifyNoInteractions(openWeatherService);
     }
 
     // ==================== signing-keys and enrollment ====================

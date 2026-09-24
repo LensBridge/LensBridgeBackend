@@ -102,7 +102,11 @@ public class OfflineBundleService {
     private final BoardPayloadAssembler payloadAssembler;
     private final DeviceRepository deviceRepository;
     private final R2StorageService r2StorageService;
-    /** Spring's own mapper, so payload files serialize exactly like {@code /api/musallah/payload}. */
+    /**
+     * Spring's own mapper, so each {@code payloads/<date>.json} serializes a
+     * {@link com.ibrasoft.lensbridge.dto.board.response.MusallahBoardPayload} with the same
+     * settings (ISO dates, naming) as the rest of the API.
+     */
     private final ObjectMapper objectMapper;
     private final ContentSigningService signingService;
     private final Clock clock;

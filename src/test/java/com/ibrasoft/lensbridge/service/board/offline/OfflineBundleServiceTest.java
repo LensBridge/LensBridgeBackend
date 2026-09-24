@@ -11,7 +11,6 @@ import com.ibrasoft.lensbridge.model.board.Location;
 import com.ibrasoft.lensbridge.model.board.Poster;
 import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
-import com.ibrasoft.lensbridge.service.OpenWeatherService;
 import com.ibrasoft.lensbridge.service.PosterService;
 import com.ibrasoft.lensbridge.service.R2StorageService;
 import com.ibrasoft.lensbridge.service.board.BoardContext;
@@ -76,7 +75,6 @@ class OfflineBundleServiceTest {
     private static final byte[] PNG = "png-bytes".getBytes(StandardCharsets.UTF_8);
 
     private final DeviceRepository deviceRepository = mock(DeviceRepository.class);
-    private final OpenWeatherService weatherService = mock(OpenWeatherService.class);
     private final PosterService posterService = mock(PosterService.class);
     private final R2StorageService r2 = mock(R2StorageService.class);
     private final ObjectMapper objectMapper = Jackson2ObjectMapperBuilder.json()
@@ -128,7 +126,6 @@ class OfflineBundleServiceTest {
             return List.of();
         };
         BoardPayloadAssembler assembler = new BoardPayloadAssembler(
-                deviceRepository, weatherService,
                 List.of(recorder, new PosterFrameProducer(posterService)), ZoneId.of("UTC"));
         return new OfflineBundleService(assembler, deviceRepository, r2, objectMapper, signer,
                 Clock.fixed(NOW, ZoneOffset.UTC));
@@ -345,7 +342,7 @@ class OfflineBundleServiceTest {
     void withoutASigningKeyTheBuildIsA503AndNothingIsAssembledOrFetched() {
         poster("Halaqa", "poster-a.jpg", "2026-10-01T00:00", "2026-12-01T00:00");
         BoardPayloadAssembler assembler = new BoardPayloadAssembler(
-                deviceRepository, weatherService, List.of(new PosterFrameProducer(posterService)), ZoneId.of("UTC"));
+                List.of(new PosterFrameProducer(posterService)), ZoneId.of("UTC"));
         OfflineBundleService unsigned = new OfflineBundleService(assembler, deviceRepository, r2, objectMapper,
                 new ContentSigningService("", ""), Clock.fixed(NOW, ZoneOffset.UTC));
 
@@ -434,17 +431,16 @@ class OfflineBundleServiceTest {
     }
 
     @Test
-    void weatherIsNullAndOpenWeatherIsNeverCalled() throws Exception {
+    void weatherIsAlwaysNull() throws Exception {
         Map<String, byte[]> zip = unzip(service().build(DEVICE_ID, 2));
 
         JsonNode payload = json(zip, "payloads/2026-10-30.json");
         assertThat(payload.has("weather")).isTrue();
         assertThat(payload.get("weather").isNull()).isTrue();
-        verifyNoInteractions(weatherService);
     }
 
     @Test
-    void payloadIsSerializedLikeTheLiveEndpoint() throws Exception {
+    void payloadIsSerializedInThePerDayFormat() throws Exception {
         Map<String, byte[]> zip = unzip(service().build(DEVICE_ID, 1));
 
         JsonNode payload = json(zip, "payloads/2026-10-30.json");
@@ -580,13 +576,6 @@ class OfflineBundleServiceTest {
     }
 
     // ==================== Validation ====================
-
-    @Test
-    void theLivePosterQueryIsNeverUsedForABundle() {
-        service().build(DEVICE_ID, 3);
-
-        verify(posterService, never()).getActivePosterFramesForAudience(any());
-    }
 
     @Test
     void daysOutsideOneToThirtyOneIsA400() {

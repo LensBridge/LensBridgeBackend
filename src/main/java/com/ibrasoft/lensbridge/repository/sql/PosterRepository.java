@@ -19,13 +19,9 @@ public interface PosterRepository extends JpaRepository<Poster, UUID> {
     @Query("SELECT p FROM Poster p WHERE (p.audience = :aud OR p.audience = com.ibrasoft.lensbridge.model.board.Audience.BOTH) ORDER BY p.startTime DESC")
     List<Poster> findByAudienceOrBoth(@Param("aud") Audience audience);
 
-    @Query("SELECT p FROM Poster p WHERE (p.audience = :aud OR p.audience = com.ibrasoft.lensbridge.model.board.Audience.BOTH) AND p.startTime <= :now AND p.endTime > :now ORDER BY p.startTime DESC")
-    List<Poster> findActivePostersForAudienceAt(@Param("now") Instant now, @Param("aud") Audience audience);
-
     /**
      * Posters for the audience (or BOTH) active at any point in {@code [from, to)}: their
-     * {@code [startTime, endTime)} overlaps it. Used for offline bundle days; the live board
-     * uses {@link #findActivePostersForAudienceAt}.
+     * {@code [startTime, endTime)} overlaps it. Used for each day of a board's content package.
      */
     @Query("SELECT p FROM Poster p WHERE (p.audience = :aud OR p.audience = com.ibrasoft.lensbridge.model.board.Audience.BOTH) AND p.startTime < :to AND p.endTime > :from ORDER BY p.startTime DESC")
     List<Poster> findPostersForAudienceOverlapping(@Param("from") Instant from, @Param("to") Instant to, @Param("aud") Audience audience);
