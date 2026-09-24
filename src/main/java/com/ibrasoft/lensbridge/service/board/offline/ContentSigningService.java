@@ -4,24 +4,15 @@ import com.ibrasoft.lensbridge.dto.board.response.SigningKeyView;
 import com.ibrasoft.lensbridge.dto.upload.response.ErrorResponse;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
 import lombok.extern.slf4j.Slf4j;
+import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters;
+import org.bouncycastle.crypto.signers.Ed25519Signer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
-import java.security.GeneralSecurityException;
-import java.security.KeyFactory;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.security.PrivateKey;
-import java.security.PublicKey;
-import java.security.SecureRandom;
-import java.security.Signature;
-import java.security.spec.NamedParameterSpec;
-import java.security.spec.PKCS8EncodedKeySpec;
-import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
@@ -62,23 +53,13 @@ public class ContentSigningService {
     private static final int SEED_LEN = 32;
     private static final int RAW_PUBLIC_KEY_LEN = 32;
 
-    /**
-     * DER prefix of a PKCS#8 PrivateKeyInfo for Ed25519 (RFC 8410): version 0, the Ed25519
-     * AlgorithmIdentifier, and an OCTET STRING wrapping the 32-byte seed as another OCTET
-     * STRING. Appending the seed gives a complete encoding the JDK's KeyFactory accepts.
-     */
-    private static final byte[] PKCS8_PREFIX = HexFormat.of().parseHex("302e020100300506032b657004220420");
-
-    /** DER prefix of an Ed25519 SubjectPublicKeyInfo; the raw key is the 32 bytes after it. */
-    private static final byte[] X509_PREFIX = HexFormat.of().parseHex("302a300506032b6570032100");
-
     /** The configured signing key, or null when signing is not configured. */
     private final SigningKey current;
 
     /** Every public content key to publish, current first. Empty when not configured. */
     private final List<SigningKeyView> publishedKeys;
 
-    private record SigningKey(PrivateKey privateKey, byte[] rawPublicKey, String keyId) {}
+    private record SigningKey(Ed25519PrivateKeyParameters privateKey, byte[] rawPublicKey, String keyId) {}
 
     /**
      * @param privateKeyBase64      base64 of the 32-byte seed; empty or blank disables signing.
@@ -185,43 +166,6 @@ public class ContentSigningService {
         }
     }
 
-    /**
-     * Derives the raw 32-byte public key for a 32-byte seed.
-     * <p>
-     * The JDK has no public API for "public key of this private key". Its Ed25519 key pair
-     * generator, though, takes the seed as the first 32 bytes it reads from the supplied
-     * {@link SecureRandom}, so feeding it the seed reproduces the pair. The constructor then
-     * proves the pair matches by signing and verifying a probe message, so a JDK that ever
-     * drew its randomness differently would fail loudly at startup rather than publish a
-     * public key that does not match the signatures.
-     */
-    static byte[] rawPublicKeyForSeed(byte[] seed) throws GeneralSecurityException {
-        KeyPairGenerator generator = KeyPairGenerator.getInstance("Ed25519");
-        generator.initialize(NamedParameterSpec.ED25519, new FixedSeedRandom(seed));
-        KeyPair pair = generator.generateKeyPair();
-        return rawPublicKey(pair.getPublic());
-    }
-
-    /** The raw 32-byte key out of an Ed25519 public key's X.509 encoding. */
-    static byte[] rawPublicKey(PublicKey publicKey) {
-        byte[] encoded = publicKey.getEncoded();
-        if (encoded == null || encoded.length != X509_PREFIX.length + RAW_PUBLIC_KEY_LEN
-                || !Arrays.equals(encoded, 0, X509_PREFIX.length, X509_PREFIX, 0, X509_PREFIX.length)) {
-            throw new IllegalStateException("Unexpected Ed25519 public key encoding");
-        }
-        return Arrays.copyOfRange(encoded, X509_PREFIX.length, encoded.length);
-    }
-
-    /** Wraps a 32-byte seed in the PKCS#8 envelope and decodes it with the JDK provider. */
-    static PrivateKey privateKeyForSeed(byte[] seed) throws GeneralSecurityException {
-        byte[] pkcs8 = new byte[PKCS8_PREFIX.length + seed.length];
-        System.arraycopy(PKCS8_PREFIX, 0, pkcs8, 0, PKCS8_PREFIX.length);
-        System.arraycopy(seed, 0, pkcs8, PKCS8_PREFIX.length, seed.length);
-        return KeyFactory.getInstance("Ed25519").generatePrivate(new PKCS8EncodedKeySpec(pkcs8));
-    }
-
-    // ==================== Loading ====================
-
     private static SigningKey loadSigningKey(String base64) {
         byte[] seed;
         try {
@@ -234,20 +178,10 @@ public class ContentSigningService {
             throw new IllegalStateException("musallahboard.content-signing.private-key must be the base64 of a "
                     + SEED_LEN + "-byte Ed25519 seed, got " + seed.length + " bytes");
         }
-        try {
-            PrivateKey privateKey = privateKeyForSeed(seed);
-            byte[] rawPublicKey = rawPublicKeyForSeed(seed);
-            // Prove the derived public key belongs to this private key before publishing it.
-            byte[] probe = "musallahboard content key self-test".getBytes(StandardCharsets.US_ASCII);
-            if (!verify(rawPublicKey, probe, sign(privateKey, probe))) {
-                throw new IllegalStateException("Derived content public key does not match the private key");
-            }
-            return new SigningKey(privateKey, rawPublicKey, keyId(rawPublicKey));
-        } catch (GeneralSecurityException e) {
-            throw new IllegalStateException("Could not load the content signing key: " + e.getMessage(), e);
-        } finally {
-            Arrays.fill(seed, (byte) 0);
-        }
+        Ed25519PrivateKeyParameters privateKey = new Ed25519PrivateKeyParameters(seed, 0);
+        Arrays.fill(seed, (byte) 0);
+        byte[] rawPublicKey = privateKey.generatePublicKey().getEncoded();
+        return new SigningKey(privateKey, rawPublicKey, keyId(rawPublicKey));
     }
 
     private static List<byte[]> parsePreviousKeys(String csv) {
@@ -278,55 +212,15 @@ public class ContentSigningService {
 
     // ==================== Primitives ====================
 
-    private static byte[] sign(PrivateKey privateKey, byte[] message) {
-        try {
-            // Signature objects are not thread-safe; one per call is cheap for Ed25519.
-            Signature signer = Signature.getInstance("Ed25519");
-            signer.initSign(privateKey);
-            signer.update(message);
-            return signer.sign();
-        } catch (GeneralSecurityException e) {
-            throw new IllegalStateException("Ed25519 signing failed", e);
-        }
-    }
-
-    private static boolean verify(byte[] rawPublicKey, byte[] message, byte[] signature)
-            throws GeneralSecurityException {
-        byte[] x509 = new byte[X509_PREFIX.length + rawPublicKey.length];
-        System.arraycopy(X509_PREFIX, 0, x509, 0, X509_PREFIX.length);
-        System.arraycopy(rawPublicKey, 0, x509, X509_PREFIX.length, rawPublicKey.length);
-        PublicKey publicKey = KeyFactory.getInstance("Ed25519").generatePublic(new X509EncodedKeySpec(x509));
-        Signature verifier = Signature.getInstance("Ed25519");
-        verifier.initVerify(publicKey);
-        verifier.update(message);
-        return verifier.verify(signature);
+    private static byte[] sign(Ed25519PrivateKeyParameters privateKey, byte[] message) {
+        // Signers hold state; one per call is cheap for Ed25519.
+        Ed25519Signer signer = new Ed25519Signer();
+        signer.init(true, privateKey);
+        signer.update(message, 0, message.length);
+        return signer.generateSignature();
     }
 
     private static boolean isBlank(String s) {
         return s == null || s.isBlank();
-    }
-
-    /**
-     * A {@link SecureRandom} that yields the given seed and then refuses to produce more, so
-     * {@link #rawPublicKeyForSeed} fails instead of silently mixing in other bytes if the
-     * generator ever asks for more than one seed's worth.
-     */
-    private static final class FixedSeedRandom extends SecureRandom {
-        private final byte[] seed;
-        private boolean used;
-
-        FixedSeedRandom(byte[] seed) {
-            this.seed = seed.clone();
-        }
-
-        @Override
-        public void nextBytes(byte[] bytes) {
-            if (used || bytes.length != seed.length) {
-                throw new IllegalStateException("Ed25519 key generator requested unexpected randomness");
-            }
-            System.arraycopy(seed, 0, bytes, 0, seed.length);
-            Arrays.fill(seed, (byte) 0);
-            used = true;
-        }
     }
 }

@@ -50,6 +50,13 @@
     </dependencyManagement>
 
     <dependencies>
+        <!-- Ed25519 content signing: derives the public key from the configured seed, which
+             the JDK has no API for. -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+            <version>1.80</version>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
