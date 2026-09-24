@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.util.UrlPathHelper;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -25,9 +26,16 @@ public class DeviceBodyCachingFilter extends OncePerRequestFilter {
     static final String AGENT_PATH_PREFIX = "/api/agent/";
     static final int MAX_BODY_BYTES = 1024 * 1024;
 
+    private static final UrlPathHelper PATHS = new UrlPathHelper();
+
+    /**
+     * Matched on the path inside the application, exactly as the interceptor's
+     * {@code /api/agent/**} pattern is, so a context path or a proxy prefix
+     * ({@code X-Forwarded-Prefix}) cannot make the two disagree.
+     */
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !request.getRequestURI().startsWith(AGENT_PATH_PREFIX);
+        return !PATHS.getPathWithinApplication(request).startsWith(AGENT_PATH_PREFIX);
     }
 
     @Override

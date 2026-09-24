@@ -40,9 +40,8 @@ import java.time.Instant;
  * MusallahBoard {@code agent/docs/architecture.md}, sections 9.1 to 9.3.
  * <p>
  * All paths are {@code permitAll} in {@code WebSecurityConfig}. The signing keys are public
- * by nature; the content bundle and weather authenticate the device themselves with
- * {@link DeviceRequestAuthenticator}, which needs the raw body and so cannot sit behind the
- * JWT filter chain.
+ * by nature; the content bundle and weather take an {@link AuthenticatedDevice}, which
+ * verifies the board's Ed25519 request signature instead of a user's JWT.
  */
 @RestController
 @RequestMapping("/api/agent")

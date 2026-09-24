@@ -63,6 +63,11 @@ import java.util.UUID;
 public class OfflineBundleService {
 
     public static final int FORMAT_VERSION = 2;
+    /**
+     * Default window of an admin download for an offline board: two weeks between visits.
+     * Online boards ask for their own window (a week by default, see
+     * {@link com.ibrasoft.lensbridge.dto.board.request.ContentBundleRequest#DEFAULT_DAYS}).
+     */
     public static final int DEFAULT_DAYS = 14;
     public static final int MAX_DAYS = 31;
 
@@ -174,7 +179,10 @@ public class OfflineBundleService {
         signingService.requireConfigured();
 
         ZoneId zone = payloadAssembler.zoneFor(device);
-        Instant createdAt = clock.instant().truncatedTo(ChronoUnit.SECONDS);
+        // The sequence keeps the clock's milliseconds so two builds in the same second still
+        // order; createdAt is the same instant at the second precision the format uses.
+        Instant builtAt = clock.instant();
+        Instant createdAt = builtAt.truncatedTo(ChronoUnit.SECONDS);
         LocalDate firstDay = LocalDate.ofInstant(createdAt, zone);
         LocalDate lastDay = firstDay.plusDays(days - 1L);
 
@@ -217,7 +225,7 @@ public class OfflineBundleService {
                 FORMAT_VERSION,
                 "content",
                 createdAt.toString(),
-                createdAt.toEpochMilli(),
+                builtAt.toEpochMilli(),
                 deviceId.toString(),
                 null,
                 files,

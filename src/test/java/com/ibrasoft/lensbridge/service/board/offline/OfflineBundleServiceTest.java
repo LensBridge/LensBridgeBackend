@@ -121,6 +121,10 @@ class OfflineBundleServiceTest {
     }
 
     private OfflineBundleService service() {
+        return service(NOW);
+    }
+
+    private OfflineBundleService service(Instant now) {
         FrameProducer recorder = ctx -> {
             seenContexts.add(ctx);
             return List.of();
@@ -128,7 +132,7 @@ class OfflineBundleServiceTest {
         BoardPayloadAssembler assembler = new BoardPayloadAssembler(
                 List.of(recorder, new PosterFrameProducer(posterService)), ZoneId.of("UTC"));
         return new OfflineBundleService(assembler, deviceRepository, r2, objectMapper, signer,
-                Clock.fixed(NOW, ZoneOffset.UTC));
+                Clock.fixed(now, ZoneOffset.UTC));
     }
 
     private static Instant toronto(String localDateTime) {
@@ -260,6 +264,16 @@ class OfflineBundleServiceTest {
         JsonNode mediaFile = fileEntry(manifest, "media/" + sha + ".jpg");
         assertThat(mediaFile.get("sha256").asText()).isEqualTo(sha);
         assertThat(mediaFile.get("bytes").asLong()).isEqualTo(JPEG.length);
+    }
+
+    /** Two builds in the same second must still be ordered, or the board would treat the second as unchanged. */
+    @Test
+    void sequenceKeepsMillisecondsWhileCreatedAtIsWholeSeconds() throws Exception {
+        JsonNode first = json(unzip(service(NOW.plusMillis(100)).build(DEVICE_ID, 1)), "mbu.json");
+        JsonNode second = json(unzip(service(NOW.plusMillis(900)).build(DEVICE_ID, 1)), "mbu.json");
+        assertThat(first.get("createdAt").asText()).isEqualTo("2026-10-31T03:30:00Z");
+        assertThat(second.get("createdAt").asText()).isEqualTo("2026-10-31T03:30:00Z");
+        assertThat(second.get("sequence").asLong()).isGreaterThan(first.get("sequence").asLong());
     }
 
     /** Every zip entry but mbu.json and mbu.sig is listed with its true hash and size, and vice versa. */

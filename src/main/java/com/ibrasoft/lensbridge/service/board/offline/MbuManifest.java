@@ -20,7 +20,8 @@ import java.util.List;
  * @param formatVersion always {@value OfflineBundleService#FORMAT_VERSION}
  * @param type          always {@code "content"}: this backend only holds a content key
  * @param createdAt     RFC 3339 UTC, second precision ({@code 2026-09-24T14:02:11Z})
- * @param sequence      {@code createdAt} in epoch milliseconds; the board's anti-rollback counter
+ * @param sequence      build time in epoch milliseconds (not truncated like {@code createdAt});
+ *                      the board's anti-rollback counter
  * @param deviceId      the device the content is bound to
  * @param version       always null for content (only software packages carry a version)
  * @param files         every payload and media file, including media left out of this zip

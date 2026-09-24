@@ -41,10 +41,10 @@ import java.util.UUID;
  * ({@code musallahboard-auth-v1}) and from package signatures ({@code musallahboard-mbu-v2}),
  * so a signature made for one can never be replayed as another.
  * <p>
- * Deliberately a component the endpoint calls, not a servlet filter: only a couple of agent
- * endpoints use it, and the caller hands over the raw body bytes it already read, so the
- * hash covers exactly what was sent rather than a re-serialization of a bound object. The
- * paths are {@code permitAll} in {@code WebSecurityConfig}; this is their authentication.
+ * Endpoints do not call this directly: they declare an {@link AuthenticatedDevice} parameter,
+ * and {@link DeviceAuthInterceptor} calls it with the body {@link DeviceBodyCachingFilter}
+ * cached, so the hash covers exactly the bytes that were sent. The paths are
+ * {@code permitAll} in {@code WebSecurityConfig}; this is their authentication.
  * <p>
  * Replays inside the five-minute window are accepted. That is by design: the endpoints this
  * guards are idempotent reads, so a replay only fetches the same content again.
