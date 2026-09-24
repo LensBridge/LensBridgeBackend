@@ -1,5 +1,6 @@
 package com.ibrasoft.lensbridge.dto.board.response;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.Data;
 
@@ -17,8 +18,9 @@ public class AgentEnrollResponse {
 
     /**
      * Public content signing keys the agent pins at enrollment, over the same TLS connection
-     * that establishes its identity. Empty when the server has no content key configured.
-     * Optional in the spec so agents built before it existed still decode the response.
+     * that establishes its identity. Always present; empty when the server has no content
+     * key configured.
      */
+    @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
     private List<SigningKeyView> contentSigningKeys;
 }

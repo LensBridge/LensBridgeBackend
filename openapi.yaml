@@ -3370,12 +3370,13 @@ components:
       - token
     AgentEnrollResponse:
       type: object
+      required:
+        - contentSigningKeys
       properties:
         contentSigningKeys:
           type: array
-          description: "Public content signing keys the agent pins at enrollment. Empty\
-            \ when the server has no content key configured. Optional so agents built\
-            \ before it existed still decode the response."
+          description: "Public content signing keys the agent pins at enrollment. Always\
+            \ present; empty when the server has no content key configured."
           items:
             $ref: "#/components/schemas/SigningKeyView"
         deviceId:

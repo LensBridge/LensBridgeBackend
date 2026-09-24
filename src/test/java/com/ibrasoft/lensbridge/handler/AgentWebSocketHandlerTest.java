@@ -216,7 +216,7 @@ class AgentWebSocketHandlerTest {
      * Regression: the agent reports the kiosk's slide key ("next-prayer", "poster-3"), which
      * is not a UUID. While the field was typed UUID every heartbeat from a working board
      * failed to parse and the session was closed with 4004, so devices looked permanently
-     * offline. The legacy displayedFrameId name must keep working.
+     * offline.
      */
     @Test
     void heartbeat_acceptsNonUuidFrameKey() throws Exception {
@@ -230,7 +230,7 @@ class AgentWebSocketHandlerTest {
         ArgumentCaptor<HeartbeatFrame> captor = ArgumentCaptor.forClass(HeartbeatFrame.class);
         deliver(s, String.format(
                 "{\"type\":\"heartbeat\",\"seq\":2,\"sessionId\":\"%s\"," +
-                        "\"telemetry\":{\"kioskAlive\":true,\"displayedFrameId\":\"next-prayer\"}}",
+                        "\"telemetry\":{\"kioskAlive\":true,\"displayedFrameKey\":\"next-prayer\"}}",
                 hello.sessionId));
 
         verify(heartbeatService).record(eq(device.getId()), captor.capture(), any());
