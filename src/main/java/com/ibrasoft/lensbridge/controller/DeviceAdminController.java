@@ -195,25 +195,29 @@ public class DeviceAdminController {
     }
 
     /**
-     * The bundle is built completely before the first byte goes out, so every failure (bad
-     * {@code days}, unknown or revoked device, an unfetchable poster image) is still a normal
-     * JSON error response rather than a truncated zip.
+     * The signed content package ({@code .mbu}) an admin carries to a board, with every media
+     * file included. It is the same package an online board syncs for itself, just with no
+     * {@code haveMedia} to leave anything out.
+     * <p>
+     * The package is built completely before the first byte goes out, so every failure (bad
+     * {@code days}, unknown or revoked device, no signing key, an unfetchable poster image) is
+     * still a normal JSON error response rather than a truncated zip.
      * <p>
      * Written straight to the servlet response on the request thread. A
      * {@code StreamingResponseBody} would finish on an ASYNC re-dispatch, where
      * {@code AuthTokenFilter} (a {@code OncePerRequestFilter}) does not run, so the
      * authorization filter would reject the dispatch and append a 401 body to the zip.
      * No {@code produces} on the mapping either: it would stop Spring rendering the JSON
-     * error bodies, since the only producible type would be the zip.
+     * error bodies, since the only producible type would be the package.
      */
     @Operation(operationId = "downloadOfflineBundle",
-            summary = "Download a content bundle for a board with no internet",
-            description = "A zip holding one fully assembled payload per day, starting today in the "
-                    + "device's timezone, plus every poster image those payloads reference. Pushed to "
-                    + "the board by hand with mbpush.")
+            summary = "Download a signed content package for a board",
+            description = "A signed .mbu content package (format version 2) holding one fully assembled "
+                    + "payload per day, starting today in the device's timezone, plus every poster image those "
+                    + "payloads reference. Taken to the board by USB stick, laptop or phone.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "The bundle",
-                    content = @Content(mediaType = "application/zip",
+            @ApiResponse(responseCode = "200", description = "The package",
+                    content = @Content(mediaType = OfflineBundleService.MBU_CONTENT_TYPE,
                             schema = @Schema(type = "string", format = "binary"))),
             @ApiResponse(responseCode = "400", description = "days outside 1-31",
                     content = @Content(schema = @Schema(implementation = MessageResponse.class))),
@@ -222,6 +226,8 @@ public class DeviceAdminController {
             @ApiResponse(responseCode = "409", description = "Device is revoked",
                     content = @Content(schema = @Schema(implementation = MessageResponse.class))),
             @ApiResponse(responseCode = "502", description = "A poster image could not be fetched; the message names the poster",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+            @ApiResponse(responseCode = "503", description = "No content signing key is configured on the server",
                     content = @Content(schema = @Schema(implementation = MessageResponse.class)))
     })
     @GetMapping("/{deviceId}/offline-bundle")
@@ -232,7 +238,7 @@ public class DeviceAdminController {
             HttpServletResponse response) throws IOException {
         OfflineBundle bundle = offlineBundleService.build(deviceId, days);
         response.setStatus(HttpStatus.OK.value());
-        response.setContentType("application/zip");
+        response.setContentType(OfflineBundleService.MBU_CONTENT_TYPE);
         response.setHeader(HttpHeaders.CONTENT_DISPOSITION,
                 ContentDisposition.attachment().filename(bundle.filename()).build().toString());
         bundle.writeTo(response.getOutputStream());
