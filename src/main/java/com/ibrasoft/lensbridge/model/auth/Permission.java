@@ -57,7 +57,7 @@ public enum Permission implements GrantedAuthority {
 
     /** Recoverable, no data egress: chrome.reload, config.refresh. */
     BOARD_COMMAND_BENIGN(Authority.BOARD_COMMAND_BENIGN),
-    /** Takes a physical display down: kiosk.restart, system.reboot. */
+    /** Takes a physical display down: kiosk.restart, system.reboot, update.install_now. */
     BOARD_COMMAND_DISRUPTIVE(Authority.BOARD_COMMAND_DISRUPTIVE),
     /** Data egress: chrome.screenshot returns an image of a screen in a prayer space; logs.tail leaks internals. */
     BOARD_COMMAND_INSPECT(Authority.BOARD_COMMAND_INSPECT),
