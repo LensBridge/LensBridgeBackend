@@ -22,6 +22,9 @@ public record BoardReport(
         Clock clock,
         /* Why the last content sync failed, if it did. */
         String syncError,
+        /* The offline routes the board accepts: its ethernet upload page, USB sticks. */
+        boolean servicePort,
+        boolean usbImport,
         /* Set when the installed content cannot be read. */
         String error
 ) {
@@ -32,6 +35,8 @@ public record BoardReport(
             String firstDay,
             String lastDay,
             String createdAt,
+            /* The board's zone, so days left can be worked out again from lastDay. */
+            String timezone,
             /* How it arrived: sync, usb, upload or cli. */
             String source,
             String installedAt,
@@ -47,7 +52,13 @@ public record BoardReport(
             String installTime,
             /* When the waiting updates install, RFC 3339; null when nothing waits. */
             String installAt,
-            boolean installing
+            boolean installing,
+            /* Whether the board follows the release channels at all (auto_update). */
+            boolean autoUpdate,
+            /* When the channels were last asked, RFC 3339; null before the first check. */
+            String lastCheckAt,
+            /* Why that check failed, if it did. */
+            String lastCheckError
     ) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)

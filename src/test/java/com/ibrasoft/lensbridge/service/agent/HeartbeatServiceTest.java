@@ -144,7 +144,9 @@ class HeartbeatServiceTest {
                   "content":{"firstDay":"2026-09-25","lastDay":"2026-10-01","createdAt":"2026-09-25T12:00:00Z",
                              "source":"usb","daysRemaining":6,"staleDays":0},
                   "updates":{"available":[{"type":"app","version":"2.3.0","description":"board app 2.3.0"}],
-                             "installTime":"23:00","installAt":"2026-09-25T23:00:00-04:00","installing":false},
+                             "installTime":"23:00","installAt":"2026-09-25T23:00:00-04:00","installing":false,
+                             "autoUpdate":true,"lastCheckAt":"2026-09-25T18:00:00Z","lastCheckError":"no route"},
+                  "servicePort":true,"usbImport":true,
                   "lastAgentUpdate":{"from":"0.2.1","to":"0.3.0","at":"2026-09-24T23:01:00Z","status":"ok","message":"m"},
                   "clock":{"source":"unverified","trusted":false},
                   "someFutureField":{"x":1}}}}
@@ -163,6 +165,8 @@ class HeartbeatServiceTest {
         assertThat(board.updates().available()).extracting(u -> u.version()).containsExactly("2.3.0");
         assertThat(board.lastAgentUpdate().status()).isEqualTo("ok");
         assertThat(board.clock().trusted()).isFalse();
+        assertThat(board.updates().lastCheckError()).isEqualTo("no route");
+        assertThat(board.servicePort()).isTrue();
         assertThat(device.getBoardReportAt()).isNotNull();
 
         // What is stored reads back the same.
@@ -173,7 +177,7 @@ class HeartbeatServiceTest {
     @Test
     void recordKeepsTheLastReportWhenAHeartbeatHasNone() {
         UUID deviceId = UUID.randomUUID();
-        var report = new com.ibrasoft.lensbridge.model.board.BoardReport("2.2.0", null, null, null, null, null, null);
+        var report = new com.ibrasoft.lensbridge.model.board.BoardReport("2.2.0", null, null, null, null, null, false, false, null);
         Device device = Device.builder().id(deviceId).displayName("d").boardReport(report).build();
         when(deviceRepository.findById(deviceId)).thenReturn(Optional.of(device));
 
