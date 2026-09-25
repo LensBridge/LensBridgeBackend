@@ -1,5 +1,6 @@
 package com.ibrasoft.lensbridge.dto.board.agent;
 
+import com.ibrasoft.lensbridge.model.board.BoardReport;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
@@ -34,5 +35,8 @@ public class HeartbeatFrame extends IncomingAgentFrame {
         private String agentVersion;
 
         private String displayedFrameKey;
+
+        /** What the board runs and shows; stored as the device's latest state. */
+        private BoardReport board;
     }
 }

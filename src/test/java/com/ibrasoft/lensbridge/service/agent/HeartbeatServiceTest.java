@@ -134,4 +134,55 @@ class HeartbeatServiceTest {
 
         verify(events).heartbeat(deviceId, frame);
     }
+
+    /** The board's report, as the agent sends it, parsed and stored as the device's state. */
+    @Test
+    void recordStoresTheBoardReport() throws Exception {
+        String json = """
+                {"type":"heartbeat","telemetry":{"agentVersion":"0.3.0","board":{
+                  "appVersion":"2.2.0",
+                  "content":{"firstDay":"2026-09-25","lastDay":"2026-10-01","createdAt":"2026-09-25T12:00:00Z",
+                             "source":"usb","daysRemaining":6,"staleDays":0},
+                  "updates":{"available":[{"type":"app","version":"2.3.0","description":"board app 2.3.0"}],
+                             "installTime":"23:00","installAt":"2026-09-25T23:00:00-04:00","installing":false,
+                             "autoUpdate":true,"lastCheckAt":"2026-09-25T18:00:00Z","lastCheckError":"no route"},
+                  "servicePort":true,"usbImport":true,
+                  "lastAgentUpdate":{"from":"0.2.1","to":"0.3.0","at":"2026-09-24T23:01:00Z","status":"ok","message":"m"},
+                  "clock":{"source":"unverified","trusted":false},
+                  "someFutureField":{"x":1}}}}
+                """;
+        HeartbeatFrame frame = new com.fasterxml.jackson.databind.ObjectMapper().readValue(json, HeartbeatFrame.class);
+        UUID deviceId = UUID.randomUUID();
+        Device device = Device.builder().id(deviceId).displayName("d").build();
+        when(deviceRepository.findById(deviceId)).thenReturn(Optional.of(device));
+
+        service.record(deviceId, frame, "ip");
+
+        var board = device.getBoardReport();
+        assertThat(board).isNotNull();
+        assertThat(board.appVersion()).isEqualTo("2.2.0");
+        assertThat(board.content().daysRemaining()).isEqualTo(6);
+        assertThat(board.updates().available()).extracting(u -> u.version()).containsExactly("2.3.0");
+        assertThat(board.lastAgentUpdate().status()).isEqualTo("ok");
+        assertThat(board.clock().trusted()).isFalse();
+        assertThat(board.updates().lastCheckError()).isEqualTo("no route");
+        assertThat(board.servicePort()).isTrue();
+        assertThat(device.getBoardReportAt()).isNotNull();
+
+        // What is stored reads back the same.
+        var converter = new com.ibrasoft.lensbridge.model.board.BoardReportConverter();
+        assertThat(converter.convertToEntityAttribute(converter.convertToDatabaseColumn(board))).isEqualTo(board);
+    }
+
+    @Test
+    void recordKeepsTheLastReportWhenAHeartbeatHasNone() {
+        UUID deviceId = UUID.randomUUID();
+        var report = new com.ibrasoft.lensbridge.model.board.BoardReport("2.2.0", null, null, null, null, null, false, false, null);
+        Device device = Device.builder().id(deviceId).displayName("d").boardReport(report).build();
+        when(deviceRepository.findById(deviceId)).thenReturn(Optional.of(device));
+
+        service.record(deviceId, frameWithTelemetry(), "ip");
+
+        assertThat(device.getBoardReport()).isEqualTo(report);
+    }
 }

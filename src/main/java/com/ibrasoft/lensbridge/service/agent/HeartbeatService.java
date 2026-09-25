@@ -44,6 +44,10 @@ public class HeartbeatService {
                 log.info("Device {} agent version {} → {}", deviceId, device.getAgentVersion(), reported);
                 device.setAgentVersion(reported);
             }
+            if (t != null && t.getBoard() != null) {
+                device.setBoardReport(t.getBoard());
+                device.setBoardReportAt(now);
+            }
             deviceRepository.save(device);
         });
 

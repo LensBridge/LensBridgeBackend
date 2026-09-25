@@ -48,6 +48,12 @@ public class Device {
     private String hardwareModel;
     private String lastSeenIp;
 
+    /** The board's latest report of what it runs and shows (heartbeat), and when it came. */
+    @Convert(converter = BoardReportConverter.class)
+    @Column(name = "board_report", columnDefinition = "TEXT")
+    private BoardReport boardReport;
+    private Instant boardReportAt;
+
     /** When set, all auth attempts are rejected and any live session is closed. */
     private Instant revokedAt;
 
