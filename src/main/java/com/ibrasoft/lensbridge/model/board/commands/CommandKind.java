@@ -26,6 +26,8 @@ public enum CommandKind {
 
     KIOSK_RESTART("kiosk.restart", CommandRisk.DISRUPTIVE),
     SYSTEM_REBOOT("system.reboot", CommandRisk.DISRUPTIVE),
+    /** Takes the board off its content for the update screen, and may restart the agent. */
+    UPDATE_INSTALL_NOW("update.install_now", CommandRisk.DISRUPTIVE),
 
     CHROME_SCREENSHOT("chrome.screenshot", CommandRisk.INSPECT),
     LOGS_TAIL("logs.tail", CommandRisk.INSPECT);

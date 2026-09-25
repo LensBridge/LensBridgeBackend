@@ -60,9 +60,10 @@ class CommandKindTest {
     }
 
     @Test
-    void restartAndRebootAreDisruptive() {
+    void restartRebootAndUpdateNowAreDisruptive() {
         assertThat(CommandKind.KIOSK_RESTART.getRisk()).isEqualTo(CommandRisk.DISRUPTIVE);
         assertThat(CommandKind.SYSTEM_REBOOT.getRisk()).isEqualTo(CommandRisk.DISRUPTIVE);
+        assertThat(CommandKind.UPDATE_INSTALL_NOW.getRisk()).isEqualTo(CommandRisk.DISRUPTIVE);
     }
 
     /** Both return device-side data to the caller. Neither may ride along with a reboot grant. */

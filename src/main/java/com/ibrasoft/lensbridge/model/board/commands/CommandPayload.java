@@ -22,10 +22,11 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
         @JsonSubTypes.Type(value = SystemRebootPayload.class,     name = "system.reboot"),
         @JsonSubTypes.Type(value = ConfigRefreshPayload.class,    name = "config.refresh"),
         @JsonSubTypes.Type(value = LogsTailPayload.class,         name = "logs.tail"),
+        @JsonSubTypes.Type(value = UpdateInstallNowPayload.class, name = "update.install_now"),
 })
 public sealed interface CommandPayload
         permits ChromeReloadPayload, ChromeScreenshotPayload, KioskRestartPayload,
-                SystemRebootPayload, ConfigRefreshPayload, LogsTailPayload {
+                SystemRebootPayload, ConfigRefreshPayload, LogsTailPayload, UpdateInstallNowPayload {
 
     String kind();
 }
