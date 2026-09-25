@@ -1,6 +1,5 @@
 package com.ibrasoft.lensbridge.dto.board.agent;
 
-import com.fasterxml.jackson.annotation.JsonAlias;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
@@ -34,8 +33,6 @@ public class HeartbeatFrame extends IncomingAgentFrame {
          */
         private String agentVersion;
 
-        // JSON alias for back-compat. will be removed in a future release.
-        @JsonAlias("displayedFrameId")
         private String displayedFrameKey;
     }
 }

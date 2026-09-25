@@ -22,6 +22,8 @@ class BoardContextTest {
     private static final ZonedDateTime WEDNESDAY =
             ZonedDateTime.of(2026, 5, 13, 12, 34, 0, 0, ZoneOffset.UTC);
 
+    private static final LocalDate DAY = LocalDate.of(2026, 5, 13);
+
     private static Device deviceWithTimezone(String timezone) {
         Location location = Location.builder().timezone(timezone).build();
         DeviceConfig config = DeviceConfig.builder().location(location).build();
@@ -43,7 +45,7 @@ class BoardContextTest {
     void ofResolvesZoneFromConfigTimezone() {
         Device device = deviceWithTimezone("Asia/Dubai");
 
-        BoardContext ctx = BoardContext.of(device, DEFAULT_ZONE);
+        BoardContext ctx = BoardContext.of(device, DEFAULT_ZONE, DAY);
 
         assertThat(ctx.getDevice()).isSameAs(device);
         assertThat(ctx.getConfig()).isSameAs(device.getConfig());
@@ -52,7 +54,7 @@ class BoardContextTest {
 
     @Test
     void ofFallsBackToSuppliedDefaultWhenConfigMissing() {
-        BoardContext ctx = BoardContext.of(Device.builder().displayName("d").build(), DEFAULT_ZONE);
+        BoardContext ctx = BoardContext.of(Device.builder().displayName("d").build(), DEFAULT_ZONE, DAY);
 
         assertThat(ctx.getConfig()).isNull();
         assertThat(ctx.zone()).isEqualTo(DEFAULT_ZONE);
@@ -60,7 +62,7 @@ class BoardContextTest {
 
     @Test
     void ofFallsBackToSuppliedDefaultWhenTimezoneInvalid() {
-        assertThat(BoardContext.of(deviceWithTimezone("Bogus/Zone"), DEFAULT_ZONE).zone())
+        assertThat(BoardContext.of(deviceWithTimezone("Bogus/Zone"), DEFAULT_ZONE, DAY).zone())
                 .isEqualTo(DEFAULT_ZONE);
     }
 
@@ -68,7 +70,7 @@ class BoardContextTest {
     void ofUsesTheSuppliedDefaultRatherThanTheJvmZone() {
         ZoneId elsewhere = ZoneId.of("Asia/Tokyo");
 
-        assertThat(BoardContext.of(deviceWithTimezone(null), elsewhere).zone()).isEqualTo(elsewhere);
+        assertThat(BoardContext.of(deviceWithTimezone(null), elsewhere, DAY).zone()).isEqualTo(elsewhere);
     }
 
     @Test
@@ -170,24 +172,13 @@ class BoardContextTest {
         assertThat(ctx.today()).isEqualTo(LocalDate.of(2026, 5, 13));
     }
 
-    // ==================== Whole-day contexts ====================
-
-    @Test
-    void builtContextIsNotWholeDay() {
-        assertThat(at(WEDNESDAY).isWholeDay()).isFalse();
-    }
-
-    @Test
-    void ofLiveIsNotWholeDay() {
-        assertThat(BoardContext.of(deviceWithTimezone("Asia/Dubai"), DEFAULT_ZONE).isWholeDay()).isFalse();
-    }
+    // ==================== Day contexts ====================
 
     @Test
     void ofDayStartsAtMidnightInTheDeviceZoneAndSpansTheDay() {
         BoardContext ctx = BoardContext.of(deviceWithTimezone("Asia/Dubai"), DEFAULT_ZONE,
                 LocalDate.of(2026, 5, 13));
 
-        assertThat(ctx.isWholeDay()).isTrue();
         assertThat(ctx.getNow()).isEqualTo(ZonedDateTime.of(2026, 5, 13, 0, 0, 0, 0, ZoneId.of("Asia/Dubai")));
         assertThat(ctx.today()).isEqualTo(LocalDate.of(2026, 5, 13));
         assertThat(ctx.currentDayStart()).isEqualTo(Instant.parse("2026-05-12T20:00:00Z"));

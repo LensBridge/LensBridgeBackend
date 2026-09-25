@@ -74,16 +74,6 @@ class BoardStreamHandlerTest {
         assertThat(body.hasNonNull("at")).isTrue();
     }
 
-    /** The deployed kiosk substring-matches rather than parsing, so JSON must still hit it. */
-    @Test
-    void messageStillMatchesTheLegacyRefreshSubstring() throws Exception {
-        Session s = connect(enrolled());
-
-        handler.refreshAll();
-
-        assertThat(s.sent.get(0).toUpperCase()).contains("REFRESH");
-    }
-
     // ── enrollment is a precondition, not a state ─────────────────────────
 
     @Test

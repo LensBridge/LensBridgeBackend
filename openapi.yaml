@@ -653,9 +653,10 @@ paths:
       - device-admin-controller
   /api/admin/board/devices/{deviceId}/offline-bundle:
     get:
-      description: "A zip holding one fully assembled payload per day, starting today\
-        \ in the device's timezone, plus every poster image those payloads reference.\
-        \ Pushed to the board by hand with mbpush. Requires board:device:read."
+      description: "A signed .mbu content package (format version 2) holding one fully\
+        \ assembled payload per day, starting today in the device's timezone, plus\
+        \ every poster image those payloads reference. Taken to the board by USB stick,\
+        \ laptop or phone. Requires board:device:read."
       operationId: downloadOfflineBundle
       parameters:
       - in: path
@@ -678,15 +679,15 @@ paths:
       responses:
         "200":
           content:
-            application/zip:
+            application/vnd.musallahboard.mbu:
               schema:
                 type: string
                 format: binary
-          description: The bundle
+          description: The package
           headers:
             Content-Disposition:
-              description: "attachment; filename=\"musallahboard-<first 8 chars of\
-                \ deviceId>-<firstDay>.zip\""
+              description: "attachment; filename=\"musallahboard-content-<first 8 chars\
+                \ of deviceId>-<firstDay>.mbu\""
               schema:
                 type: string
         "400":
@@ -713,13 +714,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
           description: A poster image could not be fetched; the message names the poster
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: No content signing key is configured on the server
         default:
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
           description: Request failed; body carries a human-readable message
-      summary: Download a content bundle for a board with no internet
+      summary: Download a signed content package for a board
       tags:
       - device-admin-controller
   /api/admin/board/devices/{deviceId}/revoke:
@@ -2105,11 +2112,95 @@ paths:
           description: Request failed; body carries a human-readable message
       tags:
       - admin-controller
+  /api/agent/content-bundle:
+    post:
+      description: "Device-authenticated with the X-MB-* headers (Ed25519 signature\
+        \ by the enrolled device key over musallahboard-http-v1, method, path, device\
+        \ id, timestamp and the body's SHA-256). Returns a signed .mbu content package\
+        \ starting today in the device's timezone. Media whose SHA-256 is in haveMedia\
+        \ is listed and signed in mbu.json but left out of the zip."
+      operationId: downloadContentBundle
+      parameters:
+      - description: Enrolled device id
+        in: header
+        name: X-MB-Device-Id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - description: Unix milliseconds; must be within 5 minutes of the server clock
+        in: header
+        name: X-MB-Timestamp
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - description: Base64 Ed25519 signature by the device key
+        in: header
+        name: X-MB-Signature
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContentBundleRequest"
+      responses:
+        "200":
+          content:
+            application/vnd.musallahboard.mbu:
+              schema:
+                type: string
+                format: binary
+          description: The signed content package
+          headers:
+            Content-Disposition:
+              description: "attachment; filename=\"musallahboard-content-<first 8 chars\
+                \ of deviceId>-<firstDay>.mbu\""
+              schema:
+                type: string
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: "Malformed body, days outside 1-31, or a bad haveMedia entry"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: "Missing or bad device signature, clock skew over 5 minutes,\
+            \ or an unknown or revoked device"
+        "502":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: A poster image could not be fetched; the message names the poster
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: No content signing key is configured on the server
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      security: []
+      summary: Fetch this board's signed content package (online sync)
+      tags:
+      - agent-content-controller
   /api/agent/enroll:
     post:
       description: Called once per device by the MusallahBoard agent. The returned
         websocketUrl is persisted verbatim into the agent's config and never requested
-        again.
+        again. contentSigningKeys are the public content keys the agent pins in its
+        trust store.
       operationId: enrollAgent
       requestBody:
         content:
@@ -2145,6 +2236,81 @@ paths:
       summary: Exchange a one-time enrollment token for a device identity
       tags:
       - agent-enrollment-controller
+  /api/agent/signing-keys:
+    get:
+      description: "Current key first, then previous keys still valid during a rotation.\
+        \ Empty when the server has no content signing key. Used by `musallahboard-agent\
+        \ trust fetch` on boards enrolled before signed content existed."
+      operationId: getSigningKeys
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SigningKeysResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      security: []
+      summary: Public content signing keys boards should trust
+      tags:
+      - agent-content-controller
+  /api/agent/weather:
+    get:
+      description: "Device-authenticated with the X-MB-* headers, like the content\
+        \ bundle; the signed body hash is the SHA-256 of the empty string. `weather`\
+        \ is the OpenWeatherMap current weather JSON exactly as the server last fetched\
+        \ it, or null when the server has none. `fetchedAt` is when the server answered."
+      operationId: getAgentWeather
+      parameters:
+      - description: Enrolled device id
+        in: header
+        name: X-MB-Device-Id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - description: Unix milliseconds; must be within 5 minutes of the server clock
+        in: header
+        name: X-MB-Timestamp
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - description: Base64 Ed25519 signature by the device key
+        in: header
+        name: X-MB-Signature
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentWeatherResponse"
+          description: "Current weather, or null weather when unavailable"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: "Missing or bad device signature, clock skew over 5 minutes,\
+            \ or an unknown or revoked device"
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      security: []
+      summary: Current weather for this board
+      tags:
+      - agent-content-controller
   /api/auth/change-password:
     post:
       description: "Revokes every refresh token for the user, so all sessions must\
@@ -2731,31 +2897,6 @@ paths:
           description: Request failed; body carries a human-readable message
       tags:
       - musallah-board-controller
-  /api/musallah/payload:
-    get:
-      operationId: getBoardPayload
-      parameters:
-      - in: query
-        name: deviceId
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MusallahBoardPayload"
-          description: OK
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: Request failed; body carries a human-readable message
-      tags:
-      - musallah-board-controller
   /api/musallah/weekly-content:
     get:
       operationId: getCurrentWeeklyContent
@@ -3229,12 +3370,33 @@ components:
       - token
     AgentEnrollResponse:
       type: object
+      required:
+        - contentSigningKeys
       properties:
+        contentSigningKeys:
+          type: array
+          description: "Public content signing keys the agent pins at enrollment. Always\
+            \ present; empty when the server has no content key configured."
+          items:
+            $ref: "#/components/schemas/SigningKeyView"
         deviceId:
           type: string
           format: uuid
         websocketUrl:
           type: string
+    AgentWeatherResponse:
+      type: object
+      properties:
+        fetchedAt:
+          type: string
+          format: date-time
+          example: 2026-09-24T14:05:00Z
+        weather:
+          $ref: "#/components/schemas/JsonNode"
+          description: "OpenWeatherMap current weather JSON, verbatim; null when unavailable"
+      required:
+      - fetchedAt
+      - weather
     AuditEventDto:
       type: object
       properties:
@@ -3435,6 +3597,21 @@ components:
           - TIMEOUT
           - REJECTED
           - EXPIRED
+    ContentBundleRequest:
+      type: object
+      properties:
+        days:
+          type: integer
+          format: int32
+          default: 7
+          maximum: 31
+          minimum: 1
+        haveMedia:
+          type: array
+          items:
+            type: string
+            pattern: "^[0-9a-f]{64}$"
+          maxItems: 2000
     CreateCalendarEventRequest:
       type: object
       properties:
@@ -3938,6 +4115,10 @@ components:
           type: string
     MusallahBoardPayload:
       type: object
+      description: "Format of each payloads/<date>.json file inside a signed content\
+        \ package (.mbu). Not returned by any endpoint; boards read it from installed\
+        \ packages. weather is always null here: boards fetch current weather from\
+        \ GET /api/agent/weather."
       properties:
         deviceConfig:
           $ref: "#/components/schemas/DeviceConfig"
@@ -4294,6 +4475,26 @@ components:
           type: array
           items:
             type: string
+    SigningKeyView:
+      type: object
+      properties:
+        keyId:
+          type: string
+          example: 0123456789abcdef
+        publicKey:
+          type: string
+      required:
+      - keyId
+      - publicKey
+    SigningKeysResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/SigningKeyView"
+      required:
+      - content
     SignupRequest:
       type: object
       properties:

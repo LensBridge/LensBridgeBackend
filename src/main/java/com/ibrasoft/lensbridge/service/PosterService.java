@@ -60,15 +60,6 @@ public class PosterService {
     }
 
     /**
-     * Get active posters for a specific audience as FrameDefinitions.
-     * Returns posters that are currently active (startDate <= today < endDate)
-     * and match the audience or BOTH.
-     */
-    public List<Poster> getActivePosterFramesForAudience(Audience audience) {
-        return posterRepository.findActivePostersForAudienceAt(Instant.now(), audience);
-    }
-
-    /**
      * Posters for the audience (or BOTH) active at any point in {@code [from, to)}.
      */
     public List<Poster> getPostersForAudienceOverlapping(Audience audience, Instant from, Instant to) {

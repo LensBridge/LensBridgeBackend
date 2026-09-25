@@ -11,7 +11,6 @@ import com.ibrasoft.lensbridge.model.board.Location;
 import com.ibrasoft.lensbridge.model.board.Poster;
 import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
-import com.ibrasoft.lensbridge.service.OpenWeatherService;
 import com.ibrasoft.lensbridge.service.PosterService;
 import com.ibrasoft.lensbridge.service.R2StorageService;
 import com.ibrasoft.lensbridge.service.board.BoardContext;
@@ -36,11 +35,13 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -57,8 +58,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * Runs the real assembler and the real {@link PosterFrameProducer}; only storage, the
- * repositories and the clock are faked.
+ * Runs the real assembler, the real {@link PosterFrameProducer} and the real signer (with a
+ * fixed test key); only storage, the repositories and the clock are faked.
  * <p>
  * The clock is 23:30 on Friday 2026-10-30 in Toronto — already the 31st in UTC — and a
  * three-day bundle ends on Sunday 2026-11-01, the day Toronto leaves DST (25 hours long).
@@ -74,12 +75,16 @@ class OfflineBundleServiceTest {
     private static final byte[] PNG = "png-bytes".getBytes(StandardCharsets.UTF_8);
 
     private final DeviceRepository deviceRepository = mock(DeviceRepository.class);
-    private final OpenWeatherService weatherService = mock(OpenWeatherService.class);
     private final PosterService posterService = mock(PosterService.class);
     private final R2StorageService r2 = mock(R2StorageService.class);
     private final ObjectMapper objectMapper = Jackson2ObjectMapperBuilder.json()
             .featuresToDisable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
             .build();
+
+    /** Seed 0x01..0x20: the cross-language test vector, see ContentSigningServiceTest. */
+    private static final byte[] SEED = ContentSigningServiceTest.VECTOR_SEED;
+    private final ContentSigningService signer =
+            new ContentSigningService(Base64.getEncoder().encodeToString(SEED), "");
 
     private final List<Poster> posters = new ArrayList<>();
     private final List<BoardContext> seenContexts = new ArrayList<>();
@@ -116,15 +121,18 @@ class OfflineBundleServiceTest {
     }
 
     private OfflineBundleService service() {
+        return service(NOW);
+    }
+
+    private OfflineBundleService service(Instant now) {
         FrameProducer recorder = ctx -> {
             seenContexts.add(ctx);
             return List.of();
         };
         BoardPayloadAssembler assembler = new BoardPayloadAssembler(
-                deviceRepository, weatherService,
                 List.of(recorder, new PosterFrameProducer(posterService)), ZoneId.of("UTC"));
-        return new OfflineBundleService(assembler, deviceRepository, r2, objectMapper,
-                Clock.fixed(NOW, ZoneOffset.UTC));
+        return new OfflineBundleService(assembler, deviceRepository, r2, objectMapper, signer,
+                Clock.fixed(now, ZoneOffset.UTC));
     }
 
     private static Instant toronto(String localDateTime) {
@@ -158,6 +166,26 @@ class OfflineBundleServiceTest {
         return entries;
     }
 
+    private static Map<String, Integer> zipMethods(OfflineBundle bundle) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        bundle.writeTo(out);
+        Map<String, Integer> methods = new LinkedHashMap<>();
+        try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(out.toByteArray()))) {
+            ZipEntry entry;
+            while ((entry = zip.getNextEntry()) != null) {
+                methods.put(entry.getName(), entry.getMethod());
+            }
+        }
+        return methods;
+    }
+
+    private static JsonNode fileEntry(JsonNode manifest, String path) {
+        for (JsonNode file : manifest.get("files")) {
+            if (file.get("path").asText().equals(path)) return file;
+        }
+        throw new AssertionError("mbu.json files does not list " + path);
+    }
+
     private JsonNode json(Map<String, byte[]> zip, String name) throws IOException {
         assertThat(zip).containsKey(name);
         return objectMapper.readTree(zip.get(name));
@@ -189,13 +217,14 @@ class OfflineBundleServiceTest {
     // ==================== Layout and manifest ====================
 
     @Test
-    void zipHoldsTheManifestOnePayloadPerDayAndTheMediaAndNothingElse() throws Exception {
+    void zipHoldsTheManifestSignatureOnePayloadPerDayAndTheMediaAndNothingElse() throws Exception {
         poster("Halaqa", "poster-a.jpg", "2026-10-01T00:00", "2026-12-01T00:00");
 
         Map<String, byte[]> zip = unzip(service().build(DEVICE_ID, 3));
 
         assertThat(zip.keySet()).containsExactlyInAnyOrder(
-                "manifest.json",
+                "mbu.json",
+                "mbu.sig",
                 "payloads/2026-10-30.json",
                 "payloads/2026-10-31.json",
                 "payloads/2026-11-01.json",
@@ -206,30 +235,111 @@ class OfflineBundleServiceTest {
     void manifestCarriesTheContractFields() throws Exception {
         poster("Halaqa", "poster-a.jpg", "2026-10-01T00:00", "2026-12-01T00:00");
 
-        JsonNode manifest = json(unzip(service().build(DEVICE_ID, 3)), "manifest.json");
+        JsonNode manifest = json(unzip(service().build(DEVICE_ID, 3)), "mbu.json");
 
+        assertThat(manifest.fieldNames()).toIterable().containsExactly(
+                "format", "formatVersion", "type", "createdAt", "sequence", "deviceId", "version", "files", "content");
+        assertThat(manifest.get("format").asText()).isEqualTo("mbu");
         assertThat(manifest.get("formatVersion").isInt()).isTrue();
-        assertThat(manifest.get("formatVersion").asInt()).isEqualTo(1);
+        assertThat(manifest.get("formatVersion").asInt()).isEqualTo(2);
+        assertThat(manifest.get("type").asText()).isEqualTo("content");
+        assertThat(manifest.get("createdAt").asText()).isEqualTo("2026-10-31T03:30:00Z");
+        assertThat(manifest.get("sequence").isIntegralNumber()).isTrue();
+        assertThat(manifest.get("sequence").asLong()).isEqualTo(NOW.toEpochMilli());
         assertThat(manifest.get("deviceId").asText()).isEqualTo(DEVICE_ID.toString());
-        assertThat(manifest.get("timezone").asText()).isEqualTo("America/Toronto");
-        assertThat(manifest.get("generatedAt").asText()).isEqualTo("2026-10-31T03:30:00Z");
+        assertThat(manifest.get("version").isNull()).isTrue();
+
+        JsonNode content = manifest.get("content");
+        assertThat(content.get("timezone").asText()).isEqualTo("America/Toronto");
         // Today in Toronto, not in UTC (where it is already the 31st).
-        assertThat(manifest.get("firstDay").asText()).isEqualTo("2026-10-30");
-        assertThat(manifest.get("lastDay").asText()).isEqualTo("2026-11-01");
+        assertThat(content.get("firstDay").asText()).isEqualTo("2026-10-30");
+        assertThat(content.get("lastDay").asText()).isEqualTo("2026-11-01");
 
         String sha = sha256(JPEG);
-        assertThat(manifest.get("media")).hasSize(1);
-        JsonNode media = manifest.get("media").get(0);
+        assertThat(content.get("media")).hasSize(1);
+        JsonNode media = content.get("media").get(0);
         assertThat(media.get("path").asText()).isEqualTo("media/" + sha + ".jpg");
-        assertThat(media.get("sha256").asText()).isEqualTo(sha);
-        assertThat(media.get("bytes").asLong()).isEqualTo(JPEG.length);
         assertThat(media.get("contentType").asText()).isEqualTo("image/jpeg");
+
+        JsonNode mediaFile = fileEntry(manifest, "media/" + sha + ".jpg");
+        assertThat(mediaFile.get("sha256").asText()).isEqualTo(sha);
+        assertThat(mediaFile.get("bytes").asLong()).isEqualTo(JPEG.length);
+    }
+
+    /** Two builds in the same second must still be ordered, or the board would treat the second as unchanged. */
+    @Test
+    void sequenceKeepsMillisecondsWhileCreatedAtIsWholeSeconds() throws Exception {
+        JsonNode first = json(unzip(service(NOW.plusMillis(100)).build(DEVICE_ID, 1)), "mbu.json");
+        JsonNode second = json(unzip(service(NOW.plusMillis(900)).build(DEVICE_ID, 1)), "mbu.json");
+        assertThat(first.get("createdAt").asText()).isEqualTo("2026-10-31T03:30:00Z");
+        assertThat(second.get("createdAt").asText()).isEqualTo("2026-10-31T03:30:00Z");
+        assertThat(second.get("sequence").asLong()).isGreaterThan(first.get("sequence").asLong());
+    }
+
+    /** Every zip entry but mbu.json and mbu.sig is listed with its true hash and size, and vice versa. */
+    @Test
+    void filesListsEveryPayloadAndMediaFileWithItsHashAndSize() throws Exception {
+        poster("Halaqa", "poster-a.jpg", "2026-10-01T00:00", "2026-12-01T00:00");
+        poster("Iftar", "poster-b.png", "2026-10-01T00:00", "2026-12-01T00:00");
+
+        Map<String, byte[]> zip = unzip(service().build(DEVICE_ID, 3));
+        JsonNode files = json(zip, "mbu.json").get("files");
+
+        List<String> listed = new ArrayList<>();
+        for (JsonNode file : files) {
+            String path = file.get("path").asText();
+            listed.add(path);
+            assertThat(file.get("sha256").asText()).isEqualTo(sha256(zip.get(path)));
+            assertThat(file.get("bytes").asLong()).isEqualTo(zip.get(path).length);
+        }
+        assertThat(listed).containsExactlyInAnyOrderElementsOf(zip.keySet().stream()
+                .filter(n -> !n.equals("mbu.json") && !n.equals("mbu.sig")).toList());
     }
 
     @Test
-    void filenameUsesTheFirstEightCharactersOfTheIdAndTheFirstDay() {
+    void signatureVerifiesOverThePrefixAndTheStoredManifestBytes() throws Exception {
+        poster("Halaqa", "poster-a.jpg", "2026-10-01T00:00", "2026-12-01T00:00");
+
+        Map<String, byte[]> zip = unzip(service().build(DEVICE_ID, 3));
+        JsonNode sig = json(zip, "mbu.sig");
+
+        assertThat(sig.fieldNames()).toIterable().containsExactly("signatures");
+        assertThat(sig.get("signatures")).hasSize(1);
+        JsonNode entry = sig.get("signatures").get(0);
+        assertThat(entry.get("keyId").asText()).isEqualTo(ContentSigningServiceTest.VECTOR_KEY_ID);
+
+        byte[] prefix = "musallahboard-mbu-v2\n".getBytes(StandardCharsets.US_ASCII);
+        byte[] manifest = zip.get("mbu.json");
+        byte[] message = new byte[prefix.length + manifest.length];
+        System.arraycopy(prefix, 0, message, 0, prefix.length);
+        System.arraycopy(manifest, 0, message, prefix.length, manifest.length);
+        byte[] signature = Base64.getDecoder().decode(entry.get("sig").asText());
+        assertThat(signature).hasSize(64);
+
+        byte[] publicKey = Base64.getDecoder().decode(signer.publicKeys().get(0).getPublicKey());
+        assertThat(ContentSigningServiceTest.jdkVerify(publicKey, message, signature)).isTrue();
+
+        // One byte changed anywhere in the manifest and it no longer verifies.
+        message[message.length - 2] ^= 1;
+        assertThat(ContentSigningServiceTest.jdkVerify(publicKey, message, signature)).isFalse();
+    }
+
+    @Test
+    void mediaIsStoredAndJsonIsDeflated() throws Exception {
+        poster("Halaqa", "poster-a.jpg", "2026-10-01T00:00", "2026-12-01T00:00");
+
+        Map<String, Integer> methods = zipMethods(service().build(DEVICE_ID, 2));
+
+        assertThat(methods.get("media/" + sha256(JPEG) + ".jpg")).isEqualTo(ZipEntry.STORED);
+        assertThat(methods.get("mbu.json")).isEqualTo(ZipEntry.DEFLATED);
+        assertThat(methods.get("mbu.sig")).isEqualTo(ZipEntry.DEFLATED);
+        assertThat(methods.get("payloads/2026-10-30.json")).isEqualTo(ZipEntry.DEFLATED);
+    }
+
+    @Test
+    void filenameFollowsTheContentPackageConvention() {
         assertThat(service().build(DEVICE_ID, 14).filename())
-                .isEqualTo("musallahboard-3f2a1b4c-2026-10-30.zip");
+                .isEqualTo("musallahboard-content-3f2a1b4c-2026-10-30.mbu");
     }
 
     @Test
@@ -237,7 +347,89 @@ class OfflineBundleServiceTest {
         Map<String, byte[]> zip = unzip(service().build(DEVICE_ID, 14));
 
         assertThat(zip.keySet().stream().filter(n -> n.startsWith("payloads/"))).hasSize(14);
-        assertThat(json(zip, "manifest.json").get("lastDay").asText()).isEqualTo("2026-11-12");
+        assertThat(json(zip, "mbu.json").get("content").get("lastDay").asText()).isEqualTo("2026-11-12");
+    }
+
+    // ==================== Signing key ====================
+
+    @Test
+    void withoutASigningKeyTheBuildIsA503AndNothingIsAssembledOrFetched() {
+        poster("Halaqa", "poster-a.jpg", "2026-10-01T00:00", "2026-12-01T00:00");
+        BoardPayloadAssembler assembler = new BoardPayloadAssembler(
+                List.of(new PosterFrameProducer(posterService)), ZoneId.of("UTC"));
+        OfflineBundleService unsigned = new OfflineBundleService(assembler, deviceRepository, r2, objectMapper,
+                new ContentSigningService("", ""), Clock.fixed(NOW, ZoneOffset.UTC));
+
+        assertThatThrownBy(() -> unsigned.build(DEVICE_ID, 3))
+                .isInstanceOfSatisfying(ApiResponseException.class, e -> {
+                    assertThat(e.getStatus()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+                    assertThat(((ErrorResponse) e.getBody()).getError()).contains("signing is not configured");
+                });
+        verifyNoInteractions(posterService);
+        verifyNoInteractions(r2);
+    }
+
+    // ==================== haveMedia (online delta sync) ====================
+
+    @Test
+    void mediaTheBoardHoldsIsListedAndSignedButLeftOutOfTheZip() throws Exception {
+        poster("Halaqa", "poster-a.jpg", "2026-10-01T00:00", "2026-12-01T00:00");
+        poster("Iftar", "poster-b.png", "2026-10-01T00:00", "2026-12-01T00:00");
+        String jpeg = "media/" + sha256(JPEG) + ".jpg";
+        String png = "media/" + sha256(PNG) + ".png";
+
+        Map<String, byte[]> zip = unzip(service().build(DEVICE_ID, 2, Set.of(sha256(JPEG))));
+
+        assertThat(zip).doesNotContainKey(jpeg).containsKey(png);
+        JsonNode manifest = json(zip, "mbu.json");
+        assertThat(fileEntry(manifest, jpeg).get("sha256").asText()).isEqualTo(sha256(JPEG));
+        assertThat(fileEntry(manifest, jpeg).get("bytes").asLong()).isEqualTo(JPEG.length);
+        assertThat(manifest.get("content").get("media")).hasSize(2);
+        assertThat(posterUrls(json(zip, "payloads/2026-10-30.json")))
+                .containsExactlyInAnyOrder("/" + jpeg, "/" + png);
+    }
+
+    /**
+     * The first build learns each image's hash by downloading it. A later sync from a board
+     * that holds the image must not download it again.
+     */
+    @Test
+    void aSyncWhereTheBoardHoldsEveryImageDownloadsNothingOnceHashesAreKnown() throws Exception {
+        poster("Halaqa", "poster-a.jpg", "2026-10-01T00:00", "2026-12-01T00:00");
+        OfflineBundleService service = service();
+
+        Map<String, byte[]> first = unzip(service.build(DEVICE_ID, 7));
+        verify(r2, times(1)).getObject("poster-a.jpg");
+        assertThat(first).containsKey("media/" + sha256(JPEG) + ".jpg");
+
+        Map<String, byte[]> second = unzip(service.build(DEVICE_ID, 7, Set.of(sha256(JPEG))));
+
+        verify(r2, times(1)).getObject("poster-a.jpg"); // still just the first download
+        assertThat(second.keySet().stream().filter(n -> n.startsWith("media/"))).isEmpty();
+        assertThat(fileEntry(json(second, "mbu.json"), "media/" + sha256(JPEG) + ".jpg")).isNotNull();
+    }
+
+    @Test
+    void anImageTheBoardLacksIsDownloadedEvenWhenItsHashIsCached() throws Exception {
+        poster("Halaqa", "poster-a.jpg", "2026-10-01T00:00", "2026-12-01T00:00");
+        OfflineBundleService service = service();
+        service.build(DEVICE_ID, 1);
+
+        Map<String, byte[]> zip = unzip(service.build(DEVICE_ID, 1, Set.of(sha256(PNG))));
+
+        verify(r2, times(2)).getObject("poster-a.jpg");
+        assertThat(zip.get("media/" + sha256(JPEG) + ".jpg")).isEqualTo(JPEG);
+    }
+
+    /** Hash not cached yet: the image is downloaded to learn it, but still left out of the zip. */
+    @Test
+    void anUncachedImageTheBoardHoldsIsHashedButNotShipped() throws Exception {
+        poster("Halaqa", "poster-a.jpg", "2026-10-01T00:00", "2026-12-01T00:00");
+
+        Map<String, byte[]> zip = unzip(service().build(DEVICE_ID, 1, Set.of(sha256(JPEG))));
+
+        verify(r2, times(1)).getObject("poster-a.jpg");
+        assertThat(zip.keySet().stream().filter(n -> n.startsWith("media/"))).isEmpty();
     }
 
     // ==================== Per-day assembly ====================
@@ -253,17 +445,16 @@ class OfflineBundleServiceTest {
     }
 
     @Test
-    void weatherIsNullAndOpenWeatherIsNeverCalled() throws Exception {
+    void weatherIsAlwaysNull() throws Exception {
         Map<String, byte[]> zip = unzip(service().build(DEVICE_ID, 2));
 
         JsonNode payload = json(zip, "payloads/2026-10-30.json");
         assertThat(payload.has("weather")).isTrue();
         assertThat(payload.get("weather").isNull()).isTrue();
-        verifyNoInteractions(weatherService);
     }
 
     @Test
-    void payloadIsSerializedLikeTheLiveEndpoint() throws Exception {
+    void payloadIsSerializedInThePerDayFormat() throws Exception {
         Map<String, byte[]> zip = unzip(service().build(DEVICE_ID, 1));
 
         JsonNode payload = json(zip, "payloads/2026-10-30.json");
@@ -341,7 +532,7 @@ class OfflineBundleServiceTest {
         verify(r2, times(1)).getObject("poster-a.jpg");
         verify(r2, times(1)).getObject("poster-copy.jpg");
         assertThat(zip.keySet().stream().filter(n -> n.startsWith("media/"))).hasSize(1);
-        assertThat(json(zip, "manifest.json").get("media")).hasSize(1);
+        assertThat(json(zip, "mbu.json").get("content").get("media")).hasSize(1);
         assertThat(posterUrls(json(zip, "payloads/2026-11-05.json")))
                 .containsOnly("/media/" + sha256(JPEG) + ".jpg");
     }
@@ -351,9 +542,9 @@ class OfflineBundleServiceTest {
         poster("Untyped", "poster-u.PNG", "2026-10-01T00:00", "2026-12-01T00:00");
         when(r2.getObject("poster-u.PNG")).thenReturn(new R2StorageService.R2Object("poster-u.PNG", PNG, null));
 
-        JsonNode manifest = json(unzip(service().build(DEVICE_ID, 1)), "manifest.json");
+        JsonNode manifest = json(unzip(service().build(DEVICE_ID, 1)), "mbu.json");
 
-        JsonNode media = manifest.get("media").get(0);
+        JsonNode media = manifest.get("content").get("media").get(0);
         assertThat(media.get("path").asText()).isEqualTo("media/" + sha256(PNG) + ".png");
         assertThat(media.get("contentType").asText()).isEqualTo("image/png");
     }
@@ -364,10 +555,24 @@ class OfflineBundleServiceTest {
         when(r2.getObject("poster-o.jpeg")).thenReturn(
                 new R2StorageService.R2Object("poster-o.jpeg", JPEG, "application/octet-stream"));
 
-        JsonNode media = json(unzip(service().build(DEVICE_ID, 1)), "manifest.json").get("media").get(0);
+        JsonNode media = json(unzip(service().build(DEVICE_ID, 1)), "mbu.json").get("content").get("media").get(0);
 
         assertThat(media.get("path").asText()).isEqualTo("media/" + sha256(JPEG) + ".jpeg");
         assertThat(media.get("contentType").asText()).isEqualTo("image/jpeg");
+    }
+
+    /** The agent accepts only a fixed list of media types; anything else must not reject the package. */
+    @Test
+    void aStoredTypeTheAgentDoesNotAcceptBecomesOctetStream() throws Exception {
+        byte[] heic = "heic-bytes".getBytes(StandardCharsets.UTF_8);
+        poster("Phone photo", "poster-h.heic", "2026-10-01T00:00", "2026-12-01T00:00");
+        when(r2.getObject("poster-h.heic")).thenReturn(
+                new R2StorageService.R2Object("poster-h.heic", heic, "image/heic"));
+
+        JsonNode media = json(unzip(service().build(DEVICE_ID, 1)), "mbu.json").get("content").get("media").get(0);
+
+        assertThat(media.get("path").asText()).isEqualTo("media/" + sha256(heic) + ".heic");
+        assertThat(media.get("contentType").asText()).isEqualTo("application/octet-stream");
     }
 
     @Test
@@ -385,13 +590,6 @@ class OfflineBundleServiceTest {
     }
 
     // ==================== Validation ====================
-
-    @Test
-    void theLivePosterQueryIsNeverUsedForABundle() {
-        service().build(DEVICE_ID, 3);
-
-        verify(posterService, never()).getActivePosterFramesForAudience(any());
-    }
 
     @Test
     void daysOutsideOneToThirtyOneIsA400() {
@@ -428,10 +626,10 @@ class OfflineBundleServiceTest {
     void deviceWithoutATimezoneUsesTheDefaultZone() throws Exception {
         device.setConfig(null);
 
-        JsonNode manifest = json(unzip(service().build(DEVICE_ID, 1)), "manifest.json");
+        JsonNode content = json(unzip(service().build(DEVICE_ID, 1)), "mbu.json").get("content");
 
         // The assembler's default zone here is UTC, where NOW is already the 31st.
-        assertThat(manifest.get("timezone").asText()).isEqualTo("UTC");
-        assertThat(manifest.get("firstDay").asText()).isEqualTo("2026-10-31");
+        assertThat(content.get("timezone").asText()).isEqualTo("UTC");
+        assertThat(content.get("firstDay").asText()).isEqualTo("2026-10-31");
     }
 }

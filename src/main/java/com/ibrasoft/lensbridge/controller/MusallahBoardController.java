@@ -1,12 +1,10 @@
 package com.ibrasoft.lensbridge.controller;
 
-import com.ibrasoft.lensbridge.dto.board.response.MusallahBoardPayload;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.BoardEvent;
 import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
 import com.ibrasoft.lensbridge.model.board.WeeklyContent;
 import com.ibrasoft.lensbridge.service.BoardService;
-import com.ibrasoft.lensbridge.service.board.BoardPayloadAssembler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -24,7 +22,6 @@ import io.swagger.v3.oas.annotations.Operation;
 public class MusallahBoardController {
 
     private final BoardService boardService;
-    private final BoardPayloadAssembler payloadAssembler;
 
     // ==================== Board Configuration ====================
 
@@ -77,11 +74,4 @@ public class MusallahBoardController {
         return ResponseEntity.ok(boardEvents);
     }
 
-    // ==================== Combined Payload ====================
-
-    @GetMapping("/payload")
-    public ResponseEntity<MusallahBoardPayload> getBoardPayload(@RequestParam UUID deviceId) {
-        log.debug("Musallah board fetching full payload for device: {}", deviceId);
-        return ResponseEntity.ok(payloadAssembler.assemble(deviceId));
-    }
 }

@@ -6,6 +6,7 @@ import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
 import com.ibrasoft.lensbridge.service.agent.DeviceEnrollmentService;
 import com.ibrasoft.lensbridge.service.agent.DeviceEnrollmentService.Outcome;
+import com.ibrasoft.lensbridge.service.board.offline.ContentSigningService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -36,6 +37,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AgentEnrollmentController {
 
     private final DeviceEnrollmentService enrollmentService;
+    private final ContentSigningService signingService;
 
     @Value("${musallahboard.agent.websocketUrl}")
     private String websocketUrl;
@@ -43,7 +45,8 @@ public class AgentEnrollmentController {
     @Operation(operationId = "enrollAgent",
             summary = "Exchange a one-time enrollment token for a device identity",
             description = "Called once per device by the MusallahBoard agent. The returned websocketUrl is "
-                    + "persisted verbatim into the agent's config and never requested again.")
+                    + "persisted verbatim into the agent's config and never requested again. "
+                    + "contentSigningKeys are the public content keys the agent pins in its trust store.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Device enrolled; identity and websocket URL returned"),
             @ApiResponse(responseCode = "400", description = "Public key malformed or unsupported",
@@ -69,6 +72,8 @@ public class AgentEnrollmentController {
             case Outcome.Ok ok -> ResponseEntity.ok(AgentEnrollResponse.builder()
                     .deviceId(ok.device().getId())
                     .websocketUrl(websocketUrl)
+                    // Pinned by the agent over this same TLS connection; empty without a key.
+                    .contentSigningKeys(signingService.publicKeys())
                     .build());
             case Outcome.InvalidPublicKey bad -> throw new ApiResponseException(HttpStatus.BAD_REQUEST,
                     new MessageResponse("Invalid public key: " + bad.reason()));

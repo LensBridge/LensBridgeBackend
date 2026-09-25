@@ -43,7 +43,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * {@code GET /api/admin/board/devices/{id}/offline-bundle}: who may download it, and that the
- * HTTP shape (content type, filename, error bodies) matches the offline-mode contract.
+ * HTTP shape (content type, filename, error bodies) matches the signed-package contract
+ * (MusallahBoard {@code agent/docs/architecture.md}, sections 4.3 and 9.3).
  */
 @WebMvcTest(controllers = DeviceAdminController.class)
 @Import(MethodSecurityTestConfig.class)
@@ -75,8 +76,9 @@ class DeviceAdminControllerOfflineBundleTest {
     private UserService userService;
 
     private static OfflineBundle bundle() {
-        return new OfflineBundle("musallahboard-3f2a1b4c-2026-09-24.zip", List.of(
-                new OfflineBundle.Entry("manifest.json", "{}".getBytes(StandardCharsets.UTF_8), false)));
+        return new OfflineBundle("musallahboard-content-3f2a1b4c-2026-09-24.mbu", List.of(
+                new OfflineBundle.Entry("mbu.json", "{}".getBytes(StandardCharsets.UTF_8), false),
+                new OfflineBundle.Entry("mbu.sig", "{}".getBytes(StandardCharsets.UTF_8), false)));
     }
 
     @Test
@@ -95,20 +97,21 @@ class DeviceAdminControllerOfflineBundleTest {
     }
 
     @Test
-    void deviceReadAloneIsEnoughAndStreamsTheZip() throws Exception {
+    void deviceReadAloneIsEnoughAndStreamsThePackage() throws Exception {
         when(offlineBundleService.build(DEVICE_ID, 14)).thenReturn(bundle());
 
         MvcResult result = mockMvc.perform(get(URL).with(TestAuthorities.asHolderOf(Permission.BOARD_DEVICE_READ)))
                 .andExpect(request().asyncNotStarted())
                 .andExpect(status().isOk())
-                .andExpect(header().string("Content-Type", "application/zip"))
+                .andExpect(header().string("Content-Type", "application/vnd.musallahboard.mbu"))
                 .andExpect(header().string("Content-Disposition",
-                        "attachment; filename=\"musallahboard-3f2a1b4c-2026-09-24.zip\""))
+                        "attachment; filename=\"musallahboard-content-3f2a1b4c-2026-09-24.mbu\""))
                 .andReturn();
 
         try (ZipInputStream zip = new ZipInputStream(
                 new ByteArrayInputStream(result.getResponse().getContentAsByteArray()))) {
-            assertThat(zip.getNextEntry().getName()).isEqualTo("manifest.json");
+            assertThat(zip.getNextEntry().getName()).isEqualTo("mbu.json");
+            assertThat(zip.getNextEntry().getName()).isEqualTo("mbu.sig");
         }
         verify(offlineBundleService).build(DEVICE_ID, 14);
     }
@@ -133,6 +136,17 @@ class DeviceAdminControllerOfflineBundleTest {
                 .andExpect(status().isBadGateway())
                 .andExpect(jsonPath("$.message").value(
                         "Could not fetch the image for poster \"Eid\" (poster:1): NoSuchKey"));
+    }
+
+    @Test
+    void anUnconfiguredSigningKeyIsA503WithJsonMessage() throws Exception {
+        when(offlineBundleService.build(DEVICE_ID, 14)).thenThrow(new ApiResponseException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                ErrorResponse.of("Content signing is not configured on this server")));
+
+        mockMvc.perform(get(URL).with(TestAuthorities.as(Role.BOARD_VIEWER)))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.message").value("Content signing is not configured on this server"));
     }
 
     @Test
