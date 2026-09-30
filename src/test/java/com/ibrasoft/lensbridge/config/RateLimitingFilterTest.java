@@ -1,6 +1,7 @@
 package com.ibrasoft.lensbridge.config;
 
 import com.ibrasoft.lensbridge.model.auth.Role;
+import com.ibrasoft.lensbridge.security.ClientIpResolver;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,8 +33,11 @@ import static org.mockito.Mockito.verifyNoInteractions;
  *   <li>The {@code @Value} default for {@code ratelimit.requests} is <b>10</b>, not 100.
  *       Tests set the limit explicitly via reflection so they don't depend on the default.</li>
  *   <li>Exempt-role detection reads from the {@link SecurityContextHolder}, not the request.</li>
- *   <li>Per-client isolation keys on {@code X-Forwarded-For} (first hop) falling back to
- *       {@code remoteAddr}.</li>
+ *   <li>Per-client isolation keys on the client IP as resolved by {@link ClientIpResolver}:
+ *       the forwarded header is honoured only for peers inside the configured trusted-proxy
+ *       range, and otherwise ignored in favour of {@code remoteAddr}. These tests configure
+ *       {@code 10.0.0.0/8} as the trusted range, so {@code 10.x} peers are treated as our
+ *       proxy and everything else as a direct caller.</li>
  *   <li>On a successful pass-through an {@code X-Rate-Limit-Remaining} header is added; on a
  *       block the status is set to 429 and a plain-text body is written (chain not invoked).</li>
  * </ul>
@@ -45,7 +49,13 @@ class RateLimitingFilterTest {
 
     @BeforeEach
     void setUp() {
-        filter = new RateLimitingFilter();
+        ClientIpProperties clientIpProperties = new ClientIpProperties();
+        clientIpProperties.setTrustedProxies(List.of("10.0.0.0/8"));
+        clientIpProperties.setTrustedProxyCount(1);
+        ClientIpResolver clientIpResolver = new ClientIpResolver(clientIpProperties);
+        ReflectionTestUtils.invokeMethod(clientIpResolver, "initialiseTrustedProxies");
+
+        filter = new RateLimitingFilter(clientIpResolver);
         ReflectionTestUtils.setField(filter, "maxRequests", 3);
         ReflectionTestUtils.setField(filter, "durationMinutes", 1);
         ReflectionTestUtils.setField(filter, "exemptRoles", List.of(Role.ROOT));
@@ -165,21 +175,56 @@ class RateLimitingFilterTest {
     }
 
     @Test
-    void clientIpIsTakenFromXForwardedForFirstHop() throws Exception {
+    void forwardedHeaderFromATrustedProxyIdentifiesTheClient() throws Exception {
         FilterChain chain = mock(FilterChain.class);
 
-        // Two requests with different remoteAddr but the same X-Forwarded-For client
-        // share a bucket, proving the forwarded header is the bucket key.
+        // 10.0.0.99 is inside the configured trusted range, so it is our proxy and the entry it
+        // appended -- the last one -- is the real client. Two requests arriving through different
+        // proxy instances for the same client must therefore share a bucket.
         for (int i = 0; i < 3; i++) {
             MockHttpServletRequest request = requestFromIp("10.0.0.99");
-            request.addHeader("X-Forwarded-For", "203.0.113.7, 10.0.0.99");
+            request.addHeader("X-Forwarded-For", "203.0.113.7");
             filter.doFilter(request, new MockHttpServletResponse(), chain);
         }
 
         MockHttpServletRequest blockedReq = requestFromIp("10.0.0.100");
-        blockedReq.addHeader("X-Forwarded-For", "203.0.113.7, 10.0.0.100");
+        blockedReq.addHeader("X-Forwarded-For", "203.0.113.7");
         MockHttpServletResponse blocked = new MockHttpServletResponse();
         filter.doFilter(blockedReq, blocked, chain);
+
+        assertThat(blocked.getStatus()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS.value());
+    }
+
+    @Test
+    void spoofedForwardedHeaderFromAnUntrustedPeerCannotEvadeTheBucket() throws Exception {
+        FilterChain chain = mock(FilterChain.class);
+
+        // The whole point of the fix. 198.51.100.5 is a direct caller, not a proxy we operate, so
+        // nothing it claims about its own origin is believed. Rotating a fresh forged header on
+        // every request used to mint a fresh bucket each time and made the limiter a no-op.
+        for (int i = 0; i < 3; i++) {
+            MockHttpServletRequest request = requestFromIp("198.51.100.5");
+            request.addHeader("X-Forwarded-For", "203.0.113." + i);
+            filter.doFilter(request, new MockHttpServletResponse(), chain);
+        }
+
+        MockHttpServletRequest blockedReq = requestFromIp("198.51.100.5");
+        blockedReq.addHeader("X-Forwarded-For", "203.0.113.250");
+        MockHttpServletResponse blocked = new MockHttpServletResponse();
+        filter.doFilter(blockedReq, blocked, chain);
+
+        assertThat(blocked.getStatus()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS.value());
+    }
+
+    @Test
+    void trustedProxyWithoutAForwardedHeaderFallsBackToThePeerAddress() throws Exception {
+        FilterChain chain = mock(FilterChain.class);
+
+        for (int i = 0; i < 3; i++) {
+            filter.doFilter(requestFromIp("10.1.2.3"), new MockHttpServletResponse(), chain);
+        }
+        MockHttpServletResponse blocked = new MockHttpServletResponse();
+        filter.doFilter(requestFromIp("10.1.2.3"), blocked, chain);
 
         assertThat(blocked.getStatus()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS.value());
     }
