@@ -1,6 +1,7 @@
 package com.ibrasoft.lensbridge.service.agent;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.validation.Validation;
 import com.ibrasoft.lensbridge.model.minbar.board.DeviceCommand;
 import com.ibrasoft.lensbridge.model.minbar.board.DeviceCommandStatus;
 import com.ibrasoft.lensbridge.repository.sql.DeviceCommandRepository;
@@ -37,9 +38,11 @@ class DeviceCommandReaperTest {
     void setUp() {
         commandRepo = mock(DeviceCommandRepository.class);
         events = mock(DeviceEventPublisher.class);
+        ObjectMapper mapper = new ObjectMapper();
         CommandDispatcher dispatcher = new CommandDispatcher(
                 commandRepo, mock(DeviceRepository.class), new AgentSessionRegistry(),
-                new ObjectMapper(), events);
+                mapper, events,
+                new CommandPayloadCodec(mapper, Validation.buildDefaultValidatorFactory().getValidator()));
         reaper = new DeviceCommandReaper(commandRepo, dispatcher, events);
 
         when(commandRepo.findByStatusAndExpiresAtBefore(any(), any())).thenReturn(List.of());

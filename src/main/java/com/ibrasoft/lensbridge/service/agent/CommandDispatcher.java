@@ -13,6 +13,7 @@ import com.ibrasoft.lensbridge.model.minbar.board.Device;
 import com.ibrasoft.lensbridge.model.minbar.board.DeviceCommand;
 import com.ibrasoft.lensbridge.model.minbar.board.DeviceCommandStatus;
 import com.ibrasoft.lensbridge.model.minbar.board.commands.CommandKind;
+import com.ibrasoft.lensbridge.model.minbar.board.commands.CommandPayload;
 import com.ibrasoft.lensbridge.repository.sql.DeviceCommandRepository;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.service.agent.events.DeviceEventPublisher;
@@ -62,6 +63,7 @@ public class CommandDispatcher {
     private final AgentSessionRegistry registry;
     private final ObjectMapper objectMapper;
     private final DeviceEventPublisher events;
+    private final CommandPayloadCodec payloadCodec;
 
     @Transactional
     public CommandIssuedResponse issue(UUID deviceId, String issuedBy, IssueCommandRequest request) {
@@ -73,10 +75,19 @@ public class CommandDispatcher {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Device is revoked");
         }
 
-        JsonNode payload = request.payload() == null ? NullNode.getInstance() : request.payload();
+        // Bind the wire JSON to the sealed CommandPayload subtype for this kind, validate it, and
+        // store what came back rather than what was sent. The raw JsonNode used to be stringified
+        // verbatim, which meant LogsTailPayload's 1..500 bound -- and every other constraint in
+        // that hierarchy -- was never evaluated on the only path that issues commands: the
+        // records existed but nothing deserialized into them. Every bound was therefore delegated
+        // to agent code that does not live in this repository. Re-serializing the validated
+        // object also drops anything the client tacked on beyond the record's components.
         String payloadJson;
         try {
+            CommandPayload payload = payloadCodec.parse(kind, request.payload());
             payloadJson = objectMapper.writeValueAsString(payload);
+        } catch (ResponseStatusException e) {
+            throw e;
         } catch (Exception e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid payload");
         }
