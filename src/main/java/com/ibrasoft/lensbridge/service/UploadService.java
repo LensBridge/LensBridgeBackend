@@ -153,8 +153,22 @@ public class UploadService {
         return uploadRepository.findById(id);
     }
 
-    public Optional<UploadDto> getUploadByIdAsDto(UUID id) {
-        return uploadRepository.findById(id).map(this::toUploadDto);
+    /**
+     * Reads a single upload as the given viewer would be allowed to see it.
+     * <p>
+     * A viewer holding {@code media:upload:read} sees any live upload. Everyone else sees an
+     * upload only when it is already approved or they uploaded it themselves; anything else comes
+     * back empty so the caller answers 404 rather than 403 — a 403 would confirm that the id
+     * exists, which is exactly what an enumeration attempt is fishing for.
+     *
+     * @param viewerId   id of the authenticated caller, may be {@code null} for no ownership claim
+     * @param canReadAll whether the caller holds {@code media:upload:read}
+     */
+    public Optional<UploadDto> getUploadByIdAsDto(UUID id, UUID viewerId, boolean canReadAll) {
+        return uploadRepository.findById(id)
+                .filter(upload -> upload.getDeletedAt() == null)
+                .filter(upload -> canReadAll || isVisibleTo(upload, viewerId))
+                .map(this::toUploadDto);
     }
 
     public Page<Upload> getAllUploads(Pageable pageable) {
@@ -167,10 +181,20 @@ public class UploadService {
         return uploadRepository.findByBoardEventAndDeletedAtIsNull(boardEvent, pageable);
     }
 
-    public Page<UploadDto> getUploadsByEventAsDto(UUID eventId, Pageable pageable) {
+    /**
+     * Pages an event's uploads as the given viewer would be allowed to see them: everything for a
+     * holder of {@code media:upload:read}, otherwise only approved uploads plus the viewer's own.
+     *
+     * @param viewerId   id of the authenticated caller, may be {@code null} for no ownership claim
+     * @param canReadAll whether the caller holds {@code media:upload:read}
+     */
+    public Page<UploadDto> getUploadsByEventAsDto(UUID eventId, Pageable pageable, UUID viewerId, boolean canReadAll) {
         BoardEvent boardEvent = boardEventRepository.findById(eventId)
                 .orElseThrow(() -> new IllegalArgumentException("Event not found"));
-        return uploadRepository.findByBoardEventAndDeletedAtIsNull(boardEvent, pageable).map(this::toUploadDto);
+        Page<Upload> uploads = canReadAll
+                ? uploadRepository.findByBoardEventAndDeletedAtIsNull(boardEvent, pageable)
+                : uploadRepository.findVisibleByBoardEvent(boardEvent, viewerId, pageable);
+        return uploads.map(this::toUploadDto);
     }
 
     public Page<UploadDto> getUserUploads(UUID userId, Pageable pageable) {
@@ -216,6 +240,17 @@ public class UploadService {
     }
 
     // ── Internal helpers ──────────────────────────────────────────────────────
+
+    /** Approved content is public to signed-in users; unapproved content is the uploader's alone. */
+    private boolean isVisibleTo(Upload upload, UUID viewerId) {
+        return upload.isApproved() || isOwnedBy(upload, viewerId);
+    }
+
+    private boolean isOwnedBy(Upload upload, UUID viewerId) {
+        return viewerId != null
+                && upload.getUploadedBy() != null
+                && viewerId.equals(upload.getUploadedBy().getId());
+    }
 
     private Upload findRequiredById(UUID id) {
         return uploadRepository.findById(id)
