@@ -686,10 +686,11 @@ paths:
           description: The package
           headers:
             Content-Disposition:
-              description: "attachment; filename=\"musallahboard-content-<first 8 chars\
-                \ of deviceId>-<firstDay>.mbu\""
+              description: attachment; filename="musallahboard-content-<first 8 chars
+                of deviceId>-<firstDay>.mbu"
               schema:
                 type: string
+              style: simple
         "400":
           content:
             application/json:
@@ -713,7 +714,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
-          description: A poster image could not be fetched; the message names the poster
+          description: A poster image could not be fetched; the message names the
+            poster
         "503":
           content:
             application/json:
@@ -2135,7 +2137,8 @@ paths:
         schema:
           type: integer
           format: int64
-      - description: Base64 Ed25519 signature by the device key
+      - description: "Base64 Ed25519 signature by the device key over musallahboard-http-v1,\
+          \ the method, path, device id, timestamp and the body's SHA-256"
         in: header
         name: X-MB-Signature
         required: true
@@ -2156,10 +2159,11 @@ paths:
           description: The signed content package
           headers:
             Content-Disposition:
-              description: "attachment; filename=\"musallahboard-content-<first 8 chars\
-                \ of deviceId>-<firstDay>.mbu\""
+              description: attachment; filename="musallahboard-content-<first 8 chars
+                of deviceId>-<firstDay>.mbu"
               schema:
                 type: string
+              style: simple
         "400":
           content:
             application/json:
@@ -2178,7 +2182,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
-          description: A poster image could not be fetched; the message names the poster
+          description: A poster image could not be fetched; the message names the
+            poster
         "503":
           content:
             application/json:
@@ -2281,7 +2286,8 @@ paths:
         schema:
           type: integer
           format: int64
-      - description: Base64 Ed25519 signature by the device key
+      - description: "Base64 Ed25519 signature by the device key over musallahboard-http-v1,\
+          \ the method, path, device id, timestamp and the body's SHA-256"
         in: header
         name: X-MB-Signature
         required: true
@@ -3370,19 +3376,32 @@ components:
       - token
     AgentEnrollResponse:
       type: object
-      required:
-        - contentSigningKeys
       properties:
         contentSigningKeys:
           type: array
-          description: "Public content signing keys the agent pins at enrollment. Always\
-            \ present; empty when the server has no content key configured."
+          description: Public content signing keys the agent pins at enrollment. Always
+            present; empty when the server has no content key configured.
           items:
             $ref: "#/components/schemas/SigningKeyView"
         deviceId:
           type: string
           format: uuid
         websocketUrl:
+          type: string
+      required:
+      - contentSigningKeys
+    AgentUpdate:
+      type: object
+      properties:
+        at:
+          type: string
+        from:
+          type: string
+        message:
+          type: string
+        status:
+          type: string
+        to:
           type: string
     AgentWeatherResponse:
       type: object
@@ -3502,6 +3521,27 @@ components:
         startTime:
           type: string
           format: date-time
+    BoardReport:
+      type: object
+      properties:
+        appVersion:
+          type: string
+        clock:
+          $ref: "#/components/schemas/Clock"
+        content:
+          $ref: "#/components/schemas/Content"
+        error:
+          type: string
+        lastAgentUpdate:
+          $ref: "#/components/schemas/AgentUpdate"
+        servicePort:
+          type: boolean
+        syncError:
+          type: string
+        updates:
+          $ref: "#/components/schemas/Updates"
+        usbImport:
+          type: boolean
     ChangePasswordRequest:
       type: object
       properties:
@@ -3516,6 +3556,13 @@ components:
       required:
       - currentPassword
       - newPassword
+    Clock:
+      type: object
+      properties:
+        source:
+          type: string
+        trusted:
+          type: boolean
     CommandIssuedResponse:
       type: object
       properties:
@@ -3597,6 +3644,27 @@ components:
           - TIMEOUT
           - REJECTED
           - EXPIRED
+    Content:
+      type: object
+      properties:
+        createdAt:
+          type: string
+        daysRemaining:
+          type: integer
+          format: int32
+        firstDay:
+          type: string
+        installedAt:
+          type: string
+        lastDay:
+          type: string
+        source:
+          type: string
+        staleDays:
+          type: integer
+          format: int32
+        timezone:
+          type: string
     ContentBundleRequest:
       type: object
       properties:
@@ -3612,6 +3680,7 @@ components:
             type: string
             pattern: "^[0-9a-f]{64}$"
           maxItems: 2000
+          minItems: 0
     CreateCalendarEventRequest:
       type: object
       properties:
@@ -3804,6 +3873,11 @@ components:
           - brothers
           - sisters
           - both
+        board:
+          $ref: "#/components/schemas/BoardReport"
+        boardReportAt:
+          type: string
+          format: date-time
         displayName:
           type: string
         enrolledAt:
@@ -4578,6 +4652,15 @@ components:
           type: boolean
         verified:
           type: boolean
+    Update:
+      type: object
+      properties:
+        description:
+          type: string
+        type:
+          type: string
+        version:
+          type: string
     UpdateBoardConfigRequest:
       type: object
       properties:
@@ -4721,6 +4804,25 @@ components:
           type: array
           items:
             type: string
+    Updates:
+      type: object
+      properties:
+        autoUpdate:
+          type: boolean
+        available:
+          type: array
+          items:
+            $ref: "#/components/schemas/Update"
+        installAt:
+          type: string
+        installTime:
+          type: string
+        installing:
+          type: boolean
+        lastCheckAt:
+          type: string
+        lastCheckError:
+          type: string
     UploadCompletionResponse:
       type: object
       properties:

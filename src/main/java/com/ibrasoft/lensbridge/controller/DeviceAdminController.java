@@ -23,6 +23,8 @@ import com.ibrasoft.lensbridge.service.agent.EnrollmentTokenService.Issued;
 import com.ibrasoft.lensbridge.service.board.offline.OfflineBundle;
 import com.ibrasoft.lensbridge.service.board.offline.OfflineBundleService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -214,9 +216,12 @@ public class DeviceAdminController {
             summary = "Download a signed content package for a board",
             description = "A signed .mbu content package (format version 2) holding one fully assembled "
                     + "payload per day, starting today in the device's timezone, plus every poster image those "
-                    + "payloads reference. Taken to the board by USB stick, laptop or phone.")
+                    + "payloads reference. Taken to the board by USB stick, laptop or phone. Requires board:device:read.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "The package",
+                    headers = @Header(name = HttpHeaders.CONTENT_DISPOSITION,
+                            description = "attachment; filename=\"musallahboard-content-<first 8 chars of deviceId>-<firstDay>.mbu\"",
+                            schema = @Schema(type = "string")),
                     content = @Content(mediaType = OfflineBundleService.MBU_CONTENT_TYPE,
                             schema = @Schema(type = "string", format = "binary"))),
             @ApiResponse(responseCode = "400", description = "days outside 1-31",
@@ -234,6 +239,10 @@ public class DeviceAdminController {
     @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_DEVICE_READ + "')")
     public void offlineBundle(
             @PathVariable UUID deviceId,
+            @Parameter(description = "Number of days in the bundle, starting today in the device's timezone",
+                    schema = @Schema(type = "integer", format = "int32", minimum = "1",
+                            maximum = "" + OfflineBundleService.MAX_DAYS,
+                            defaultValue = "" + OfflineBundleService.DEFAULT_DAYS))
             @RequestParam(defaultValue = "" + OfflineBundleService.DEFAULT_DAYS) int days,
             HttpServletResponse response) throws IOException {
         OfflineBundle bundle = offlineBundleService.build(deviceId, days);

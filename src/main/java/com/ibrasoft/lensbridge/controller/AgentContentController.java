@@ -12,6 +12,7 @@ import com.ibrasoft.lensbridge.service.board.offline.ContentSigningService;
 import com.ibrasoft.lensbridge.service.board.offline.OfflineBundle;
 import com.ibrasoft.lensbridge.service.board.offline.OfflineBundleService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -75,6 +76,9 @@ public class AgentContentController {
     @SecurityRequirements
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "The signed content package",
+                    headers = @Header(name = HttpHeaders.CONTENT_DISPOSITION,
+                            description = "attachment; filename=\"musallahboard-content-<first 8 chars of deviceId>-<firstDay>.mbu\"",
+                            schema = @Schema(type = "string")),
                     content = @Content(mediaType = OfflineBundleService.MBU_CONTENT_TYPE,
                             schema = @Schema(type = "string", format = "binary"))),
             @ApiResponse(responseCode = "400", description = "Malformed body, days outside 1-31, or a bad haveMedia entry",
