@@ -102,6 +102,9 @@ class CommandDispatcherTest {
 
         verify(session.getTransport(), atLeastOnce()).sendMessage(any());
         verify(events).commandDelivered(any());
+        // Outside a transaction delivery happens before the response is built, so the admin
+        // UI still sees DELIVERED straight away for a live board.
+        assertEquals(DeviceCommandStatus.DELIVERED, resp.status());
         assertEquals(DeviceCommandStatus.DELIVERED, db.row(resp.commandId()).getStatus());
         assertNotNull(db.row(resp.commandId()).getDeliveredAt());
     }

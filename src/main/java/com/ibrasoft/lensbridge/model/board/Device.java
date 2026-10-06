@@ -2,6 +2,7 @@ package com.ibrasoft.lensbridge.model.board;
 
 import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
 import jakarta.persistence.*;
+import org.hibernate.annotations.DynamicUpdate;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -12,8 +13,15 @@ import lombok.ToString;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * {@code @DynamicUpdate}: the heartbeat path loads a device and saves it every 30 seconds per
+ * board. Hibernate's default UPDATE writes every column, so an admin's revoke, rename or
+ * audience change committed while a heartbeat was in flight would be written back over with
+ * the heartbeat's stale copy. Updating only the columns that changed keeps the two apart.
+ */
 @Entity
 @Table(name = "devices")
+@DynamicUpdate
 @Data
 @Builder
 @NoArgsConstructor
