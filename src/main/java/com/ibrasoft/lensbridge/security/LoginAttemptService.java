@@ -1,84 +1,60 @@
 package com.ibrasoft.lensbridge.security;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.Ticker;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
+import java.time.Duration;
 
+/**
+ * Counts failed sign-ins per key (the email) and locks the key out once it reaches
+ * {@code login.maxAttempts}.
+ *
+ * <p>Counters live in a bounded Caffeine cache. An entry expires one lockout duration after its
+ * last failed attempt, which is exactly when the lockout ends, so expiry needs no bookkeeping
+ * of our own. The size bound matters because the key is attacker-chosen: spraying random
+ * emails would otherwise grow an unbounded map. Increments go through the cache's atomic
+ * {@code merge}, so concurrent failures cannot lose a count.
+ */
 @Component
 public class LoginAttemptService {
 
-    @Value("${login.maxAttempts:5}")
-    private int maxAttempts;
+    private final int maxAttempts;
+    private final Cache<String, Integer> attempts;
 
-    @Value("${login.lockdownDurationMinutes:15}")
-    private int lockoutDurationMinutes;
+    @Autowired
+    public LoginAttemptService(@Value("${login.maxAttempts:5}") int maxAttempts,
+                               @Value("${login.lockdownDurationMinutes:15}") int lockoutDurationMinutes,
+                               @Value("${login.maxCacheSize:1000}") int maxCacheSize) {
+        this(maxAttempts, lockoutDurationMinutes, maxCacheSize, Ticker.systemTicker());
+    }
 
-    @Value("${login.maxCacheSize:1000}")
-    private int maxCacheSize;
-
-    private final ConcurrentMap<String, AttemptRecord> attemptsCache = new ConcurrentHashMap<>();
-
-    @Scheduled(fixedRate = 300000)
-    public void cleanupExpiredEntries() {
-        attemptsCache.entrySet().removeIf(entry -> entry.getValue().isLockoutExpired());
+    /** Lets tests drive the clock instead of sleeping through a lockout. */
+    LoginAttemptService(int maxAttempts, int lockoutDurationMinutes, int maxCacheSize, Ticker ticker) {
+        this.maxAttempts = maxAttempts;
+        this.attempts = Caffeine.newBuilder()
+                .expireAfterWrite(Duration.ofMinutes(lockoutDurationMinutes))
+                .maximumSize(maxCacheSize)
+                .ticker(ticker)
+                // Run eviction on the calling thread: the work is tiny and this keeps the size
+                // bound deterministic instead of lagging behind a burst on a shared pool.
+                .executor(Runnable::run)
+                .build();
     }
 
     public void recordFailedAttempt(String key) {
-        if (attemptsCache.size() >= maxCacheSize) {
-            cleanupExpiredEntries();
-        }
-
-        AttemptRecord record = attemptsCache.computeIfAbsent(key, k -> new AttemptRecord());
-        record.incrementAttempts();
+        attempts.asMap().merge(key, 1, Integer::sum);
     }
 
     public void recordSuccessfulAttempt(String key) {
-        attemptsCache.remove(key);
+        attempts.invalidate(key);
     }
 
     public boolean isBlocked(String key) {
-        AttemptRecord record = attemptsCache.get(key);
-        if (record == null) {
-            return false;
-        }
-
-        // Check if lockout period has expired
-        if (record.isLockoutExpired()) {
-            attemptsCache.remove(key);
-            return false;
-        }
-
-        return record.getAttempts() >= maxAttempts;
-    }
-
-    public int getRemainingAttempts(String key) {
-        AttemptRecord record = attemptsCache.get(key);
-        if (record == null) {
-            return maxAttempts;
-        }
-        return Math.max(0, maxAttempts - record.getAttempts());
-    }
-
-    private class AttemptRecord {
-        private int attempts = 0;
-        private LocalDateTime lastAttempt = LocalDateTime.now();
-
-        public void incrementAttempts() {
-            this.attempts++;
-            this.lastAttempt = LocalDateTime.now();
-        }
-
-        public int getAttempts() {
-            return attempts;
-        }
-
-        public boolean isLockoutExpired() {
-            return ChronoUnit.MINUTES.between(lastAttempt, LocalDateTime.now()) >= lockoutDurationMinutes;
-        }
+        Integer count = attempts.getIfPresent(key);
+        return count != null && count >= maxAttempts;
     }
 }
