@@ -20,14 +20,21 @@ public class AgentWeatherResponse {
 
     /**
      * The OpenWeatherMap "current weather" response, forwarded verbatim, or null when the
-     * server has none (no API key, no successful fetch yet, or the weather service failed).
+     * server has none (no API key, no successful fetch yet, the last fetch is over 3 hours old, or
+     * the weather service failed).
      */
     @JsonInclude(JsonInclude.Include.ALWAYS)
     @Schema(requiredMode = Schema.RequiredMode.REQUIRED,
             description = "OpenWeatherMap current weather JSON, verbatim; null when unavailable")
     private JsonNode weather;
 
-    /** When the server answered, as a UTC instant. */
-    @Schema(requiredMode = Schema.RequiredMode.REQUIRED, example = "2026-09-24T14:05:00Z")
+    /**
+     * When the server fetched {@link #weather} from OpenWeatherMap, as a UTC instant, so a board
+     * can judge how old the observation is. When {@code weather} is null there is nothing to
+     * date, and this is when the server answered.
+     */
+    @Schema(requiredMode = Schema.RequiredMode.REQUIRED, example = "2026-09-24T14:05:00Z",
+            description = "When the server fetched the weather from OpenWeatherMap; when weather is null, "
+                    + "when the server answered")
     private Instant fetchedAt;
 }
