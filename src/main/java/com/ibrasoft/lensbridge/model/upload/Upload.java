@@ -23,16 +23,16 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * Represents an uploaded media file, including its metadata and status.
+ * This class is akin to the inode models in a filesystem, storing metadata and the location of the uploaded content (R2)
+ */
 @Entity
 @Table(name = "uploads")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-/**
- * Represents an uploaded media file, including its metadata and status.
- * This class is akin to the inode models in a filesystem, storing metadata and the location of the uploaded content (R2)
- */
 public class Upload {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -63,12 +63,11 @@ public class Upload {
     @Enumerated(EnumType.STRING)
     private UploadType contentType;
 
-    @Column(nullable = true)
     /**
-     * We do not delete things anymore
-     * DB is append-only, we just mark things as deleted and filter them out in queries
-     * deletedAt = null => not deleted 
-    */
+     * Soft-delete marker: rows are never removed, only stamped here and filtered out of queries.
+     * deletedAt = null => not deleted.
+     */
+    @Column(nullable = true)
     private Instant deletedAt;
     @ManyToOne(fetch = FetchType.LAZY)
     private User deletedBy;    

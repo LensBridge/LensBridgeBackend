@@ -25,6 +25,7 @@ import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
@@ -112,6 +113,28 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return handleExceptionInternal(ex, new MessageResponse(details), headers, status, request);
     }
 
+    /**
+     * Constraint annotations directly on controller parameters ({@code @RequestParam @Size ...})
+     * surface here rather than as a {@link MethodArgumentNotValidException}. Without this the
+     * parent's body is a bare "Validation failure"; naming the parameter tells the client which
+     * of a dozen form fields to fix.
+     */
+    @Override
+    protected ResponseEntity<Object> handleHandlerMethodValidationException(HandlerMethodValidationException ex,
+            HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        String details = ex.getParameterValidationResults().stream()
+                .flatMap(result -> {
+                    String name = result.getMethodParameter().getParameterName();
+                    return result.getResolvableErrors().stream()
+                            .map(error -> (name != null ? name + ": " : "") + error.getDefaultMessage());
+                })
+                .sorted()
+                .collect(Collectors.joining("; "));
+        return handleExceptionInternal(ex,
+                new MessageResponse(details.isEmpty() ? "Validation failure" : details),
+                headers, status, request);
+    }
+
     @Override
     protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex,
             HttpHeaders headers, HttpStatusCode status, WebRequest request) {
@@ -179,7 +202,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(DailyLimitExceededException.class)
     public ResponseEntity<Object> handleDailyLimitExceeded(DailyLimitExceededException ex) {
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                .body(DailyLimitErrorResponse.of(ex.getMessage(), ex.getLimit(), ex.getCurrent(), "unknown"));
+                .body(DailyLimitErrorResponse.of(ex.getMessage(), ex.getLimit(), ex.getCurrent(), ex.getRole()));
     }
 
     @ExceptionHandler(FileSizeLimitExceededException.class)
