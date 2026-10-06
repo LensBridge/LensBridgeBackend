@@ -106,8 +106,9 @@ class RefreshTokenServiceTest {
 
         service.createRefreshToken(userId);
 
-        verify(refreshTokenRepository).revokeIfActive(oldest.getTokenHash());
-        verify(refreshTokenRepository, never()).revokeIfActive(newer.getTokenHash());
+        verify(refreshTokenRepository).deleteByHash(oldest.getTokenHash());
+        verify(refreshTokenRepository, never()).deleteByHash(newer.getTokenHash());
+        verify(refreshTokenRepository, never()).revokeIfActive(any());
     }
 
     @Test
@@ -207,17 +208,17 @@ class RefreshTokenServiceTest {
     }
 
     @Test
-    void revokeRefreshTokenRevokesByHashOfTheRawToken() {
+    void revokeRefreshTokenDeletesByHashOfTheRawToken() {
         service.revokeRefreshToken("raw");
 
-        verify(refreshTokenRepository).revokeIfActive(TokenHasher.sha256Hex("raw"));
+        verify(refreshTokenRepository).deleteByHash(TokenHasher.sha256Hex("raw"));
     }
 
     @Test
-    void revokeAllUserTokensRevokesEveryActiveToken() {
+    void revokeAllUserTokensDeletesEveryToken() {
         service.revokeAllUserTokens(userId);
 
-        verify(refreshTokenRepository).revokeAllActiveForUser(userId);
+        verify(refreshTokenRepository).deleteAllForUser(userId);
     }
 
     @Test

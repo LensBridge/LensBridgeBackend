@@ -55,10 +55,11 @@ public class RefreshTokenService {
         // Check if user has too many active tokens
         long activeTokenCount = refreshTokenRepository.countByUser_IdAndRevokedFalse(userId);
         if (activeTokenCount >= maxRefreshTokensPerUser) {
-            // Revoke oldest token
+            // Delete, not revoke, the oldest: the device still holding it is not a thief, and a
+            // revoked token presented again would sign the user out everywhere (see rotate).
             refreshTokenRepository.findByUser_IdAndRevokedFalse(userId).stream()
                 .min((t1, t2) -> t1.getCreatedDate().compareTo(t2.getCreatedDate()))
-                .ifPresent(oldest -> refreshTokenRepository.revokeIfActive(oldest.getTokenHash()));
+                .ifPresent(oldest -> refreshTokenRepository.deleteByHash(oldest.getTokenHash()));
         }
         Instant now = Instant.now();
 
@@ -120,20 +121,22 @@ public class RefreshTokenService {
     }
 
     /**
-     * Revoke a refresh token given the raw value the client holds. Unknown tokens are ignored so
-     * logout stays idempotent.
+     * Sign-out: forget the token given the raw value the client holds. Deleted rather than
+     * revoked, so a tab that still holds it gets a plain 401 instead of tripping replay
+     * detection for the whole account. Unknown tokens are ignored so logout stays idempotent.
      */
     @Transactional
     public void revokeRefreshToken(String rawToken) {
-        refreshTokenRepository.revokeIfActive(TokenHasher.sha256Hex(rawToken));
+        refreshTokenRepository.deleteByHash(TokenHasher.sha256Hex(rawToken));
     }
 
     /**
-     * Revoke all refresh tokens for a user (useful for logout all devices)
+     * Sign out everywhere (also used after a password change): delete every refresh token the
+     * user holds, so each device gets a plain 401 on its next refresh.
      */
     @Transactional
     public void revokeAllUserTokens(UUID userId) {
-        refreshTokenRepository.revokeAllActiveForUser(userId);
+        refreshTokenRepository.deleteAllForUser(userId);
     }
 
     /**

@@ -106,6 +106,36 @@ class AuthRepositoriesQueryTest {
     }
 
     @Test
+    void anEvictedOrSignedOutTokenIsUnknownNotAReplay() {
+        RefreshTokenService service = service();
+        RefreshTokenService.IssuedToken signedOut = service.createRefreshToken(user.getId());
+        RefreshTokenService.IssuedToken otherDevice = service.createRefreshToken(user.getId());
+
+        service.revokeRefreshToken(signedOut.rawToken());
+
+        // The signed-out tab gets a plain 401; the user's other device keeps its session.
+        assertThatThrownBy(() -> service.rotate(signedOut.rawToken())).hasMessageContaining("not found");
+        assertThat(service.rotate(otherDevice.rawToken()).rawToken()).isNotBlank();
+    }
+
+    @Test
+    void theOldestTokenOverTheCapIsDeletedSoItsDeviceDoesNotSignEveryoneOut() {
+        RefreshTokenService service = service();
+        RefreshTokenService.IssuedToken oldest = service.createRefreshToken(user.getId());
+        // Back-dated so "oldest" does not depend on clock resolution in a tight loop.
+        RefreshToken stored = refreshTokenRepository.findByTokenHash(oldest.entity().getTokenHash()).orElseThrow();
+        stored.setCreatedDate(Instant.now().minusSeconds(60));
+        refreshTokenRepository.saveAndFlush(stored);
+        for (int i = 0; i < 5; i++) {
+            service.createRefreshToken(user.getId());
+        }
+
+        assertThat(refreshTokenRepository.countByUser_IdAndRevokedFalse(user.getId())).isEqualTo(5);
+        assertThatThrownBy(() -> service.rotate(oldest.rawToken())).hasMessageContaining("not found");
+        assertThat(refreshTokenRepository.countByUser_IdAndRevokedFalse(user.getId())).isEqualTo(5);
+    }
+
+    @Test
     void bulkDeletesRemoveOnlyWhatTheirNamesSay() {
         Instant now = Instant.now();
         refreshToken("expired", false, now.minusSeconds(10), now.minusSeconds(100));

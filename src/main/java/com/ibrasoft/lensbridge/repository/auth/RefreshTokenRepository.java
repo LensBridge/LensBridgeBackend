@@ -36,6 +36,19 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, UUID
     @Query("update RefreshToken t set t.revoked = true where t.user.id = :userId and t.revoked = false")
     int revokeAllActiveForUser(@Param("userId") UUID userId);
 
+    /**
+     * Deletes rather than revokes, for tokens retired by anything other than rotation (sign-out,
+     * the per-user cap, sign-out everywhere). A revoked row means "rotated out", and presenting
+     * one again is treated as theft; a deleted token is simply unknown.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("delete from RefreshToken t where t.tokenHash = :tokenHash")
+    int deleteByHash(@Param("tokenHash") String tokenHash);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("delete from RefreshToken t where t.user.id = :userId")
+    int deleteAllForUser(@Param("userId") UUID userId);
+
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("delete from RefreshToken t where t.user.id = :userId and t.expiryDate < :now")
     int deleteExpiredForUser(@Param("userId") UUID userId, @Param("now") Instant now);
