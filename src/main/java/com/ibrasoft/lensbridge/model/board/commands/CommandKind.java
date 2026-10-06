@@ -8,16 +8,11 @@ import java.util.Optional;
 /**
  * The registry of issuable command kinds and their {@link CommandRisk}.
  * <p>
- * This replaces the hardcoded {@code KNOWN_KINDS} string set that used to live in
- * {@code CommandDispatcher}, which duplicated the {@code @JsonSubTypes} registration on
- * {@link CommandPayload} with nothing keeping the two in step. Adding a command kind is
- * now: new record + new {@code @Type} entry + a constant here (which forces a risk
- * classification) + agent-side handler. {@code CommandKindTest} fails if the wire strings
- * here and the Jackson subtypes ever diverge.
- * <p>
- * The dispatcher never deserializes the payload into a {@link CommandPayload}; it stores
- * the raw JSON and hands it to the agent so classification has to hang off the wire
- * string rather than the payload type.
+ * The dispatcher never interprets a command's payload: it stores the raw JSON and hands it to
+ * the agent, which owns each kind's payload shape and validation. So classification, and with
+ * it authorization (see {@code CommandAuthorizer}), hangs off the wire string alone. Adding a
+ * command kind is a constant here (which forces a risk classification) plus the agent-side
+ * handler.
  */
 public enum CommandKind {
 

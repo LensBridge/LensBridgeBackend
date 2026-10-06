@@ -16,7 +16,7 @@ public class IssueEnrollmentTokenResponse {
 
     private UUID tokenId;
 
-    /** Human-typeable plaintext (base32, dash-separated). Show once, never store. */
+    /** Plaintext token: 24 characters of URL-safe base64 without padding. Show once, never store. */
     private String token;
 
     private Instant expiresAt;
