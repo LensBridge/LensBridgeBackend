@@ -1,9 +1,14 @@
 package com.ibrasoft.lensbridge.service.agent;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ibrasoft.lensbridge.dto.board.agent.CommandAckFrame;
+import com.ibrasoft.lensbridge.dto.board.agent.CommandProgressFrame;
 import com.ibrasoft.lensbridge.dto.board.agent.CommandResultFrame;
 import com.ibrasoft.lensbridge.dto.board.request.IssueCommandRequest;
 import com.ibrasoft.lensbridge.dto.board.response.CommandIssuedResponse;
@@ -14,9 +19,16 @@ import com.ibrasoft.lensbridge.model.board.DeviceCommandStatus;
 import com.ibrasoft.lensbridge.repository.sql.DeviceCommandRepository;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.service.agent.events.DeviceEventPublisher;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.slf4j.LoggerFactory;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 
 import java.time.Instant;
@@ -24,6 +36,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -32,27 +45,38 @@ import static org.mockito.Mockito.*;
 class CommandDispatcherTest {
 
     private DeviceCommandRepository commandRepo;
+    private CommandDbFake db;
     private DeviceRepository deviceRepo;
     private AgentSessionRegistry registry;
     private ObjectMapper mapper;
     private DeviceEventPublisher events;
     private CommandDispatcher dispatcher;
 
+    private ch.qos.logback.classic.Logger dispatcherLogger;
+    private ListAppender<ILoggingEvent> logs;
+
     @BeforeEach
     void setUp() {
         commandRepo = mock(DeviceCommandRepository.class);
+        db = CommandDbFake.backing(commandRepo);
         deviceRepo = mock(DeviceRepository.class);
         mapper = new ObjectMapper();
         events = mock(DeviceEventPublisher.class);
         registry = new AgentSessionRegistry(events);
         dispatcher = new CommandDispatcher(commandRepo, deviceRepo, registry, mapper, events);
 
-        when(commandRepo.save(any())).thenAnswer(inv -> {
-            DeviceCommand c = inv.getArgument(0);
-            if (c.getId() == null) c.setId(UUID.randomUUID());
-            if (c.getIssuedAt() == null) c.setIssuedAt(Instant.now());
-            return c;
-        });
+        dispatcherLogger = ((LoggerContext) LoggerFactory.getILoggerFactory()).getLogger(CommandDispatcher.class);
+        logs = new ListAppender<>();
+        logs.start();
+        dispatcherLogger.addAppender(logs);
+    }
+
+    @AfterEach
+    void tearDown() {
+        dispatcherLogger.detachAppender(logs);
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 
     @Test
@@ -73,16 +97,19 @@ class CommandDispatcherTest {
         UUID deviceId = registerDevice();
         AgentSession session = liveSession(deviceId);
 
-        dispatcher.issue(deviceId, "admin", new IssueCommandRequest("chrome.reload", null, 15_000, null));
+        CommandIssuedResponse resp = dispatcher.issue(deviceId, "admin",
+                new IssueCommandRequest("chrome.reload", null, 15_000, null));
 
         verify(session.getTransport(), atLeastOnce()).sendMessage(any());
         verify(events).commandDelivered(any());
+        assertEquals(DeviceCommandStatus.DELIVERED, db.row(resp.commandId()).getStatus());
+        assertNotNull(db.row(resp.commandId()).getDeliveredAt());
     }
 
     @Test
     void issue_leavesPending_whenRegisteredSessionIsClosed() {
         UUID deviceId = registerDevice();
-        AgentSession session = closedSession(deviceId);
+        closedSession(deviceId);
 
         CommandIssuedResponse resp = dispatcher.issue(deviceId, "admin",
                 new IssueCommandRequest("chrome.reload", null, 15_000, null));
@@ -111,6 +138,80 @@ class CommandDispatcherTest {
         assertEquals(409, ex.getStatusCode().value());
     }
 
+    // ── ordering around the commit ────────────────────────────────────────
+
+    /**
+     * Regression: the frame and the STOMP event used to go out inside the transaction, before
+     * the commit. An agent answering at once then looked the command up, found no row, and its
+     * ack was dropped. Inside a transaction nothing may leave until the commit has happened.
+     */
+    @Test
+    void issue_insideATransaction_deliversAndPublishesOnlyAfterCommit() throws Exception {
+        UUID deviceId = registerDevice();
+        AgentSession session = liveSession(deviceId);
+        TransactionSynchronizationManager.initSynchronization();
+
+        dispatcher.issue(deviceId, "admin", new IssueCommandRequest("chrome.reload", null, null, null));
+
+        verify(session.getTransport(), never()).sendMessage(any());
+        verify(events, never()).commandIssued(any());
+
+        for (TransactionSynchronization sync : TransactionSynchronizationManager.getSynchronizations()) {
+            sync.afterCommit();
+        }
+
+        verify(session.getTransport()).sendMessage(any(TextMessage.class));
+        verify(events).commandIssued(any());
+        verify(events).commandDelivered(any());
+    }
+
+    @Test
+    void issue_insideATransactionThatRollsBack_neverDeliversOrPublishes() throws Exception {
+        UUID deviceId = registerDevice();
+        AgentSession session = liveSession(deviceId);
+        TransactionSynchronizationManager.initSynchronization();
+
+        dispatcher.issue(deviceId, "admin", new IssueCommandRequest("chrome.reload", null, null, null));
+        // A rollback runs afterCompletion only; afterCommit is never called.
+        for (TransactionSynchronization sync : TransactionSynchronizationManager.getSynchronizations()) {
+            sync.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK);
+        }
+
+        verify(session.getTransport(), never()).sendMessage(any());
+        verifyNoInteractions(events);
+    }
+
+    /**
+     * The fastest possible agent: its ack is processed while the frame is still being written,
+     * before the DELIVERED write. The ack must find the (already committed) row and win; the
+     * late DELIVERED write must then leave the status alone.
+     */
+    @Test
+    void anAckThatOutrunsTheDeliveredWriteIsNotLost() throws Exception {
+        UUID deviceId = registerDevice();
+        AgentSession session = liveSession(deviceId);
+        doAnswer(inv -> {
+            UUID commandId = UUID.fromString(mapper.readTree(((TextMessage) inv.getArgument(0)).getPayload())
+                    .get("commandId").asText());
+            CommandAckFrame ack = new CommandAckFrame();
+            ack.setCommandId(commandId);
+            dispatcher.onAck(ack, session);
+            return null;
+        }).when(session.getTransport()).sendMessage(any());
+
+        CommandIssuedResponse resp = dispatcher.issue(deviceId, "admin",
+                new IssueCommandRequest("chrome.reload", null, null, null));
+
+        DeviceCommand stored = db.row(resp.commandId());
+        assertEquals(DeviceCommandStatus.ACKED, stored.getStatus());
+        assertNotNull(stored.getAckedAt());
+        assertNotNull(stored.getDeliveredAt(), "the ack stamps delivery so the reaper deadline still works");
+        verify(events).commandAcked(any());
+        verify(events, never()).commandDelivered(any());
+    }
+
+    // ── result handling ───────────────────────────────────────────────────
+
     @Test
     void onResult_movesToTerminalState() {
         UUID deviceId = registerDevice();
@@ -127,9 +228,28 @@ class CommandDispatcherTest {
 
         dispatcher.onResult(frame, session);
 
-        assertEquals(DeviceCommandStatus.SUCCEEDED, cmd.getStatus());
-        assertNotNull(cmd.getFinishedAt());
-        verify(events).commandResult(eq(cmd), eq(frame));
+        DeviceCommand stored = db.row(cmd.getId());
+        assertEquals(DeviceCommandStatus.SUCCEEDED, stored.getStatus());
+        assertNotNull(stored.getFinishedAt());
+        assertEquals("{\"ok\":true}", stored.getOutputJson());
+        verify(events).commandResult(any(), eq(frame));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"ok,SUCCEEDED", "error,FAILED", "timeout,TIMEOUT", "rejected,REJECTED"})
+    void onResult_mapsEveryStatusTheAgentSends(String agentStatus, DeviceCommandStatus expected) {
+        UUID deviceId = registerDevice();
+        AgentSession session = liveSession(deviceId);
+        DeviceCommand cmd = persistedCommand(deviceId, DeviceCommandStatus.RUNNING);
+
+        CommandResultFrame frame = new CommandResultFrame();
+        frame.setCommandId(cmd.getId());
+        frame.setStatus(agentStatus);
+        frame.setErrorMessage("why");
+        dispatcher.onResult(frame, session);
+
+        assertEquals(expected, db.row(cmd.getId()).getStatus());
+        assertEquals("why", db.row(cmd.getId()).getErrorMessage());
     }
 
     @Test
@@ -144,8 +264,88 @@ class CommandDispatcherTest {
         frame.setStatus("error");
         dispatcher.onResult(frame, session);
 
-        assertEquals(DeviceCommandStatus.SUCCEEDED, cmd.getStatus());
+        assertEquals(DeviceCommandStatus.SUCCEEDED, db.row(cmd.getId()).getStatus());
         verify(events, never()).commandResult(any(), any());
+    }
+
+    /**
+     * The reaper times the command out between the moment the result handler reads it (still
+     * RUNNING) and the moment it writes. The conditional update must refuse, the reaper's
+     * outcome must stand, and no result event may be published for the loser.
+     */
+    @Test
+    void onResult_losingARaceWithTheReaperChangesNothingAndPublishesNothing() {
+        UUID deviceId = registerDevice();
+        AgentSession session = liveSession(deviceId);
+        DeviceCommand cmd = persistedCommand(deviceId, DeviceCommandStatus.RUNNING);
+        // The handler reads a RUNNING copy; the reaper then commits TIMEOUT underneath it.
+        when(commandRepo.findById(cmd.getId())).thenAnswer(inv -> {
+            DeviceCommand snapshot = CommandDbFake.copy(db.row(cmd.getId()));
+            db.row(cmd.getId()).setStatus(DeviceCommandStatus.TIMEOUT);
+            return Optional.of(snapshot);
+        });
+
+        CommandResultFrame frame = new CommandResultFrame();
+        frame.setCommandId(cmd.getId());
+        frame.setStatus("ok");
+        dispatcher.onResult(frame, session);
+
+        assertEquals(DeviceCommandStatus.TIMEOUT, db.row(cmd.getId()).getStatus());
+        verify(events, never()).commandResult(any(), any());
+    }
+
+    // ── ack and progress ──────────────────────────────────────────────────
+
+    @Test
+    void onAck_movesDeliveredToAcked() {
+        UUID deviceId = registerDevice();
+        AgentSession session = liveSession(deviceId);
+        DeviceCommand cmd = persistedCommand(deviceId, DeviceCommandStatus.DELIVERED);
+
+        dispatcher.onAck(ack(cmd), session);
+
+        assertEquals(DeviceCommandStatus.ACKED, db.row(cmd.getId()).getStatus());
+        assertNotNull(db.row(cmd.getId()).getAckedAt());
+        verify(events).commandAcked(any());
+    }
+
+    @Test
+    void onAck_neverMovesRunningBackToAcked() {
+        UUID deviceId = registerDevice();
+        AgentSession session = liveSession(deviceId);
+        DeviceCommand cmd = persistedCommand(deviceId, DeviceCommandStatus.RUNNING);
+
+        dispatcher.onAck(ack(cmd), session);
+
+        assertEquals(DeviceCommandStatus.RUNNING, db.row(cmd.getId()).getStatus());
+        verify(events, never()).commandAcked(any());
+    }
+
+    @Test
+    void onAck_repeatedAckPublishesOnce() {
+        UUID deviceId = registerDevice();
+        AgentSession session = liveSession(deviceId);
+        DeviceCommand cmd = persistedCommand(deviceId, DeviceCommandStatus.DELIVERED);
+
+        dispatcher.onAck(ack(cmd), session);
+        dispatcher.onAck(ack(cmd), session);
+
+        verify(events, times(1)).commandAcked(any());
+    }
+
+    /** A progress frame overtakes the ack: the later ack must not undo RUNNING. */
+    @Test
+    void onAck_afterProgressDoesNotRegress() {
+        UUID deviceId = registerDevice();
+        AgentSession session = liveSession(deviceId);
+        DeviceCommand cmd = persistedCommand(deviceId, DeviceCommandStatus.DELIVERED);
+        CommandProgressFrame progress = new CommandProgressFrame();
+        progress.setCommandId(cmd.getId());
+        dispatcher.onProgress(progress, session);
+
+        dispatcher.onAck(ack(cmd), session);
+
+        assertEquals(DeviceCommandStatus.RUNNING, db.row(cmd.getId()).getStatus());
     }
 
     @Test
@@ -155,13 +355,86 @@ class CommandDispatcherTest {
         AgentSession sessionB = liveSession(deviceB);
         DeviceCommand cmdForA = persistedCommand(deviceA, DeviceCommandStatus.DELIVERED);
 
-        CommandAckFrame ack = new CommandAckFrame();
-        ack.setCommandId(cmdForA.getId());
-        dispatcher.onAck(ack, sessionB);
+        dispatcher.onAck(ack(cmdForA), sessionB);
 
-        assertEquals(DeviceCommandStatus.DELIVERED, cmdForA.getStatus());
+        assertEquals(DeviceCommandStatus.DELIVERED, db.row(cmdForA.getId()).getStatus());
         verify(events, never()).commandAcked(any());
     }
+
+    @Test
+    void onProgress_marksRunningOnceAndPublishesEveryFrame() {
+        UUID deviceId = registerDevice();
+        AgentSession session = liveSession(deviceId);
+        DeviceCommand cmd = persistedCommand(deviceId, DeviceCommandStatus.ACKED);
+        CommandProgressFrame progress = new CommandProgressFrame();
+        progress.setCommandId(cmd.getId());
+
+        dispatcher.onProgress(progress, session);
+        Instant startedAt = db.row(cmd.getId()).getStartedAt();
+        dispatcher.onProgress(progress, session);
+
+        assertEquals(DeviceCommandStatus.RUNNING, db.row(cmd.getId()).getStatus());
+        assertEquals(startedAt, db.row(cmd.getId()).getStartedAt());
+        verify(events, times(2)).commandProgress(any(), eq(progress));
+        verify(commandRepo, times(1)).markRunning(any(), any());
+    }
+
+    @Test
+    void onProgress_ignoresTerminalCommands() {
+        UUID deviceId = registerDevice();
+        AgentSession session = liveSession(deviceId);
+        DeviceCommand cmd = persistedCommand(deviceId, DeviceCommandStatus.TIMEOUT);
+        CommandProgressFrame progress = new CommandProgressFrame();
+        progress.setCommandId(cmd.getId());
+
+        dispatcher.onProgress(progress, session);
+
+        assertEquals(DeviceCommandStatus.TIMEOUT, db.row(cmd.getId()).getStatus());
+        verify(events, never()).commandProgress(any(), any());
+    }
+
+    // ── frames about commands we do not have ──────────────────────────────
+
+    @Test
+    void frameForAnUnknownCommand_isLoggedAtWarnNotSilentlyDropped() {
+        UUID deviceId = registerDevice();
+        AgentSession session = liveSession(deviceId);
+        UUID missing = UUID.randomUUID();
+
+        CommandAckFrame ack = new CommandAckFrame();
+        ack.setCommandId(missing);
+        dispatcher.onAck(ack, session);
+        CommandProgressFrame progress = new CommandProgressFrame();
+        progress.setCommandId(missing);
+        dispatcher.onProgress(progress, session);
+        CommandResultFrame result = new CommandResultFrame();
+        result.setCommandId(missing);
+        result.setStatus("ok");
+        dispatcher.onResult(result, session);
+
+        List<ILoggingEvent> warnings = logs.list.stream()
+                .filter(e -> e.getLevel() == Level.WARN && e.getFormattedMessage().contains(missing.toString()))
+                .toList();
+        assertThat(warnings).hasSize(3);
+        assertThat(warnings).extracting(ILoggingEvent::getFormattedMessage)
+                .anyMatch(m -> m.contains("command_ack"))
+                .anyMatch(m -> m.contains("command_progress"))
+                .anyMatch(m -> m.contains("command_result"));
+        verifyNoInteractions(events);
+    }
+
+    @Test
+    void frameWithoutACommandId_isLoggedAtWarn() {
+        UUID deviceId = registerDevice();
+        AgentSession session = liveSession(deviceId);
+
+        dispatcher.onAck(new CommandAckFrame(), session);
+
+        assertThat(logs.list).anyMatch(e -> e.getLevel() == Level.WARN
+                && e.getFormattedMessage().contains("no commandId"));
+    }
+
+    // ── flush and expiry ──────────────────────────────────────────────────
 
     @Test
     void flushPending_deliversAllPendingCommands() {
@@ -170,13 +443,11 @@ class CommandDispatcherTest {
 
         DeviceCommand c1 = persistedCommand(deviceId, DeviceCommandStatus.PENDING);
         DeviceCommand c2 = persistedCommand(deviceId, DeviceCommandStatus.PENDING);
-        when(commandRepo.findByDeviceIdAndStatusOrderByIssuedAtAsc(deviceId, DeviceCommandStatus.PENDING))
-                .thenReturn(List.of(c1, c2));
 
         dispatcher.flushPending(deviceId, session);
 
-        assertEquals(DeviceCommandStatus.DELIVERED, c1.getStatus());
-        assertEquals(DeviceCommandStatus.DELIVERED, c2.getStatus());
+        assertEquals(DeviceCommandStatus.DELIVERED, db.row(c1.getId()).getStatus());
+        assertEquals(DeviceCommandStatus.DELIVERED, db.row(c2.getId()).getStatus());
         verify(events, times(2)).commandDelivered(any());
     }
 
@@ -189,17 +460,16 @@ class CommandDispatcherTest {
         DeviceCommand stale = persistedCommand(deviceId, DeviceCommandStatus.PENDING);
         stale.setKind("system.reboot");
         stale.setExpiresAt(Instant.now().minusSeconds(1));
-        when(commandRepo.findByDeviceIdAndStatusOrderByIssuedAtAsc(deviceId, DeviceCommandStatus.PENDING))
-                .thenReturn(List.of(stale, fresh));
 
         dispatcher.flushPending(deviceId, session);
 
-        assertEquals(DeviceCommandStatus.EXPIRED, stale.getStatus());
-        assertNotNull(stale.getFinishedAt());
-        assertNotNull(stale.getErrorMessage());
-        assertEquals(DeviceCommandStatus.DELIVERED, fresh.getStatus());
+        DeviceCommand expired = db.row(stale.getId());
+        assertEquals(DeviceCommandStatus.EXPIRED, expired.getStatus());
+        assertNotNull(expired.getFinishedAt());
+        assertNotNull(expired.getErrorMessage());
+        assertEquals(DeviceCommandStatus.DELIVERED, db.row(fresh.getId()).getStatus());
         verify(events, times(1)).commandDelivered(any());
-        verify(events, times(1)).commandTerminated(eq(stale));
+        verify(events, times(1)).commandTerminated(any());
     }
 
     @Test
@@ -210,12 +480,25 @@ class CommandDispatcherTest {
         // Rows written before expiry support carry a null expiresAt.
         DeviceCommand legacy = persistedCommand(deviceId, DeviceCommandStatus.PENDING);
         legacy.setExpiresAt(null);
-        when(commandRepo.findByDeviceIdAndStatusOrderByIssuedAtAsc(deviceId, DeviceCommandStatus.PENDING))
-                .thenReturn(List.of(legacy));
 
         dispatcher.flushPending(deviceId, session);
 
-        assertEquals(DeviceCommandStatus.DELIVERED, legacy.getStatus());
+        assertEquals(DeviceCommandStatus.DELIVERED, db.row(legacy.getId()).getStatus());
+    }
+
+    @Test
+    void expire_doesNothingWhenTheCommandWasDeliveredInTheMeantime() {
+        UUID deviceId = registerDevice();
+        DeviceCommand cmd = persistedCommand(deviceId, DeviceCommandStatus.PENDING);
+        cmd.setExpiresAt(Instant.now().minusSeconds(1));
+        DeviceCommand staleCopy = CommandDbFake.copy(cmd);
+        cmd.setStatus(DeviceCommandStatus.DELIVERED); // the stored row moved on
+
+        boolean expired = dispatcher.expire(staleCopy, Instant.now());
+
+        assertFalse(expired);
+        assertEquals(DeviceCommandStatus.DELIVERED, db.row(cmd.getId()).getStatus());
+        verify(events, never()).commandTerminated(any());
     }
 
     @Test
@@ -256,8 +539,9 @@ class CommandDispatcherTest {
                 .build();
     }
 
+    /** Inserts a row into the fake database and returns the stored instance. */
     private DeviceCommand persistedCommand(UUID deviceId, DeviceCommandStatus status) {
-        DeviceCommand cmd = DeviceCommand.builder()
+        return db.insert(DeviceCommand.builder()
                 .id(UUID.randomUUID())
                 .deviceId(deviceId)
                 .kind("chrome.reload")
@@ -267,9 +551,13 @@ class CommandDispatcherTest {
                 .status(status)
                 .issuedAt(Instant.now())
                 .expiresAt(Instant.now().plusSeconds(300))
-                .build();
-        when(commandRepo.findById(cmd.getId())).thenReturn(Optional.of(cmd));
-        return cmd;
+                .build());
+    }
+
+    private static CommandAckFrame ack(DeviceCommand cmd) {
+        CommandAckFrame ack = new CommandAckFrame();
+        ack.setCommandId(cmd.getId());
+        return ack;
     }
 
     private AgentSession liveSession(UUID deviceId) {
