@@ -14,6 +14,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,8 +33,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
  *   <li>The {@code @Value} default for {@code ratelimit.requests} is <b>10</b>, not 100.
  *       Tests set the limit explicitly via reflection so they don't depend on the default.</li>
  *   <li>Exempt-role detection reads from the {@link SecurityContextHolder}, not the request.</li>
- *   <li>Per-client isolation keys on {@code X-Forwarded-For} (first hop) falling back to
- *       {@code remoteAddr}.</li>
+ *   <li>Per-client isolation keys on {@code remoteAddr} only; X-Forwarded-For is resolved by
+ *       Spring's forward-headers strategy, never read here.</li>
  *   <li>On a successful pass-through an {@code X-Rate-Limit-Remaining} header is added; on a
  *       block the status is set to 429 and a plain-text body is written (chain not invoked).</li>
  * </ul>
@@ -48,7 +49,7 @@ class RateLimitingFilterTest {
         filter = new RateLimitingFilter();
         ReflectionTestUtils.setField(filter, "maxRequests", 3);
         ReflectionTestUtils.setField(filter, "durationMinutes", 1);
-        ReflectionTestUtils.setField(filter, "exemptRoles", List.of(Role.ROOT, Role.ADMIN));
+        ReflectionTestUtils.setField(filter, "exemptRoles", List.of("ROOT", "ADMIN"));
     }
 
     @AfterEach
@@ -80,23 +81,40 @@ class RateLimitingFilterTest {
         assertThat(response.getHeader("X-Rate-Limit-Remaining")).isEqualTo("2");
     }
 
-    // @Test
-    // void requestsOverLimitReturn429AndDoNotInvokeChain() throws Exception {
-    //     FilterChain chain = mock(FilterChain.class);
+    @Test
+    void requestsOverLimitReturn429WithUtf8BodyAndRetryAfter() throws Exception {
+        FilterChain chain = mock(FilterChain.class);
 
-    //     // Limit is 3: first three consume, fourth is blocked.
-    //     for (int i = 0; i < 3; i++) {
-    //         filter.doFilter(requestFromIp("10.0.0.2"), new MockHttpServletResponse(), chain);
-    //     }
+        // Limit is 3: first three consume, fourth is blocked.
+        for (int i = 0; i < 3; i++) {
+            filter.doFilter(requestFromIp("10.0.0.2"), new MockHttpServletResponse(), chain);
+        }
 
-    //     MockHttpServletResponse blocked = new MockHttpServletResponse();
-    //     filter.doFilter(requestFromIp("10.0.0.2"), blocked, chain);
+        MockHttpServletResponse blocked = new MockHttpServletResponse();
+        filter.doFilter(requestFromIp("10.0.0.2"), blocked, chain);
 
-    //     verify(chain, times(3)).doFilter(any(), any());
-    //     assertThat(blocked.getStatus()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS.value());
-    //     assertThat(blocked.getContentAsString()).isEqualTo("Too many requests – please try again later.");
-    //     assertThat(blocked.getHeader("X-Rate-Limit-Remaining")).isNull();
-    // }
+        verify(chain, times(3)).doFilter(any(), any());
+        assertThat(blocked.getStatus()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS.value());
+        assertThat(blocked.getContentType()).isEqualTo("text/plain;charset=UTF-8");
+        assertThat(blocked.getContentAsString(StandardCharsets.UTF_8))
+                .isEqualTo("Too many requests \u2013 please try again later.");
+        assertThat(blocked.getHeader("X-Rate-Limit-Remaining")).isNull();
+        // One-minute window: the wait is between 1 and 61 seconds.
+        assertThat(Long.parseLong(blocked.getHeader("Retry-After"))).isBetween(1L, 61L);
+    }
+
+    @Test
+    void exemptRolesAcceptTheRolePrefixAsDocumentedInTheExampleProperties() throws Exception {
+        ReflectionTestUtils.setField(filter, "exemptRoles", List.of("ROLE_ROOT", "ROLE_ADMIN"));
+        authenticateWith(Role.ADMIN);
+        FilterChain chain = mock(FilterChain.class);
+
+        for (int i = 0; i < 10; i++) {
+            filter.doFilter(requestFromIp("10.0.0.6"), new MockHttpServletResponse(), chain);
+        }
+
+        verify(chain, times(10)).doFilter(any(), any());
+    }
 
     @Test
     void rootRoleIsExemptFromRateLimiting() throws Exception {
@@ -164,19 +182,18 @@ class RateLimitingFilterTest {
     }
 
     @Test
-    void clientIpIsTakenFromXForwardedForFirstHop() throws Exception {
+    void xForwardedForIsIgnoredSoClientsCannotRotateTheirBucket() throws Exception {
         FilterChain chain = mock(FilterChain.class);
 
-        // Two requests with different remoteAddr but the same X-Forwarded-For client
-        // share a bucket, proving the forwarded header is the bucket key.
+        // Same socket peer, a different spoofed X-Forwarded-For on every request: still one bucket.
         for (int i = 0; i < 3; i++) {
             MockHttpServletRequest request = requestFromIp("10.0.0.99");
-            request.addHeader("X-Forwarded-For", "203.0.113.7, 10.0.0.99");
+            request.addHeader("X-Forwarded-For", "203.0.113." + i);
             filter.doFilter(request, new MockHttpServletResponse(), chain);
         }
 
-        MockHttpServletRequest blockedReq = requestFromIp("10.0.0.100");
-        blockedReq.addHeader("X-Forwarded-For", "203.0.113.7, 10.0.0.100");
+        MockHttpServletRequest blockedReq = requestFromIp("10.0.0.99");
+        blockedReq.addHeader("X-Forwarded-For", "198.51.100.200");
         MockHttpServletResponse blocked = new MockHttpServletResponse();
         filter.doFilter(blockedReq, blocked, chain);
 
