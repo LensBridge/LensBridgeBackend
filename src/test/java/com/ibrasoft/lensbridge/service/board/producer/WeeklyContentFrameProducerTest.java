@@ -97,6 +97,15 @@ class WeeklyContentFrameProducerTest {
         assertThat(config.getKind()).isEqualTo(IslamicQuoteFrameConfig.Kind.HADITH);
     }
 
+    /** The mapping is by name, so a constant added to one enum only fails here, not silently as HADITH. */
+    @Test
+    void everyQuoteKindHasAFrameKindOfTheSameName() {
+        for (IslamicQuote.Kind kind : IslamicQuote.Kind.values()) {
+            assertThat(WeeklyContentFrameProducer.frameKind(kind).name()).isEqualTo(kind.name());
+        }
+        assertThat(IslamicQuoteFrameConfig.Kind.values()).hasSameSizeAs(IslamicQuote.Kind.values());
+    }
+
     @Test
     void nullKindQuoteFallsBackToHadith() {
         WeeklyContent content = WeeklyContent.builder()

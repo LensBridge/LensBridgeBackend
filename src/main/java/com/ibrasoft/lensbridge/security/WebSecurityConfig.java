@@ -88,7 +88,6 @@ public class WebSecurityConfig {
             .requestMatchers("/api/gallery/**").permitAll()
             .requestMatchers("/api/auth/**").permitAll()
             .requestMatchers("/api/events/**").permitAll()
-            .requestMatchers("/api/musallah/**").permitAll()
             .requestMatchers("/api/refresh-musallahboard").permitAll()
             .requestMatchers("/api/agent/enroll").permitAll()
             .requestMatchers("/api/agent/ws").permitAll()

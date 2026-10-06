@@ -16,10 +16,9 @@ import java.util.List;
 /**
  * Emits one SOCIALS frame per social account promoted to this board's audience.
  * <p>
- * This replaced a single hardcoded Instagram frame whose QR destination was read client-side
- * from a since-removed {@code socialUrl} board-config field. Every field a social frame renders — platform, URL,
- * copy, duration — is now backend data, so a board can promote several accounts and an
- * operator can change any of them without a frontend deploy.
+ * Every field a social frame renders (platform, URL, copy, duration) is stored backend data, so
+ * a board can promote several accounts and an operator can change any of them without a
+ * frontend deploy.
  */
 @Component
 @RequiredArgsConstructor
