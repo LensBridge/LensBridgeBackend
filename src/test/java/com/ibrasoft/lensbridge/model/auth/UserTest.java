@@ -93,4 +93,21 @@ class UserTest {
         assertThat(user.getPassword()).isEqualTo("secret-hash");
         assertThat(user.getPasswordHash()).isEqualTo("secret-hash");
     }
+
+    @Test
+    void toStringNeverContainsThePasswordHashOrTheLazyPermissionSet() {
+        User user = new User("A", "B", "1", "a@b.ca", "secret-hash");
+        user.addDirectPermission(Permission.IAM_ROLE_GRANT);
+
+        assertThat(user.toString()).doesNotContain("secret-hash").doesNotContain("IAM_ROLE_GRANT");
+    }
+
+    @Test
+    void equalsAndHashCodeIgnoreTheLazyDirectPermissions() {
+        User a = new User("A", "B", "1", "a@b.ca", "h");
+        User b = new User("A", "B", "1", "a@b.ca", "h");
+        b.addDirectPermission(Permission.IAM_ROLE_GRANT);
+
+        assertThat(a).isEqualTo(b).hasSameHashCodeAs(b);
+    }
 }
