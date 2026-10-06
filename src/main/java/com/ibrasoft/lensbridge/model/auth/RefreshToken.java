@@ -29,6 +29,7 @@ public class RefreshToken {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
     
+    /** SHA-256 hex of the token the client holds; the raw value is never stored. */
     @NotBlank
     @Column(nullable = false, unique = true)
     private String tokenHash;
@@ -48,10 +49,6 @@ public class RefreshToken {
     
     @Column(nullable = false)
     private boolean revoked;
-
-    public String getToken() {
-        return tokenHash;
-    }
 
     public UUID getUserId() {
         return user != null ? user.getId() : null;

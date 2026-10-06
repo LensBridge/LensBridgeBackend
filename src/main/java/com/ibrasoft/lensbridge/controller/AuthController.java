@@ -1,8 +1,6 @@
 package com.ibrasoft.lensbridge.controller;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -10,7 +8,6 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 
 import lombok.RequiredArgsConstructor;
@@ -22,7 +19,6 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import com.ibrasoft.lensbridge.dto.auth.request.ChangePasswordRequest;
@@ -37,9 +33,7 @@ import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
 import com.ibrasoft.lensbridge.dto.auth.response.TokenRefreshResponse;
 import com.ibrasoft.lensbridge.dto.auth.response.TokenValidationResponse;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
-import com.ibrasoft.lensbridge.exception.RefreshTokenException;
 import com.ibrasoft.lensbridge.model.auth.Permission;
-import com.ibrasoft.lensbridge.model.auth.RefreshToken;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.model.auth.User;
 import com.ibrasoft.lensbridge.security.services.AuthorityResolver;
@@ -71,8 +65,7 @@ public class AuthController {
                     content = @Content(schema = @Schema(implementation = MessageResponse.class)))
     })
     @PostMapping("/signin")
-    public ResponseEntity<JwtResponse> authenticateUser(@Valid @RequestBody LoginRequest loginRequest,
-                                              HttpServletRequest request) {
+    public ResponseEntity<JwtResponse> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
         String clientKey = loginRequest.getEmail();
 
         if (loginAttemptService.isBlocked(clientKey)) {
@@ -84,19 +77,14 @@ public class AuthController {
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(loginRequest.getEmail(), loginRequest.getPassword()));
 
-            SecurityContextHolder.getContext().setAuthentication(authentication);
-
             User user = userService.findByEmail(authentication.getName())
                     .orElseThrow(() -> new RuntimeException("Authenticated user not found in database"));
 
             loginAttemptService.recordSuccessfulAttempt(clientKey);
 
-            String jwt = jwtUtils.generateJwtToken(authentication);
-            RefreshToken refreshToken = refreshTokenService.createRefreshToken(
-                    user.getId(), request.getHeader("User-Agent"), getClientIpAddress(request));
+            String jwt = jwtUtils.generateJwtToken(authentication.getName());
+            RefreshTokenService.IssuedToken refreshToken = refreshTokenService.createRefreshToken(user.getId());
 
-            // TODO: This is probably slow and should be fitted in the data model somewhere
-            // Replace with a more efficient way to get roles and permissions if performance becomes an issue
             List<String> authorities = authentication.getAuthorities().stream()
                     .map(GrantedAuthority::getAuthority)
                     .toList();
@@ -109,7 +97,7 @@ public class AuthController {
                     .collect(Collectors.toList());
 
             return ResponseEntity.ok(new JwtResponse(jwt,
-                    refreshToken.getTokenHash(),
+                    refreshToken.rawToken(),
                     user.getFirstName(),
                     user.getLastName(),
                     user.getId(),
@@ -229,27 +217,12 @@ public class AuthController {
     })
     @PostMapping("/refresh-token")
     public ResponseEntity<TokenRefreshResponse> refreshToken(@Valid @RequestBody TokenRefreshRequest request) {
-        String requestRefreshToken = request.getRefreshToken();
+        // Verification, revocation and re-issue happen in one transaction (see rotate), so two
+        // concurrent refreshes with the same token cannot both succeed.
+        RefreshTokenService.IssuedToken rotated = refreshTokenService.rotate(request.getRefreshToken());
+        String newAccessToken = jwtUtils.generateJwtToken(rotated.entity().getUser().getEmail());
 
-        RefreshToken refreshToken = refreshTokenService.findByToken(requestRefreshToken)
-                .orElseThrow(() -> new RefreshTokenException(
-                        "Refresh token not found. Please login again.", HttpStatus.UNAUTHORIZED));
-
-        RefreshToken verifiedToken = refreshTokenService.verifyExpiration(refreshToken);
-
-        UUID userId = verifiedToken.getUserId();
-        User user = userService.findById(userId)
-                .orElseThrow(() -> new RefreshTokenException(
-                        "User not found. Please login again.", HttpStatus.UNAUTHORIZED));
-
-        List<GrantedAuthority> authorities = new ArrayList<>(user.getRoles());
-        Authentication auth = new UsernamePasswordAuthenticationToken(user.getEmail(), null, authorities);
-        String newAccessToken = jwtUtils.generateJwtToken(auth);
-
-        refreshTokenService.revokeRefreshToken(requestRefreshToken);
-        RefreshToken newRefreshToken = refreshTokenService.createRefreshToken(userId, "Token refresh", "System");
-
-        return ResponseEntity.ok(new TokenRefreshResponse(newAccessToken, newRefreshToken.getToken()));
+        return ResponseEntity.ok(new TokenRefreshResponse(newAccessToken, rotated.rawToken()));
     }
 
     @Operation(operationId = "logout",
@@ -304,13 +277,5 @@ public class AuthController {
                 authorityResolver.resolvePermissions(user).stream()
                         .map(Permission::getAuthority).sorted().collect(Collectors.toList())
         ));
-    }
-
-    private String getClientIpAddress(HttpServletRequest request) {
-        String xForwardedFor = request.getHeader("X-Forwarded-For");
-        if (xForwardedFor == null) {
-            return request.getRemoteAddr();
-        }
-        return xForwardedFor.split(",")[0].trim();
     }
 }

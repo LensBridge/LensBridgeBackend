@@ -10,6 +10,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -21,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -173,6 +175,57 @@ class VerificationTokenServiceTest {
 
         String expectedHash = sha256Hex(plaintext);
         assertThat(captor.getValue().getTokenHash()).isEqualTo(expectedHash);
+    }
+
+    @Test
+    void generatingATokenInvalidatesEarlierOutstandingTokensOfTheSameType() {
+        when(authTokenProperties.getPasswordResetExpirationMs()).thenReturn(900_000L);
+
+        service.generatePasswordResetToken(user);
+
+        InOrder order = inOrder(tokenRepository);
+        order.verify(tokenRepository).markOutstandingUsed(eq(user), eq(TokenType.PASSWORD_RESET), any(Instant.class));
+        order.verify(tokenRepository).save(any(VerificationToken.class));
+    }
+
+    @Test
+    void consumingAResetTokenInvalidatesTheUsersOtherOutstandingResetTokens() {
+        VerificationToken token = VerificationToken.builder()
+                .tokenHash("h").user(user).type(TokenType.PASSWORD_RESET)
+                .createdAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60)).build();
+        when(tokenRepository.findValidToken(any(), eq(TokenType.PASSWORD_RESET), any()))
+                .thenReturn(Optional.of(token));
+
+        service.consumePasswordReset("plain");
+
+        verify(tokenRepository).markOutstandingUsed(eq(user), eq(TokenType.PASSWORD_RESET), any(Instant.class));
+    }
+
+    @Test
+    void consumingAVerificationTokenInvalidatesTheUsersOtherOutstandingVerificationTokens() {
+        VerificationToken token = VerificationToken.builder()
+                .tokenHash("h").user(user).type(TokenType.EMAIL_VERIFICATION)
+                .createdAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60)).build();
+        when(tokenRepository.findValidToken(any(), eq(TokenType.EMAIL_VERIFICATION), any()))
+                .thenReturn(Optional.of(token));
+
+        service.consumeEmailVerification("plain");
+
+        verify(tokenRepository).markOutstandingUsed(eq(user), eq(TokenType.EMAIL_VERIFICATION), any(Instant.class));
+    }
+
+    @Test
+    void purgeBulkDeletesExpiredAndUsedTokens() {
+        service.purgeExpiredAndUsedTokens();
+
+        verify(tokenRepository).deleteExpiredOrUsed(any(Instant.class));
+    }
+
+    @Test
+    void purgeSwallowsRepositoryFailuresSoTheSchedulerKeepsRunning() {
+        when(tokenRepository.deleteExpiredOrUsed(any())).thenThrow(new IllegalStateException("db down"));
+
+        service.purgeExpiredAndUsedTokens();
     }
 
     private static String sha256Hex(String input) {

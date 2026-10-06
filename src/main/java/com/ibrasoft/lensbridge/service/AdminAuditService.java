@@ -71,10 +71,6 @@ public class AdminAuditService {
         return auditEventRepository.findAllByOrderByTimestampDesc(pageable).map(this::toDto);
     }
 
-    public List<AuditEventDto> getAuditEventsByAdmin(UUID adminId) {
-        return auditEventRepository.findByAdminIdOrderByTimestampDesc(adminId).stream().map(this::toDto).toList();
-    }
-
     public List<AuditEventDto> getAuditEventsByEntity(String entityType, UUID entityId) {
         return auditEventRepository.findByTargetEntityTypeAndTargetEntityIdOrderByTimestampDesc(toEntityType(entityType), entityId).stream().map(this::toDto).toList();
     }
@@ -103,24 +99,29 @@ public class AdminAuditService {
                 event.getIpAddress(), event.getUserAgent());
     }
 
-    // Statistics methods
-    public long getOperationCountByAdmin(UUID adminId) {
-        return auditEventRepository.countByAdminId(adminId);
-    }
-
-    public long getOperationCountByAction(AuditAction action) {
-        return auditEventRepository.countByAction(action);
-    }
-
+    /**
+     * Maps the free-text entity name callers pass to the stored {@link AuditEntityType}.
+     * <p>
+     * Board content (posters, calendar events, social promotions and the like) is all filed
+     * under MUSALLAH_BOARD. A name that is not recognised still falls back to EVENT, because
+     * the column cannot be null, but it is logged: a silent fallback is how promotable social
+     * media audits ended up filed as events without anyone noticing.
+     */
     private AuditEntityType toEntityType(String entityType) {
-        if (entityType == null) return AuditEntityType.EVENT;
+        if (entityType == null) {
+            log.warn("Audit entity type missing; recording as EVENT");
+            return AuditEntityType.EVENT;
+        }
         return switch (entityType.toLowerCase()) {
             case "user" -> AuditEntityType.USER;
             case "upload" -> AuditEntityType.UPLOAD;
             case "poster", "calendarevent", "boardevent", "musallah board",
-                 "boardconfig", "weeklycontent" -> AuditEntityType.MUSALLAH_BOARD;
+                 "boardconfig", "weeklycontent", "promotablesocialmedia" -> AuditEntityType.MUSALLAH_BOARD;
             case "device" -> AuditEntityType.DEVICE;
-            default -> AuditEntityType.EVENT;
+            default -> {
+                log.warn("Unrecognised audit entity type '{}'; recording as EVENT", entityType);
+                yield AuditEntityType.EVENT;
+            }
         };
     }
 }
