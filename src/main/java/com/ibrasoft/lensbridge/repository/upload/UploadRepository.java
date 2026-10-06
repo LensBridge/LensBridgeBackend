@@ -28,6 +28,11 @@ public interface UploadRepository extends JpaRepository<Upload, UUID> {
 
     Page<Upload> findByMediaEventAndDeletedAtIsNull(MediaEvent mediaEvent, Pageable pageable);
 
+    Page<Upload> findByMediaEventAndUploadedByAndDeletedAtIsNull(MediaEvent mediaEvent, User uploadedBy, Pageable pageable);
+
+    /** Includes soft-deleted rows: an object key is never reused, even after its upload is deleted. */
+    boolean existsByFileUrl(String fileUrl);
+
     Page<Upload> findByApprovedAndDeletedAtIsNull(boolean approved, Pageable pageable);
 
     Page<Upload> findByFeaturedAndDeletedAtIsNull(boolean featured, Pageable pageable);
