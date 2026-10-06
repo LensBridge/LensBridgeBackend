@@ -12,4 +12,10 @@ public class ImageProcessingProperties {
     private int thumbnailHeight;
     private double thumbnailQuality;
     private String thumbnailFolder;
+
+    /**
+     * Source images with more pixels than this get no thumbnail. Decoding allocates roughly
+     * four bytes per pixel, so the default 50 megapixels is about 200 MB of heap per image.
+     */
+    private long maxSourcePixels = 50_000_000L;
 }
