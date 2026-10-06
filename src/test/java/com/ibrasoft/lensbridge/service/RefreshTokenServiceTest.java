@@ -5,6 +5,7 @@ import com.ibrasoft.lensbridge.model.auth.RefreshToken;
 import com.ibrasoft.lensbridge.model.auth.User;
 import com.ibrasoft.lensbridge.repository.auth.RefreshTokenRepository;
 import com.ibrasoft.lensbridge.repository.auth.UserRepository;
+import com.ibrasoft.lensbridge.security.TokenHasher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -12,6 +13,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
@@ -22,10 +24,9 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -67,12 +68,11 @@ class RefreshTokenServiceTest {
 
     @Test
     void createRefreshTokenSetsExpiryFromDurationProperty() {
-        when(refreshTokenRepository.findByUser_Id(userId)).thenReturn(List.of());
         when(refreshTokenRepository.countByUser_IdAndRevokedFalse(userId)).thenReturn(0L);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
         Instant before = Instant.now();
-        RefreshToken created = service.createRefreshToken(userId, "device", "1.2.3.4");
+        RefreshToken created = service.createRefreshToken(userId).entity();
 
         long ttlSeconds = created.getExpiryDate().getEpochSecond() - before.getEpochSecond();
         assertThat(ttlSeconds).isCloseTo(604_800L, org.assertj.core.data.Offset.offset(5L));
@@ -81,28 +81,41 @@ class RefreshTokenServiceTest {
     }
 
     @Test
+    void createRefreshTokenStoresOnlyTheHashAndReturnsTheRawToken() {
+        when(refreshTokenRepository.countByUser_IdAndRevokedFalse(userId)).thenReturn(0L);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        RefreshTokenService.IssuedToken issued = service.createRefreshToken(userId);
+
+        assertThat(issued.rawToken()).isNotBlank();
+        assertThat(issued.entity().getTokenHash())
+                .isEqualTo(TokenHasher.sha256Hex(issued.rawToken()))
+                .isNotEqualTo(issued.rawToken());
+        ArgumentCaptor<RefreshToken> saved = ArgumentCaptor.forClass(RefreshToken.class);
+        verify(refreshTokenRepository).save(saved.capture());
+        assertThat(saved.getValue().getTokenHash()).doesNotContain(issued.rawToken());
+    }
+
+    @Test
     void createRefreshTokenRevokesOldestWhenAtMaxLimit() {
         RefreshToken oldest = token(Instant.now().minusSeconds(1000), false);
         RefreshToken newer = token(Instant.now().minusSeconds(10), false);
-        when(refreshTokenRepository.findByUser_Id(userId)).thenReturn(List.of());
         when(refreshTokenRepository.countByUser_IdAndRevokedFalse(userId)).thenReturn(5L);
         when(refreshTokenRepository.findByUser_IdAndRevokedFalse(userId)).thenReturn(List.of(newer, oldest));
-        when(refreshTokenRepository.findByTokenHash(oldest.getTokenHash())).thenReturn(Optional.of(oldest));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
-        service.createRefreshToken(userId, "device", "1.2.3.4");
+        service.createRefreshToken(userId);
 
-        assertThat(oldest.isRevoked()).isTrue();
-        assertThat(newer.isRevoked()).isFalse();
+        verify(refreshTokenRepository).revokeIfActive(oldest.getTokenHash());
+        verify(refreshTokenRepository, never()).revokeIfActive(newer.getTokenHash());
     }
 
     @Test
     void createRefreshTokenDoesNotRevokeWhenUnderLimit() {
-        when(refreshTokenRepository.findByUser_Id(userId)).thenReturn(List.of());
         when(refreshTokenRepository.countByUser_IdAndRevokedFalse(userId)).thenReturn(4L);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
-        service.createRefreshToken(userId, "device", "1.2.3.4");
+        service.createRefreshToken(userId);
 
         // findByUser_IdAndRevokedFalse only called for revocation path; under limit -> not called
         verify(refreshTokenRepository, never()).findByUser_IdAndRevokedFalse(userId);
@@ -110,133 +123,115 @@ class RefreshTokenServiceTest {
 
     @Test
     void createRefreshTokenThrowsWhenUserNotFound() {
-        when(refreshTokenRepository.findByUser_Id(userId)).thenReturn(List.of());
         when(refreshTokenRepository.countByUser_IdAndRevokedFalse(userId)).thenReturn(0L);
         when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.createRefreshToken(userId, "device", "ip"))
+        assertThatThrownBy(() -> service.createRefreshToken(userId))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("User not found");
     }
 
     @Test
-    void verifyExpirationRejectsRevokedTokenAndDeletesIt() {
+    void rotateRevokesPresentedTokenAndIssuesReplacement() {
+        String raw = "raw-token";
+        String hash = TokenHasher.sha256Hex(raw);
+        RefreshToken stored = token(Instant.now().minusSeconds(60), false);
+        stored.setTokenHash(hash);
+        when(refreshTokenRepository.findByTokenHash(hash)).thenReturn(Optional.of(stored));
+        when(refreshTokenRepository.revokeIfActive(hash)).thenReturn(1);
+        when(refreshTokenRepository.countByUser_IdAndRevokedFalse(userId)).thenReturn(1L);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        RefreshTokenService.IssuedToken rotated = service.rotate(raw);
+
+        assertThat(rotated.rawToken()).isNotEqualTo(raw);
+        assertThat(rotated.entity().getUserId()).isEqualTo(userId);
+        verify(refreshTokenRepository).revokeIfActive(hash);
+        verify(refreshTokenRepository, never()).revokeAllActiveForUser(any());
+    }
+
+    @Test
+    void rotateRejectsUnknownToken() {
+        when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.rotate("nope"))
+                .isInstanceOf(RefreshTokenException.class)
+                .hasMessageContaining("not found");
+        verify(refreshTokenRepository, never()).revokeAllActiveForUser(any());
+    }
+
+    @Test
+    void rotateOfRevokedTokenRevokesEveryTokenOfTheUserAndKeepsTheRevokedRow() {
+        String raw = "replayed";
         RefreshToken revoked = token(Instant.now(), true);
+        when(refreshTokenRepository.findByTokenHash(TokenHasher.sha256Hex(raw))).thenReturn(Optional.of(revoked));
 
-        assertThatThrownBy(() -> service.verifyExpiration(revoked))
+        assertThatThrownBy(() -> service.rotate(raw))
                 .isInstanceOf(RefreshTokenException.class)
-                .hasMessageContaining("revoked");
-        verify(refreshTokenRepository).delete(revoked);
-    }
-
-    @Test
-    void verifyExpirationRejectsExpiredTokenAndDeletesIt() {
-        RefreshToken expired = token(Instant.now(), false);
-        expired.setExpiryDate(Instant.now().minusSeconds(60));
-
-        assertThatThrownBy(() -> service.verifyExpiration(expired))
-                .isInstanceOf(RefreshTokenException.class)
-                .hasMessageContaining("expired");
-        verify(refreshTokenRepository).delete(expired);
-    }
-
-    @Test
-    void verifyExpirationUpdatesLastUsedDateForValidToken() {
-        RefreshToken valid = token(Instant.now().minusSeconds(500), false);
-        Instant oldLastUsed = valid.getLastUsedDate();
-
-        RefreshToken result = service.verifyExpiration(valid);
-
-        assertThat(result.getLastUsedDate()).isAfter(oldLastUsed);
-        verify(refreshTokenRepository).save(valid);
-    }
-
-    @Test
-    void revokeRefreshTokenMarksTokenRevoked() {
-        RefreshToken t = token(Instant.now(), false);
-        when(refreshTokenRepository.findByTokenHash(t.getTokenHash())).thenReturn(Optional.of(t));
-
-        service.revokeRefreshToken(t.getTokenHash());
-
-        assertThat(t.isRevoked()).isTrue();
-        verify(refreshTokenRepository).save(t);
-    }
-
-    @Test
-    void revokeRefreshTokenIsNoOpForUnknownToken() {
-        when(refreshTokenRepository.findByTokenHash("nope")).thenReturn(Optional.empty());
-
-        service.revokeRefreshToken("nope");
-
+                .hasMessageContaining("revoked")
+                .extracting(e -> ((RefreshTokenException) e).getStatus())
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+        verify(refreshTokenRepository).revokeAllActiveForUser(userId);
+        // The revoked row must stay so a further replay is still recognised as reuse.
+        verify(refreshTokenRepository, never()).delete(any(RefreshToken.class));
         verify(refreshTokenRepository, never()).save(any());
     }
 
     @Test
-    void revokeAllUserTokensRevokesEveryActiveToken() {
-        RefreshToken a = token(Instant.now(), false);
-        RefreshToken b = token(Instant.now(), false);
-        when(refreshTokenRepository.findByUser_IdAndRevokedFalse(userId)).thenReturn(List.of(a, b));
+    void rotateThatLosesTheRaceFailsAsReplayAndRevokesEverything() {
+        String raw = "contended";
+        String hash = TokenHasher.sha256Hex(raw);
+        RefreshToken stored = token(Instant.now(), false);
+        when(refreshTokenRepository.findByTokenHash(hash)).thenReturn(Optional.of(stored));
+        when(refreshTokenRepository.revokeIfActive(hash)).thenReturn(0);
 
-        service.revokeAllUserTokens(userId);
-
-        assertThat(a.isRevoked()).isTrue();
-        assertThat(b.isRevoked()).isTrue();
-        verify(refreshTokenRepository).saveAll(anyList());
+        assertThatThrownBy(() -> service.rotate(raw))
+                .isInstanceOf(RefreshTokenException.class)
+                .hasMessageContaining("revoked");
+        verify(refreshTokenRepository).revokeAllActiveForUser(userId);
+        verify(refreshTokenRepository, never()).save(any());
     }
 
     @Test
-    void deleteExpiredTokensByUserDeletesExpiredAndRevoked() {
+    void rotateRejectsExpiredTokenAndDeletesIt() {
+        String raw = "old";
         RefreshToken expired = token(Instant.now(), false);
         expired.setExpiryDate(Instant.now().minusSeconds(60));
-        RefreshToken revoked = token(Instant.now(), true);
-        RefreshToken active = token(Instant.now(), false);
-        when(refreshTokenRepository.findByUser_Id(userId)).thenReturn(List.of(expired, revoked, active));
+        when(refreshTokenRepository.findByTokenHash(TokenHasher.sha256Hex(raw))).thenReturn(Optional.of(expired));
 
-        service.deleteExpiredTokensByUser(userId);
-
-        ArgumentCaptor<List<RefreshToken>> captor = ArgumentCaptor.forClass(List.class);
-        verify(refreshTokenRepository).deleteAll(captor.capture());
-        assertThat(captor.getValue()).containsExactlyInAnyOrder(expired, revoked);
+        assertThatThrownBy(() -> service.rotate(raw))
+                .isInstanceOf(RefreshTokenException.class)
+                .hasMessageContaining("expired");
+        verify(refreshTokenRepository).delete(expired);
+        verify(refreshTokenRepository, never()).revokeIfActive(any());
     }
 
     @Test
-    void deleteExpiredTokensByUserSkipsDeleteWhenNothingExpired() {
-        RefreshToken active = token(Instant.now(), false);
-        when(refreshTokenRepository.findByUser_Id(userId)).thenReturn(List.of(active));
+    void revokeRefreshTokenRevokesByHashOfTheRawToken() {
+        service.revokeRefreshToken("raw");
 
-        service.deleteExpiredTokensByUser(userId);
-
-        verify(refreshTokenRepository, never()).deleteAll(anyList());
+        verify(refreshTokenRepository).revokeIfActive(TokenHasher.sha256Hex("raw"));
     }
 
     @Test
-    void cleanupExpiredTokensDeletesByExpiryAndOldRevoked() {
-        RefreshToken oldRevoked = token(Instant.now().minusSeconds(99999), true);
-        when(refreshTokenRepository.findByRevokedTrueAndCreatedDateBefore(any()))
-                .thenReturn(List.of(oldRevoked));
+    void revokeAllUserTokensRevokesEveryActiveToken() {
+        service.revokeAllUserTokens(userId);
 
+        verify(refreshTokenRepository).revokeAllActiveForUser(userId);
+    }
+
+    @Test
+    void deleteExpiredTokensByUserOnlyDeletesExpiredSoReuseDetectionKeepsRevokedRows() {
+        service.deleteExpiredTokensByUser(userId);
+
+        verify(refreshTokenRepository).deleteExpiredForUser(eq(userId), any(Instant.class));
+    }
+
+    @Test
+    void cleanupExpiredTokensBulkDeletesExpiredAndOldRevoked() {
         service.cleanupExpiredTokens();
 
-        verify(refreshTokenRepository).deleteByExpiryDateBefore(any());
-        verify(refreshTokenRepository).deleteAll(List.of(oldRevoked));
-    }
-
-    @Test
-    void getActiveTokensForUserDelegatesToRepository() {
-        RefreshToken a = token(Instant.now(), false);
-        when(refreshTokenRepository.findByUser_IdAndRevokedFalse(userId)).thenReturn(List.of(a));
-
-        assertThat(service.getActiveTokensForUser(userId)).containsExactly(a);
-    }
-
-    @Test
-    void invalidateAllRefreshTokensForUserRevokesAndSaves() {
-        RefreshToken a = token(Instant.now(), false);
-        when(refreshTokenRepository.findByUser_IdAndRevokedFalse(userId)).thenReturn(List.of(a));
-
-        service.invalidateAllRefreshTokensForUser(userId);
-
-        assertThat(a.isRevoked()).isTrue();
-        verify(refreshTokenRepository, times(1)).saveAll(anyList());
+        verify(refreshTokenRepository).deleteExpired(any(Instant.class));
+        verify(refreshTokenRepository).deleteRevokedCreatedBefore(any(Instant.class));
     }
 }
