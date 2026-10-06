@@ -17,6 +17,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -165,6 +171,58 @@ class BoardStreamHandlerTest {
 
         handler.contentChanged("events");
 
+        assertThat(s.sent).isEmpty();
+    }
+
+    /**
+     * Pushes come from arbitrary admin request threads. The container throws when two threads
+     * write to one session at once, and that failure used to be swallowed, so a board silently
+     * missed its refresh. Writes to one board must never overlap and none may be lost.
+     */
+    @Test
+    void concurrentPushesToOneBoardNeverOverlapOnTheSocket() throws Exception {
+        UUID target = enrolled();
+        Session s = connect(target);
+        AtomicInteger inFlight = new AtomicInteger();
+        AtomicInteger maxInFlight = new AtomicInteger();
+        AtomicInteger written = new AtomicInteger();
+        doAnswer(inv -> {
+            maxInFlight.accumulateAndGet(inFlight.incrementAndGet(), Math::max);
+            Thread.sleep(1);
+            inFlight.decrementAndGet();
+            written.incrementAndGet();
+            return null;
+        }).when(s.ws).sendMessage(any());
+
+        int threads = 6;
+        int perThread = 20;
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        CountDownLatch go = new CountDownLatch(1);
+        List<Future<?>> done = new ArrayList<>();
+        for (int t = 0; t < threads; t++) {
+            done.add(pool.submit(() -> {
+                go.await();
+                for (int i = 0; i < perThread; i++) handler.configChanged(target);
+                return null;
+            }));
+        }
+        go.countDown();
+        for (Future<?> f : done) f.get(30, TimeUnit.SECONDS);
+        pool.shutdown();
+
+        assertThat(maxInFlight.get()).isEqualTo(1);
+        assertThat(written.get()).isEqualTo(threads * perThread);
+    }
+
+    @Test
+    void closeCallbackOfTheRawSessionStillRemovesItsWrapper() throws Exception {
+        UUID device = enrolled();
+        Session s = connect(device);
+
+        handler.afterConnectionClosed(s.ws, CloseStatus.NORMAL);
+        s.open = true; // a leftover registration would write to it
+
+        handler.configChanged(device);
         assertThat(s.sent).isEmpty();
     }
 

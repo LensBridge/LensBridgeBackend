@@ -7,16 +7,15 @@ import com.ibrasoft.lensbridge.model.board.Location;
 import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
 import com.ibrasoft.lensbridge.repository.sql.BoardConfigRepository;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 /**
  * Orchestrates the agent enrollment flow:
@@ -33,11 +32,12 @@ public class DeviceEnrollmentService {
 
     private static final int ED25519_PUBLIC_KEY_LEN = 32;
 
+    /** Width of {@code devices.display_name}; Postgres rejects longer values with a 500. */
+    private static final int MAX_DISPLAY_NAME_LENGTH = 255;
+
     private final EnrollmentTokenService enrollmentTokenService;
     private final DeviceRepository deviceRepository;
     private final BoardConfigRepository boardConfigRepository;
-
-    public record EnrollResult(Device device) {}
 
     public sealed interface Outcome {
         record Ok(Device device) implements Outcome {}
@@ -62,17 +62,14 @@ public class DeviceEnrollmentService {
             return new Outcome.InvalidPublicKey("expected 32 bytes, got " + publicKey.length);
         }
 
-        UUID provisionalDeviceId = UUID.randomUUID();
-        Optional<EnrollmentToken> consumed = enrollmentTokenService.consume(plaintextToken, provisionalDeviceId);
+        Optional<EnrollmentToken> consumed = enrollmentTokenService.consume(plaintextToken);
         if (consumed.isEmpty()) {
             return new Outcome.InvalidToken();
         }
         EnrollmentToken token = consumed.get();
 
         Device device = Device.builder()
-                .displayName(hostname != null && !hostname.isBlank()
-                        ? token.getDisplayName() + " (" + hostname + ")"
-                        : token.getDisplayName())
+                .displayName(displayNameFor(token, hostname))
                 .audience(token.getAudience())
                 .publicKey(publicKey)
                 .hardwareModel(hardwareModel)
@@ -83,7 +80,8 @@ public class DeviceEnrollmentService {
 
         Device saved = deviceRepository.save(device);
 
-        token.setConsumedByDeviceId(saved.getId());
+        // The id only exists now that the device is persisted; same transaction as the consume.
+        enrollmentTokenService.recordConsumer(token.getId(), saved.getId());
 
         DeviceConfig defaultConfig = DeviceConfig.builder()
                 .device(saved)
@@ -104,5 +102,13 @@ public class DeviceEnrollmentService {
         log.info("Enrolled device {} from token {} (issued by {})",
                 saved.getId(), token.getId(), token.getCreatedBy());
         return new Outcome.Ok(saved);
+    }
+
+    /** Token name plus the hostname the agent reported, clipped to the column. */
+    private static String displayNameFor(EnrollmentToken token, String hostname) {
+        String name = hostname != null && !hostname.isBlank()
+                ? token.getDisplayName() + " (" + hostname + ")"
+                : token.getDisplayName();
+        return name.length() <= MAX_DISPLAY_NAME_LENGTH ? name : name.substring(0, MAX_DISPLAY_NAME_LENGTH);
     }
 }

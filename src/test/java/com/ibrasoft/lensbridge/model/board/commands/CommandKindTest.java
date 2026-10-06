@@ -1,6 +1,5 @@
 package com.ibrasoft.lensbridge.model.board.commands;
 
-import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.ibrasoft.lensbridge.model.auth.Permission;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -14,26 +13,6 @@ import java.util.stream.Collectors;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class CommandKindTest {
-
-    /**
-     * The registry and the Jackson subtypes must describe the same set of commands. A kind
-     * registered with Jackson but missing here would be unclassifiable and therefore
-     * unauthorizable; a kind here but not with Jackson could never be deserialized.
-     */
-    @Test
-    void wireNamesMatchTheJacksonSubtypeRegistration() {
-        JsonSubTypes subTypes = CommandPayload.class.getAnnotation(JsonSubTypes.class);
-        assertThat(subTypes).as("CommandPayload must remain @JsonSubTypes-annotated").isNotNull();
-
-        Set<String> jackson = Arrays.stream(subTypes.value())
-                .map(JsonSubTypes.Type::name)
-                .collect(Collectors.toSet());
-        Set<String> registry = Arrays.stream(CommandKind.values())
-                .map(CommandKind::getWireName)
-                .collect(Collectors.toSet());
-
-        assertThat(registry).isEqualTo(jackson);
-    }
 
     @ParameterizedTest
     @EnumSource(CommandKind.class)

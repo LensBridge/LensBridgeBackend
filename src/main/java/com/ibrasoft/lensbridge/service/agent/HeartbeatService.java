@@ -6,10 +6,10 @@ import com.ibrasoft.lensbridge.model.board.DeviceTelemetry;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.repository.sql.DeviceTelemetryRepository;
 import com.ibrasoft.lensbridge.service.agent.events.DeviceEventPublisher;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.UUID;

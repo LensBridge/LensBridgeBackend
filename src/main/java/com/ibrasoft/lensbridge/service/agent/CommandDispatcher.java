@@ -20,13 +20,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -40,6 +41,14 @@ import java.util.UUID;
  *   <li><b>State machine:</b> consume ack/progress/result frames and advance the
  *       {@link DeviceCommandStatus} state machine.</li>
  * </ol>
+ * Nothing here holds a transaction open across a whole operation, on purpose. Every status
+ * change is a single conditional UPDATE in {@link DeviceCommandRepository} that commits on its
+ * own, and the side effects (the WebSocket write, the STOMP event) happen only after the
+ * write they announce is committed, through {@link AfterCommit}. That ordering is what lets a
+ * fast agent ack find the command row, and keeps an event from announcing a change that was
+ * rolled back. Because each change is conditional, a command that the reaper times out at the
+ * same instant its result arrives is decided by the database, and only the winner publishes.
+ * <p>
  * Idempotency: the agent dedupes by {@code commandId}, so re-sending a command after a
  * reconnect is safe — the agent re-emits a cached result.
  */
@@ -57,13 +66,21 @@ public class CommandDispatcher {
      */
     private static final Duration DEFAULT_TTL = Duration.ofMinutes(5);
 
+    /** Every status a result may still land on: anything that is not terminal. */
+    private static final Set<DeviceCommandStatus> OPEN = EnumSet.of(
+            DeviceCommandStatus.PENDING,
+            DeviceCommandStatus.DELIVERED,
+            DeviceCommandStatus.ACKED,
+            DeviceCommandStatus.RUNNING);
+
+    private static final Set<DeviceCommandStatus> PENDING_ONLY = EnumSet.of(DeviceCommandStatus.PENDING);
+
     private final DeviceCommandRepository commandRepository;
     private final DeviceRepository deviceRepository;
     private final AgentSessionRegistry registry;
     private final ObjectMapper objectMapper;
     private final DeviceEventPublisher events;
 
-    @Transactional
     public CommandIssuedResponse issue(UUID deviceId, String issuedBy, IssueCommandRequest request) {
         CommandKind kind = CommandKind.from(request.kind()).orElseThrow(() ->
                 new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown command kind: " + request.kind()));
@@ -96,9 +113,11 @@ public class CommandDispatcher {
                 .status(DeviceCommandStatus.PENDING)
                 .build());
 
-        events.commandIssued(cmd);
-
-        registry.get(deviceId).ifPresent(session -> deliverTo(cmd, session));
+        // Only now that the row is committed: an agent that answers instantly must find it.
+        AfterCommit.run(() -> {
+            events.commandIssued(cmd);
+            registry.get(deviceId).ifPresent(session -> deliverTo(cmd, session));
+        });
 
         log.info("Issued command {} ({}, risk={}) for device {} by {} — initial status {}",
                 cmd.getId(), cmd.getKind(), kind.getRisk(), deviceId, issuedBy, cmd.getStatus());
@@ -113,7 +132,6 @@ public class CommandDispatcher {
      * oldest first. Anything past its {@code expiresAt} is retired rather than delivered —
      * a device returning from a long outage must not replay a queue of stale commands.
      */
-    @Transactional
     public void flushPending(UUID deviceId, AgentSession session) {
         List<DeviceCommand> pending = commandRepository
                 .findByDeviceIdAndStatusOrderByIssuedAtAsc(deviceId, DeviceCommandStatus.PENDING);
@@ -124,8 +142,7 @@ public class CommandDispatcher {
         int expired = 0;
         for (DeviceCommand cmd : pending) {
             if (isExpired(cmd, now)) {
-                expire(cmd, now);
-                expired++;
+                if (expire(cmd, now)) expired++;
             } else {
                 deliverTo(cmd, session);
                 delivered++;
@@ -134,14 +151,23 @@ public class CommandDispatcher {
         log.info("Flushed {} pending command(s) to device {} ({} expired)", delivered, deviceId, expired);
     }
 
-    /** Retires a command that outlived its delivery window. */
-    void expire(DeviceCommand cmd, Instant now) {
+    /**
+     * Retires a command that outlived its delivery window.
+     *
+     * @return false when the command was no longer PENDING (it was delivered in the meantime),
+     *         in which case nothing is published
+     */
+    boolean expire(DeviceCommand cmd, Instant now) {
+        String message = "Expired before delivery (device offline since " + cmd.getIssuedAt() + ")";
+        if (commandRepository.finish(cmd.getId(), DeviceCommandStatus.EXPIRED, now, null, message, PENDING_ONLY) != 1) {
+            return false;
+        }
         cmd.setStatus(DeviceCommandStatus.EXPIRED);
         cmd.setFinishedAt(now);
-        cmd.setErrorMessage("Expired before delivery (device offline since " + cmd.getIssuedAt() + ")");
-        commandRepository.save(cmd);
-        events.commandTerminated(cmd);
+        cmd.setErrorMessage(message);
+        AfterCommit.run(() -> events.commandTerminated(cmd));
         log.info("Command {} ({}) for device {} expired undelivered", cmd.getId(), cmd.getKind(), cmd.getDeviceId());
+        return true;
     }
 
     /** Null {@code expiresAt} means a row predating expiry support; treat it as non-expiring. */
@@ -155,22 +181,26 @@ public class CommandDispatcher {
                     ? NullNode.getInstance()
                     : objectMapper.readTree(cmd.getPayloadJson());
 
-            OutgoingAgentFrame frame = session.populateOutgoing(OutgoingAgentFrame.builder()
+            if (!session.send(OutgoingAgentFrame.builder()
                     .type("command")
                     .commandId(cmd.getId())
                     .kind(cmd.getKind())
                     .issuedBy(cmd.getIssuedBy())
                     .deadlineMs(cmd.getDeadlineMs())
-                    .payload(payload));
-            if (!session.send(frame)) {
+                    .payload(payload))) {
                 log.warn("Leaving command {} PENDING because delivery to device {} did not complete",
                         cmd.getId(), cmd.getDeviceId());
                 return;
             }
 
+            Instant now = Instant.now();
+            if (commandRepository.markDelivered(cmd.getId(), now) != 1) {
+                // The agent already acked (or the command expired) before this write landed.
+                log.debug("Command {} for device {} was no longer PENDING after delivery", cmd.getId(), cmd.getDeviceId());
+                return;
+            }
             cmd.setStatus(DeviceCommandStatus.DELIVERED);
-            cmd.setDeliveredAt(Instant.now());
-            commandRepository.save(cmd);
+            cmd.setDeliveredAt(now);
             events.commandDelivered(cmd);
         } catch (Exception e) {
             log.error("Failed to deliver command {} to device {}: {}",
@@ -178,56 +208,84 @@ public class CommandDispatcher {
         }
     }
 
-    @Transactional
     public void onAck(CommandAckFrame frame, AgentSession session) {
-        loadOwned(frame.getCommandId(), session.getDeviceId()).ifPresent(cmd -> {
+        loadOwned(frame.getCommandId(), session.getDeviceId(), "command_ack").ifPresent(cmd -> {
             if (cmd.getStatus().isTerminal()) return;
-            if (cmd.getAckedAt() != null) return; // idempotent re-ack
+            Instant now = Instant.now();
+            // Conditional on PENDING/DELIVERED: a repeated ack, or one that arrives after the
+            // command already reports RUNNING, changes nothing (and so publishes nothing).
+            if (commandRepository.markAcked(cmd.getId(), now) != 1) return;
             cmd.setStatus(DeviceCommandStatus.ACKED);
-            cmd.setAckedAt(Instant.now());
-            commandRepository.save(cmd);
-            events.commandAcked(cmd);
+            cmd.setAckedAt(now);
+            if (cmd.getDeliveredAt() == null) cmd.setDeliveredAt(now);
+            AfterCommit.run(() -> events.commandAcked(cmd));
         });
     }
 
-    @Transactional
     public void onProgress(CommandProgressFrame frame, AgentSession session) {
-        loadOwned(frame.getCommandId(), session.getDeviceId()).ifPresent(cmd -> {
+        loadOwned(frame.getCommandId(), session.getDeviceId(), "command_progress").ifPresent(cmd -> {
             if (cmd.getStatus().isTerminal()) return;
+
+            DeviceCommand current = cmd;
             if (cmd.getStatus() != DeviceCommandStatus.RUNNING) {
-                cmd.setStatus(DeviceCommandStatus.RUNNING);
-                if (cmd.getStartedAt() == null) cmd.setStartedAt(Instant.now());
-                commandRepository.save(cmd);
+                Instant now = Instant.now();
+                if (commandRepository.markRunning(cmd.getId(), now) == 1) {
+                    cmd.setStatus(DeviceCommandStatus.RUNNING);
+                    if (cmd.getStartedAt() == null) cmd.setStartedAt(now);
+                } else {
+                    // Our copy was stale: it is already RUNNING, or it finished while we looked.
+                    current = commandRepository.findById(cmd.getId()).orElse(null);
+                    if (current == null || current.getStatus().isTerminal()) return;
+                }
             }
-            events.commandProgress(cmd, frame);
+            DeviceCommand published = current;
+            AfterCommit.run(() -> events.commandProgress(published, frame));
         });
     }
 
-    @Transactional
     public void onResult(CommandResultFrame frame, AgentSession session) {
-        loadOwned(frame.getCommandId(), session.getDeviceId()).ifPresent(cmd -> {
+        loadOwned(frame.getCommandId(), session.getDeviceId(), "command_result").ifPresent(cmd -> {
             if (cmd.getStatus().isTerminal()) return;
 
             DeviceCommandStatus terminal = mapResultStatus(frame.getStatus());
+            Instant now = Instant.now();
+            String output = frame.getOutput() == null || frame.getOutput().isNull()
+                    ? null
+                    : frame.getOutput().toString();
+            if (commandRepository.finish(cmd.getId(), terminal, now, output, frame.getErrorMessage(), OPEN) != 1) {
+                // The reaper (or a duplicate result) got there first; its outcome stands.
+                log.info("Result for command {} from device {} arrived after it had already finished; ignored",
+                        cmd.getId(), cmd.getDeviceId());
+                return;
+            }
             cmd.setStatus(terminal);
-            cmd.setFinishedAt(Instant.now());
-            if (frame.getOutput() != null && !frame.getOutput().isNull()) {
-                cmd.setOutputJson(frame.getOutput().toString());
-            }
-            if (frame.getErrorMessage() != null) {
-                cmd.setErrorMessage(frame.getErrorMessage());
-            }
-            commandRepository.save(cmd);
-            events.commandResult(cmd, frame);
+            cmd.setFinishedAt(now);
+            cmd.setOutputJson(output);
+            cmd.setErrorMessage(frame.getErrorMessage());
+            AfterCommit.run(() -> events.commandResult(cmd, frame));
 
             log.info("Command {} for device {} terminated as {} (durationMs={})",
                     cmd.getId(), cmd.getDeviceId(), terminal, frame.getDurationMs());
         });
     }
 
-    private Optional<DeviceCommand> loadOwned(UUID commandId, UUID expectedDeviceId) {
-        if (commandId == null || expectedDeviceId == null) return Optional.empty();
-        return commandRepository.findById(commandId).filter(cmd -> {
+    /**
+     * Finds the command a frame is about, provided it belongs to the session's device. A frame
+     * for a command that does not exist (or has no id at all) is logged rather than ignored
+     * silently: it means a lost write, a purged row or a misbehaving agent, and without the log
+     * the command just looks stuck.
+     */
+    private Optional<DeviceCommand> loadOwned(UUID commandId, UUID expectedDeviceId, String frameType) {
+        if (commandId == null || expectedDeviceId == null) {
+            log.warn("Dropping {} frame from device {}: no commandId", frameType, expectedDeviceId);
+            return Optional.empty();
+        }
+        Optional<DeviceCommand> found = commandRepository.findById(commandId);
+        if (found.isEmpty()) {
+            log.warn("Dropping {} frame from device {}: unknown command {}", frameType, expectedDeviceId, commandId);
+            return Optional.empty();
+        }
+        return found.filter(cmd -> {
             if (!expectedDeviceId.equals(cmd.getDeviceId())) {
                 log.warn("Frame references command {} owned by device {}, but session is for {}",
                         commandId, cmd.getDeviceId(), expectedDeviceId);
@@ -240,7 +298,7 @@ public class CommandDispatcher {
     private static DeviceCommandStatus mapResultStatus(String status) {
         if (status == null) return DeviceCommandStatus.FAILED;
         return switch (status.toLowerCase()) {
-            case "ok", "success", "succeeded" -> DeviceCommandStatus.SUCCEEDED;
+            case "ok" -> DeviceCommandStatus.SUCCEEDED;
             case "timeout" -> DeviceCommandStatus.TIMEOUT;
             case "rejected" -> DeviceCommandStatus.REJECTED;
             default -> DeviceCommandStatus.FAILED;

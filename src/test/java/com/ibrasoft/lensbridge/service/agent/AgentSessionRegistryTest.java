@@ -1,6 +1,7 @@
 package com.ibrasoft.lensbridge.service.agent;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ibrasoft.lensbridge.service.agent.events.DeviceEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.socket.CloseStatus;
@@ -14,11 +15,13 @@ import static org.mockito.Mockito.*;
 
 class AgentSessionRegistryTest {
 
+    private DeviceEventPublisher events;
     private AgentSessionRegistry registry;
 
     @BeforeEach
     void setUp() {
-        registry = new AgentSessionRegistry();
+        events = mock(DeviceEventPublisher.class);
+        registry = new AgentSessionRegistry(events);
     }
 
     private AgentSession session() {
@@ -40,11 +43,10 @@ class AgentSessionRegistryTest {
         registry.register(deviceId, s);
 
         assertThat(registry.get(deviceId)).containsSame(s);
-        assertThat(registry.size()).isEqualTo(1);
     }
 
     @Test
-    void registerSameSessionTwiceDoesNotEvictItself() {
+    void registerSameSessionTwiceDoesNotEvictItself() throws Exception {
         UUID deviceId = UUID.randomUUID();
         AgentSession s = session();
 
@@ -52,7 +54,7 @@ class AgentSessionRegistryTest {
         registry.register(deviceId, s);
 
         assertThat(registry.get(deviceId)).containsSame(s);
-        // verify(s.getTransport(), never()).close(any(CloseStatus.class));
+        verify(s.getTransport(), never()).close(any(CloseStatus.class));
     }
 
     @Test
@@ -69,15 +71,16 @@ class AgentSessionRegistryTest {
     }
 
     @Test
-    void unregisterRemovesOnlyWhenStillRegistered() {
+    void unregisterRemovesOnlyWhenStillRegisteredAndAnnouncesOffline() {
         UUID deviceId = UUID.randomUUID();
         AgentSession s = session();
         registry.register(deviceId, s);
 
-        registry.unregister(deviceId, s);
+        boolean removed = registry.unregister(deviceId, s);
 
+        assertThat(removed).isTrue();
         assertThat(registry.get(deviceId)).isEmpty();
-        assertThat(registry.size()).isZero();
+        verify(events).deviceOffline(deviceId);
     }
 
     @Test
@@ -87,13 +90,28 @@ class AgentSessionRegistryTest {
         AgentSession stale = session();
         registry.register(deviceId, current);
 
-        registry.unregister(deviceId, stale);
+        boolean removed = registry.unregister(deviceId, stale);
 
+        assertThat(removed).isFalse();
         assertThat(registry.get(deviceId)).containsSame(current);
+        // A superseded session closing late must not report a reconnected device as offline.
+        verify(events, never()).deviceOffline(any());
     }
 
     @Test
-    void closeIfPresentRemovesAndClosesSession() throws Exception {
+    void unregisterTwiceAnnouncesOfflineOnce() {
+        UUID deviceId = UUID.randomUUID();
+        AgentSession s = session();
+        registry.register(deviceId, s);
+
+        registry.unregister(deviceId, s);
+        registry.unregister(deviceId, s);
+
+        verify(events, times(1)).deviceOffline(deviceId);
+    }
+
+    @Test
+    void closeIfPresentRemovesClosesAndAnnouncesOffline() throws Exception {
         UUID deviceId = UUID.randomUUID();
         AgentSession s = session();
         registry.register(deviceId, s);
@@ -102,12 +120,27 @@ class AgentSessionRegistryTest {
 
         assertThat(registry.get(deviceId)).isEmpty();
         verify(s.getTransport()).close(any(CloseStatus.class));
+        verify(events).deviceOffline(deviceId);
     }
 
     @Test
     void closeIfPresentIsNoOpWhenAbsent() {
-        registry.closeIfPresent(UUID.randomUUID(), CloseStatus.GOING_AWAY);
+        UUID deviceId = UUID.randomUUID();
 
-        assertThat(registry.size()).isZero();
+        registry.closeIfPresent(deviceId, CloseStatus.GOING_AWAY);
+
+        assertThat(registry.get(deviceId)).isEmpty();
+        verify(events, never()).deviceOffline(any());
+    }
+
+    @Test
+    void trackedConnectionsAreListedUntilUntracked() {
+        AgentSession s = session();
+
+        registry.track(s);
+        assertThat(registry.connections()).containsExactly(s);
+
+        registry.untrack(s);
+        assertThat(registry.connections()).isEmpty();
     }
 }

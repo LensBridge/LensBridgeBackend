@@ -57,7 +57,10 @@ public class AgentEnrollmentController {
     @PostMapping("/enroll")
     public ResponseEntity<AgentEnrollResponse> enroll(@Valid @RequestBody AgentEnrollRequest request,
                                     HttpServletRequest httpRequest) {
-        String remoteIp = resolveClientIp(httpRequest);
+        // Not X-Forwarded-For: any client can send that header. With server.forward-headers-strategy
+        // set, the container has already resolved it from the trusted proxy and getRemoteAddr()
+        // returns that address (or the socket peer when there is no proxy).
+        String remoteIp = httpRequest.getRemoteAddr();
 
         Outcome outcome = enrollmentService.enroll(
                 request.getToken(),
@@ -80,14 +83,5 @@ public class AgentEnrollmentController {
             case Outcome.InvalidToken ignored -> throw new ApiResponseException(HttpStatus.UNAUTHORIZED,
                     new MessageResponse("Enrollment token is invalid, expired, or already used"));
         };
-    }
-
-    private static String resolveClientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            int comma = forwarded.indexOf(',');
-            return (comma > 0 ? forwarded.substring(0, comma) : forwarded).trim();
-        }
-        return request.getRemoteAddr();
     }
 }

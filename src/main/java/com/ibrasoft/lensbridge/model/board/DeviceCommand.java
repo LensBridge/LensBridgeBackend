@@ -9,8 +9,9 @@ import java.util.UUID;
 /**
  * Audit log + delivery queue for admin-issued commands targeted at a single device.
  * <p>
- * The polymorphic command shape (kind + payload) is captured here as a discriminator
- * string and a JSON blob, so adding new command kinds does not require schema changes.
+ * A command's shape (kind + payload) is stored as the wire name of its
+ * {@link com.ibrasoft.lensbridge.model.board.commands.CommandKind} and a JSON blob, so adding
+ * new command kinds does not require schema changes.
  */
 @Entity
 @Table(name = "device_commands", indexes = {
@@ -32,11 +33,11 @@ public class DeviceCommand {
     @Column(name = "device_id", nullable = false)
     private UUID deviceId;
 
-    /** Polymorphic discriminator (e.g. "chrome.reload"). */
+    /** Wire name of the command kind (e.g. "chrome.reload"). */
     @Column(nullable = false)
     private String kind;
 
-    /** Serialized CommandPayload subclass (Jackson). */
+    /** The request's payload as JSON, forwarded to the agent as received; the string "null" when none was given. */
     @Column(columnDefinition = "TEXT")
     private String payloadJson;
 
@@ -44,7 +45,7 @@ public class DeviceCommand {
     @Column(nullable = false)
     private String issuedBy;
 
-    /** Maximum execution time once the agent picks the command up; null = server default. */
+    /** Maximum execution time once the agent picks the command up. The dispatcher always sets it (default 30 s); null only on old rows. */
     private Integer deadlineMs;
 
     @Column(name = "expires_at")

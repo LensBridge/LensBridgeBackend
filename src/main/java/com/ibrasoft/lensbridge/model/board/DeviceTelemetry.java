@@ -9,7 +9,8 @@ import java.util.UUID;
 /**
  * Append-only telemetry sample emitted by an agent over its WebSocket session.
  * <p>
- * Currently unbounded — one row per heartbeat, forever. A retention prune is still owed.
+ * One row per heartbeat (every 30 s per device), so the table grows steadily; the rows are
+ * only useful while recent, and {@code DeviceTelemetryPruner} deletes the old ones daily.
  */
 @Entity
 @Table(name = "device_telemetry", indexes = {

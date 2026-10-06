@@ -11,7 +11,6 @@ import org.springframework.web.socket.WebSocketSession;
 
 import java.io.IOException;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Server-side state for one open agent WebSocket connection.
@@ -27,6 +26,9 @@ import java.util.concurrent.atomic.AtomicLong;
 @Slf4j
 public class AgentSession {
 
+    /** How often an authenticated agent sends a heartbeat; also what auth_ok tells it to use. */
+    public static final int HEARTBEAT_INTERVAL_MS = 30_000;
+
     public enum Phase { UNAUTH, AUTHED, CLOSED }
 
     @Getter private final UUID sessionId;
@@ -35,7 +37,8 @@ public class AgentSession {
 
     private final ObjectMapper objectMapper;
 
-    private final AtomicLong outgoingSeq = new AtomicLong(0);
+    /** Guarded by the transport lock in {@link #send}; see there for why. */
+    private long outgoingSeq = 0;
 
     /** Last seq received from the client (must be strictly increasing). 0 means none yet. */
     private long lastIncomingSeq = 0;
@@ -43,11 +46,22 @@ public class AgentSession {
     @Getter private volatile Phase phase = Phase.UNAUTH;
     @Getter private volatile UUID deviceId;
 
+    /** When the socket opened (epoch millis); the clock for the authentication deadline. */
+    @Getter private final long connectedAtMs = System.currentTimeMillis();
+
+    /** When the last frame arrived (epoch millis); the clock for the idle timeout. */
+    @Getter private volatile long lastInboundAtMs = connectedAtMs;
+
     public AgentSession(WebSocketSession transport, String challenge, ObjectMapper objectMapper) {
         this.transport = transport;
         this.objectMapper = objectMapper;
         this.sessionId = UUID.randomUUID();
         this.challenge = challenge;
+    }
+
+    /** Notes that the peer just sent something, so a live connection is not swept as idle. */
+    public void touch() {
+        lastInboundAtMs = System.currentTimeMillis();
     }
 
     /** Records that the next valid incoming seq is {@code seq + 1}. Returns false if this seq is a replay/regression. */
@@ -72,32 +86,40 @@ public class AgentSession {
         this.phase = Phase.CLOSED;
     }
 
-    /** Allocates the next outbound seq and returns the populated frame. */
-    public OutgoingAgentFrame populateOutgoing(OutgoingAgentFrame.OutgoingAgentFrameBuilder builder) {
-        return builder.seq(outgoingSeq.incrementAndGet()).sessionId(sessionId).build();
-    }
-
-    public boolean send(OutgoingAgentFrame frame) {
+    /**
+     * Allocates the next outbound seq and writes the frame, as one step under the transport
+     * lock. Allocating before taking the lock would let two threads number their frames in one
+     * order and write them in the other, and the agent expects them to arrive in seq order.
+     * A frame that cannot be written (closed transport) does not consume a seq.
+     *
+     * @return true when the frame was handed to the transport
+     */
+    public boolean send(OutgoingAgentFrame.OutgoingAgentFrameBuilder builder) {
+        CloseStatus failure = null;
         try {
-            String json = objectMapper.writeValueAsString(frame);
             synchronized (transport) {
-                if (transport.isOpen()) {
-                    transport.sendMessage(new TextMessage(json));
+                if (!transport.isOpen()) {
+                    log.warn("session={} transport is closed; outgoing frame was not sent", sessionId);
+                    markClosed();
+                    return false;
+                }
+                OutgoingAgentFrame frame = builder.seq(++outgoingSeq).sessionId(sessionId).build();
+                try {
+                    transport.sendMessage(new TextMessage(objectMapper.writeValueAsString(frame)));
                     return true;
+                } catch (JsonProcessingException e) {
+                    log.error("session={} failed to serialize outgoing frame", sessionId, e);
+                    failure = CloseStatus.SERVER_ERROR;
+                } catch (IOException e) {
+                    log.warn("session={} transport send failed: {}", sessionId, e.getMessage());
+                    failure = CloseStatus.SESSION_NOT_RELIABLE;
                 }
             }
-            log.warn("session={} transport is closed; frame {} was not sent", sessionId, frame.getType());
-            markClosed();
-            return false;
-        } catch (JsonProcessingException e) {
-            log.error("session={} failed to serialize frame {}", sessionId, frame.getType(), e);
-            close(CloseStatus.SERVER_ERROR);
-            return false;
-        } catch (IOException e) {
-            log.warn("session={} transport send failed: {}", sessionId, e.getMessage());
-            close(CloseStatus.SESSION_NOT_RELIABLE);
-            return false;
+        } finally {
+            // Outside the lock: closing a transport can block on the peer.
+            if (failure != null) close(failure);
         }
+        return false;
     }
 
     public void close(CloseStatus status) {

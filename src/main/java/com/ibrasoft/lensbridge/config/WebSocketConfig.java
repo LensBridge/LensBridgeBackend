@@ -43,15 +43,28 @@ public class WebSocketConfig implements WebSocketConfigurer {
                 .setAllowedOrigins("*");
     }
 
+    /**
+     * Largest text frame a socket may carry: 10 MiB. The container's default is 8 KB, and a
+     * frame over it is closed with 1009 (message too big), which is exactly what a
+     * {@code chrome.screenshot} or {@code logs.tail} result looks like. The agent caps a
+     * screenshot's base64 at 8 MiB (internal/commands/chrome_screenshot.go, which cites this
+     * figure), leaving the headroom for the JSON envelope around it. Change the two together.
+     * <p>
+     * On by default: it used to require {@code lensbridge.websocket.container-customizer.enabled=true},
+     * which no shipped configuration set, so a stock deployment closed every large result with
+     * 1009. Setting the property to {@code false} still turns it off. Only text is raised:
+     * nothing here accepts binary frames. The cost is that an unauthenticated socket may also
+     * send a frame this large, which is why {@code AgentSessionSweeper} gives such sockets a
+     * short deadline.
+     */
+    static final int MAX_TEXT_MESSAGE_BYTES = 10 * 1024 * 1024;
+
     @Bean
-    @ConditionalOnProperty(name = "lensbridge.websocket.container-customizer.enabled", havingValue = "true")
+    @ConditionalOnProperty(name = "lensbridge.websocket.container-customizer.enabled",
+            havingValue = "true", matchIfMissing = true)
     public ServletServerContainerFactoryBean webSocketContainer() {
-        ServletServerContainerFactoryBean container =
-                new ServletServerContainerFactoryBean();
-
-        container.setMaxTextMessageBufferSize(10 * 1024 * 1024); // 10 MB
-        container.setMaxBinaryMessageBufferSize(10 * 1024 * 1024);
-
+        ServletServerContainerFactoryBean container = new ServletServerContainerFactoryBean();
+        container.setMaxTextMessageBufferSize(MAX_TEXT_MESSAGE_BYTES);
         return container;
     }
 }
