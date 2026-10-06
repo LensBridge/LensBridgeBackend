@@ -38,7 +38,7 @@ class DeviceCommandReaperTest {
         commandRepo = mock(DeviceCommandRepository.class);
         events = mock(DeviceEventPublisher.class);
         CommandDispatcher dispatcher = new CommandDispatcher(
-                commandRepo, mock(DeviceRepository.class), new AgentSessionRegistry(),
+                commandRepo, mock(DeviceRepository.class), new AgentSessionRegistry(events),
                 new ObjectMapper(), events);
         reaper = new DeviceCommandReaper(commandRepo, dispatcher, events);
 

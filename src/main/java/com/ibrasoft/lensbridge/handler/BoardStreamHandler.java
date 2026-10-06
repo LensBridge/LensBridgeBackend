@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
+import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.time.Instant;
@@ -41,6 +42,16 @@ public class BoardStreamHandler extends TextWebSocketHandler {
     static final CloseStatus CLOSE_REVOKED = new CloseStatus(4003, "device_revoked");
     static final CloseStatus CLOSE_SUPERSEDED = CloseStatus.NORMAL.withReason("superseded");
 
+    /**
+     * A push that has been stuck this long means the board has stopped reading; the decorator
+     * then closes the session instead of letting writers pile up behind it. Pushes are tiny
+     * and a healthy board drains them instantly, so this is generous.
+     */
+    static final int SEND_TIME_LIMIT_MS = 10_000;
+
+    /** Bytes of unsent pushes tolerated per board before it is cut off (a push is ~100 bytes). */
+    static final int SEND_BUFFER_LIMIT_BYTES = 64 * 1024;
+
     /** Session attribute holding the device a connection was accepted as. */
     private static final String DEVICE_ATTR = "board.deviceId";
 
@@ -51,8 +62,14 @@ public class BoardStreamHandler extends TextWebSocketHandler {
      * Live boards keyed by device. One session per device: a reloading kiosk can briefly
      * open its replacement before the old socket finishes closing, so the newcomer wins
      * and the stale one is closed rather than left to accumulate.
+     * <p>
+     * Sessions are stored wrapped in a {@link ConcurrentWebSocketSessionDecorator}. Pushes
+     * come from whichever admin request thread changed the content, and the container allows
+     * only one writer per session at a time: a second concurrent send throws, and the
+     * failure was being swallowed, so a board silently missed its refresh. The decorator
+     * serialises the writes.
      */
-    private final Map<UUID, WebSocketSession> sessions = new ConcurrentHashMap<>();
+    private final Map<UUID, ConcurrentWebSocketSessionDecorator> sessions = new ConcurrentHashMap<>();
 
     @Override
     public void afterConnectionEstablished(@NonNull WebSocketSession session) {
@@ -75,8 +92,10 @@ public class BoardStreamHandler extends TextWebSocketHandler {
         }
 
         session.getAttributes().put(DEVICE_ATTR, deviceId);
-        WebSocketSession previous = sessions.put(deviceId, session);
-        if (previous != null && previous != session) {
+        ConcurrentWebSocketSessionDecorator safe =
+                new ConcurrentWebSocketSessionDecorator(session, SEND_TIME_LIMIT_MS, SEND_BUFFER_LIMIT_BYTES);
+        ConcurrentWebSocketSessionDecorator previous = sessions.put(deviceId, safe);
+        if (previous != null) {
             log.info("Board stream device {} superseded session {} with {}",
                     deviceId, previous.getId(), session.getId());
             close(previous, CLOSE_SUPERSEDED);
@@ -89,9 +108,9 @@ public class BoardStreamHandler extends TextWebSocketHandler {
         UUID deviceId = (UUID) session.getAttributes().get(DEVICE_ATTR);
         if (deviceId == null) return; // rejected before it was ever registered
 
-        // Two-arg remove: a superseded session closing later must not evict the
-        // replacement that has already taken its place.
-        sessions.remove(deviceId, session);
+        // Only remove the entry if it still wraps this very session: a superseded session
+        // closing later must not evict the replacement that has already taken its place.
+        sessions.computeIfPresent(deviceId, (id, current) -> current.getDelegate() == session ? null : current);
         log.info("Board stream disconnected: session={} device={} status={}",
                 session.getId(), deviceId, status);
     }
@@ -123,7 +142,7 @@ public class BoardStreamHandler extends TextWebSocketHandler {
         if (json == null) return;
 
         if (target != null) {
-            WebSocketSession session = sessions.get(target);
+            ConcurrentWebSocketSessionDecorator session = sessions.get(target);
             if (session == null) {
                 log.debug("Board stream reason={} device={} not connected — it will pick the change up on its next poll",
                         reason, target);
@@ -136,14 +155,14 @@ public class BoardStreamHandler extends TextWebSocketHandler {
         }
 
         int sent = 0;
-        for (Map.Entry<UUID, WebSocketSession> entry : sessions.entrySet()) {
+        for (Map.Entry<UUID, ConcurrentWebSocketSessionDecorator> entry : sessions.entrySet()) {
             if (send(entry.getKey(), entry.getValue(), json)) sent++;
         }
         log.debug("Board stream broadcast reason={} boards={}", reason, sent);
     }
 
     /** @return true when the frame was written; drops the session if it has gone away. */
-    private boolean send(UUID deviceId, WebSocketSession session, String json) {
+    private boolean send(UUID deviceId, ConcurrentWebSocketSessionDecorator session, String json) {
         if (!session.isOpen()) {
             sessions.remove(deviceId, session);
             return false;

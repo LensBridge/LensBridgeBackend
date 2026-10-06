@@ -155,14 +155,13 @@ public class CommandDispatcher {
                     ? NullNode.getInstance()
                     : objectMapper.readTree(cmd.getPayloadJson());
 
-            OutgoingAgentFrame frame = session.populateOutgoing(OutgoingAgentFrame.builder()
+            if (!session.send(OutgoingAgentFrame.builder()
                     .type("command")
                     .commandId(cmd.getId())
                     .kind(cmd.getKind())
                     .issuedBy(cmd.getIssuedBy())
                     .deadlineMs(cmd.getDeadlineMs())
-                    .payload(payload));
-            if (!session.send(frame)) {
+                    .payload(payload))) {
                 log.warn("Leaving command {} PENDING because delivery to device {} did not complete",
                         cmd.getId(), cmd.getDeviceId());
                 return;

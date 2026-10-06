@@ -48,10 +48,10 @@ class AgentWebSocketHandlerTest {
     void setUp() {
         mapper = new ObjectMapper();
         deviceRepo = mock(DeviceRepository.class);
-        registry = new AgentSessionRegistry();
+        events = mock(DeviceEventPublisher.class);
+        registry = new AgentSessionRegistry(events);
         heartbeatService = mock(HeartbeatService.class);
         commandDispatcher = mock(CommandDispatcher.class);
-        events = mock(DeviceEventPublisher.class);
         handler = new AgentWebSocketHandler(
                 mapper, new Ed25519Verifier(), deviceRepo, registry,
                 heartbeatService, commandDispatcher, events);
@@ -252,6 +252,154 @@ class AgentWebSocketHandlerTest {
         assertTrue(registry.get(device.getId()).isEmpty());
     }
 
+    /**
+     * The agent insists that auth_ok is the first frame after its auth. A session visible in the
+     * registry can be written to by a concurrent command issue, so it must not be registered
+     * until auth_ok has been handed to the transport.
+     */
+    @Test
+    void auth_registersTheSessionOnlyAfterAuthOkIsSent() throws Exception {
+        KeyPair kp = Ed25519TestUtil.generate();
+        Device device = persistedDeviceWith(Ed25519TestUtil.rawPublicKey(kp.getPublic()));
+        FakeSession s = openSession();
+        Hello hello = parseHello(s.outbox.get(0));
+        List<Boolean> registeredWhenAuthOkWritten = new ArrayList<>();
+        s.onSend = json -> {
+            if (json.contains("\"auth_ok\"")) {
+                registeredWhenAuthOkWritten.add(registry.get(device.getId()).isPresent());
+            }
+        };
+
+        deliverAuth(s, hello.sessionId, hello.challenge, device.getId(), System.currentTimeMillis(), kp);
+
+        assertEquals(List.of(false), registeredWhenAuthOkWritten);
+        assertTrue(registry.get(device.getId()).isPresent());
+    }
+
+    @Test
+    void auth_flushesPendingCommandsOnlyAfterRegistering() throws Exception {
+        KeyPair kp = Ed25519TestUtil.generate();
+        Device device = persistedDeviceWith(Ed25519TestUtil.rawPublicKey(kp.getPublic()));
+        FakeSession s = openSession();
+        Hello hello = parseHello(s.outbox.get(0));
+        List<Boolean> registeredAtFlush = new ArrayList<>();
+        doAnswer(inv -> {
+            registeredAtFlush.add(registry.get(device.getId()).isPresent());
+            return null;
+        }).when(commandDispatcher).flushPending(eq(device.getId()), any());
+
+        deliverAuth(s, hello.sessionId, hello.challenge, device.getId(), System.currentTimeMillis(), kp);
+
+        assertEquals(List.of(true), registeredAtFlush);
+    }
+
+    @Test
+    void auth_doesNotRegisterWhenAuthOkCannotBeWritten() throws Exception {
+        KeyPair kp = Ed25519TestUtil.generate();
+        Device device = persistedDeviceWith(Ed25519TestUtil.rawPublicKey(kp.getPublic()));
+        FakeSession s = openSession();
+        Hello hello = parseHello(s.outbox.get(0));
+        s.failSends = true;
+
+        deliverAuth(s, hello.sessionId, hello.challenge, device.getId(), System.currentTimeMillis(), kp);
+
+        assertTrue(registry.get(device.getId()).isEmpty());
+        verify(events, never()).deviceOnline(any());
+        verify(commandDispatcher, never()).flushPending(any(), any());
+    }
+
+    /**
+     * Regression: a reconnect evicts the old session, whose close callback then arrived and
+     * announced the device offline, so dashboards showed a connected device as down.
+     */
+    @Test
+    void afterClose_ofASupersededSession_doesNotAnnounceOffline() throws Exception {
+        KeyPair kp = Ed25519TestUtil.generate();
+        Device device = persistedDeviceWith(Ed25519TestUtil.rawPublicKey(kp.getPublic()));
+
+        FakeSession first = openSession();
+        deliverAuth(first, parseHello(first.outbox.get(0)).sessionId,
+                parseHello(first.outbox.get(0)).challenge, device.getId(), System.currentTimeMillis(), kp);
+        FakeSession second = openSession();
+        deliverAuth(second, parseHello(second.outbox.get(0)).sessionId,
+                parseHello(second.outbox.get(0)).challenge, device.getId(), System.currentTimeMillis(), kp);
+        assertFalse(first.isOpen, "the newer session should have evicted the older one");
+
+        handler.afterConnectionClosed(first, CloseStatus.NORMAL);
+
+        verify(events, never()).deviceOffline(any());
+        assertTrue(registry.get(device.getId()).isPresent(), "the replacement must stay registered");
+
+        handler.afterConnectionClosed(second, CloseStatus.NORMAL);
+
+        verify(events, times(1)).deviceOffline(device.getId());
+    }
+
+    @Test
+    void afterClose_ofAnUnauthenticatedSession_announcesNothing() throws Exception {
+        FakeSession s = openSession();
+
+        handler.afterConnectionClosed(s, CloseStatus.NORMAL);
+
+        verify(events, never()).deviceOffline(any());
+    }
+
+    @Test
+    void connectionsAreTrackedFromOpenUntilClose() throws Exception {
+        FakeSession s = openSession();
+        assertEquals(1, registry.connections().size());
+
+        handler.afterConnectionClosed(s, CloseStatus.NORMAL);
+
+        assertTrue(registry.connections().isEmpty());
+    }
+
+    /** Same treatment as a failing heartbeat: log it and keep the socket (1011 would make the agent reconnect). */
+    @Test
+    void commandFrames_dispatcherFailureDoesNotCloseTheSocket() throws Exception {
+        KeyPair kp = Ed25519TestUtil.generate();
+        Device device = persistedDeviceWith(Ed25519TestUtil.rawPublicKey(kp.getPublic()));
+        FakeSession s = openSession();
+        Hello hello = parseHello(s.outbox.get(0));
+        deliverAuth(s, hello.sessionId, hello.challenge, device.getId(), System.currentTimeMillis(), kp);
+        doThrow(new RuntimeException("db down")).when(commandDispatcher).onAck(any(), any());
+        doThrow(new RuntimeException("db down")).when(commandDispatcher).onProgress(any(), any());
+        doThrow(new RuntimeException("db down")).when(commandDispatcher).onResult(any(), any());
+        UUID commandId = UUID.randomUUID();
+
+        deliver(s, String.format(
+                "{\"type\":\"command_ack\",\"seq\":2,\"sessionId\":\"%s\",\"commandId\":\"%s\"}",
+                hello.sessionId, commandId));
+        deliver(s, String.format(
+                "{\"type\":\"command_progress\",\"seq\":3,\"sessionId\":\"%s\",\"commandId\":\"%s\"}",
+                hello.sessionId, commandId));
+        deliver(s, String.format(
+                "{\"type\":\"command_result\",\"seq\":4,\"sessionId\":\"%s\",\"commandId\":\"%s\",\"status\":\"ok\"}",
+                hello.sessionId, commandId));
+
+        assertTrue(s.isOpen, "a transient failure must not close the socket");
+        verify(commandDispatcher).onAck(any(), any());
+        verify(commandDispatcher).onProgress(any(), any());
+        verify(commandDispatcher).onResult(any(), any());
+    }
+
+    @Test
+    void inboundFramesRefreshTheLivenessClock() throws Exception {
+        KeyPair kp = Ed25519TestUtil.generate();
+        Device device = persistedDeviceWith(Ed25519TestUtil.rawPublicKey(kp.getPublic()));
+        FakeSession s = openSession();
+        Hello hello = parseHello(s.outbox.get(0));
+        deliverAuth(s, hello.sessionId, hello.challenge, device.getId(), System.currentTimeMillis(), kp);
+        var session = registry.get(device.getId()).orElseThrow();
+        long afterAuth = session.getLastInboundAtMs();
+
+        Thread.sleep(5);
+        deliver(s, String.format("{\"type\":\"heartbeat\",\"seq\":2,\"sessionId\":\"%s\",\"telemetry\":{}}",
+                hello.sessionId));
+
+        assertTrue(session.getLastInboundAtMs() > afterAuth);
+    }
+
     // ──────────────────────────────────────────────────────────────────────
     // helpers
     // ──────────────────────────────────────────────────────────────────────
@@ -312,6 +460,8 @@ class AgentWebSocketHandlerTest {
         final Map<String, Object> attributes = new HashMap<>();
         final List<String> outbox = new ArrayList<>();
         boolean isOpen = true;
+        boolean failSends;
+        java.util.function.Consumer<String> onSend = json -> {};
         CloseStatus closeStatus;
         final String id = UUID.randomUUID().toString();
 
@@ -328,8 +478,12 @@ class AgentWebSocketHandlerTest {
         @Override public void setBinaryMessageSizeLimit(int messageSizeLimit) {}
         @Override public int getBinaryMessageSizeLimit() { return 0; }
         @Override public List<org.springframework.web.socket.WebSocketExtension> getExtensions() { return List.of(); }
-        @Override public void sendMessage(WebSocketMessage<?> message) {
-            if (message instanceof TextMessage tm) outbox.add(tm.getPayload());
+        @Override public void sendMessage(WebSocketMessage<?> message) throws java.io.IOException {
+            if (failSends) throw new java.io.IOException("connection reset");
+            if (message instanceof TextMessage tm) {
+                onSend.accept(tm.getPayload());
+                outbox.add(tm.getPayload());
+            }
         }
         @Override public boolean isOpen() { return isOpen; }
         @Override public void close() { close(CloseStatus.NORMAL); }

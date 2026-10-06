@@ -42,9 +42,9 @@ class CommandDispatcherTest {
     void setUp() {
         commandRepo = mock(DeviceCommandRepository.class);
         deviceRepo = mock(DeviceRepository.class);
-        registry = new AgentSessionRegistry();
         mapper = new ObjectMapper();
         events = mock(DeviceEventPublisher.class);
+        registry = new AgentSessionRegistry(events);
         dispatcher = new CommandDispatcher(commandRepo, deviceRepo, registry, mapper, events);
 
         when(commandRepo.save(any())).thenAnswer(inv -> {

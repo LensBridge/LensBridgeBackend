@@ -9,6 +9,7 @@ import com.ibrasoft.lensbridge.repository.sql.DeviceCommandRepository;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.service.agent.AgentSession;
 import com.ibrasoft.lensbridge.service.agent.AgentSessionRegistry;
+import com.ibrasoft.lensbridge.service.agent.events.DeviceEventPublisher;
 import com.ibrasoft.lensbridge.service.agent.CommandDispatcher;
 import com.ibrasoft.lensbridge.service.agent.EnrollmentTokenService;
 import com.ibrasoft.lensbridge.service.board.offline.OfflineBundleService;
@@ -43,7 +44,7 @@ class DeviceAdminControllerTest {
         DeviceRepository deviceRepository = mock(DeviceRepository.class);
         DeviceCommandRepository commandRepository = mock(DeviceCommandRepository.class);
         CommandDispatcher commandDispatcher = mock(CommandDispatcher.class);
-        AgentSessionRegistry registry = new AgentSessionRegistry();
+        AgentSessionRegistry registry = new AgentSessionRegistry(mock(DeviceEventPublisher.class));
         AdminAuditService auditService = mock(AdminAuditService.class);
 
         DeviceAdminController controller = new DeviceAdminController(
@@ -99,7 +100,7 @@ class DeviceAdminControllerTest {
                 mock(DeviceCommandRepository.class),
                 mock(CommandDispatcher.class),
                 new ObjectMapper(),
-                new AgentSessionRegistry(),
+                new AgentSessionRegistry(mock(DeviceEventPublisher.class)),
                 auditService,
                 mock(OfflineBundleService.class));
 
