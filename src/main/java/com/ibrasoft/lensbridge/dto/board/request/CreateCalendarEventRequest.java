@@ -9,14 +9,14 @@ import lombok.*;
 @Data @Builder @NoArgsConstructor @AllArgsConstructor
 public class CreateCalendarEventRequest {
     @NotBlank(message = "Event name is required")
-    @Size(max = 255, message = "Name must be at most 255 characters")
+    @Size(min = 1, max = 255, message = "Name must be at most 255 characters")
     private String name;
     
     @NotBlank(message = "Event description is required")
     private String description;
     
     @NotBlank(message = "Event location is required")
-    @Size(max = 255, message = "Location must be at most 255 characters")
+    @Size(min = 1, max = 255, message = "Location must be at most 255 characters")
     private String location;
     
     // Boxed: @NotNull on a primitive never fires (an absent field deserialises to 0), so an

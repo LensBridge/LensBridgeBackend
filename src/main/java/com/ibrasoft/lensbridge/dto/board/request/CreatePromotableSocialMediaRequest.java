@@ -15,7 +15,7 @@ public class CreatePromotableSocialMediaRequest {
 
     /** Admin-facing label, not shown on the board. */
     @NotBlank(message = "Name is required")
-    @Size(max = 255, message = "Name must be at most 255 characters")
+    @Size(min = 1, max = 255, message = "Name must be at most 255 characters")
     private String name;
 
     @Positive(message = "Duration must be positive")
@@ -30,17 +30,17 @@ public class CreatePromotableSocialMediaRequest {
     /** QR destination. */
     @NotBlank(message = "URL is required")
     @URL(message = "URL must be a valid URL")
-    @Size(max = 255, message = "URL must be at most 255 characters")
+    @Size(min = 1, max = 255, message = "URL must be at most 255 characters")
     private String url;
 
     // The text fields below are stored as markdown and rendered to HTML by the frontend.
 
     @NotBlank(message = "Header text is required")
-    @Size(max = PromotableSocialMedia.TEXT_MAX, message = "Header text must be at most 1000 characters")
+    @Size(min = 1, max = PromotableSocialMedia.TEXT_MAX, message = "Header text must be at most 1000 characters")
     private String headerText;
 
     @NotBlank(message = "Hero text is required")
-    @Size(max = PromotableSocialMedia.TEXT_MAX, message = "Hero text must be at most 1000 characters")
+    @Size(min = 1, max = PromotableSocialMedia.TEXT_MAX, message = "Hero text must be at most 1000 characters")
     private String heroText;
 
     /** Optional — platforms like WhatsApp have no handle. */
@@ -48,6 +48,6 @@ public class CreatePromotableSocialMediaRequest {
     private String handle;
 
     @NotBlank(message = "Footer text is required")
-    @Size(max = PromotableSocialMedia.TEXT_MAX, message = "Footer text must be at most 1000 characters")
+    @Size(min = 1, max = PromotableSocialMedia.TEXT_MAX, message = "Footer text must be at most 1000 characters")
     private String footerText;
 }

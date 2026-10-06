@@ -18,7 +18,7 @@ public class AgentEnrollRequest {
     // The three below are stored as-is in varchar(255) columns, which Postgres enforces: an
     // over-long value must be a 400 here rather than a 500 from the insert.
     @NotBlank
-    @Size(max = 255, message = "hostname must be at most 255 characters")
+    @Size(min = 1, max = 255, message = "hostname must be at most 255 characters")
     private String hostname;
 
     @Size(max = 255, message = "hardwareModel must be at most 255 characters")

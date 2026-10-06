@@ -2269,7 +2269,9 @@ paths:
       description: "Device-authenticated with the X-MB-* headers, like the content\
         \ bundle; the signed body hash is the SHA-256 of the empty string. `weather`\
         \ is the OpenWeatherMap current weather JSON exactly as the server last fetched\
-        \ it, or null when the server has none. `fetchedAt` is when the server answered."
+        \ it, or null when the server has none or its last fetch is over 3 hours old.\
+        \ `fetchedAt` is when the server fetched that weather (when `weather` is null,\
+        \ when it answered)."
       operationId: getAgentWeather
       parameters:
       - description: Enrolled device id
@@ -2805,154 +2807,6 @@ paths:
           description: Request failed; body carries a human-readable message
       tags:
       - gallery-controller
-  /api/musallah/config:
-    get:
-      operationId: getPublicBoardConfig
-      parameters:
-      - in: query
-        name: deviceId
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/DeviceConfig"
-          description: OK
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: Request failed; body carries a human-readable message
-      summary: Fetch the config a kiosk should render
-      tags:
-      - musallah-board-controller
-  /api/musallah/events:
-    get:
-      operationId: getUpcomingEvents
-      parameters:
-      - in: query
-        name: audience
-        required: true
-        schema:
-          type: string
-          enum:
-          - brothers
-          - sisters
-          - both
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/BoardEvent"
-          description: OK
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: Request failed; body carries a human-readable message
-      tags:
-      - musallah-board-controller
-  /api/musallah/events/range:
-    get:
-      operationId: getEventsInRange
-      parameters:
-      - in: query
-        name: audience
-        required: true
-        schema:
-          type: string
-          enum:
-          - brothers
-          - sisters
-          - both
-      - in: query
-        name: start
-        required: true
-        schema:
-          type: string
-          format: date-time
-      - in: query
-        name: end
-        required: true
-        schema:
-          type: string
-          format: date-time
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/BoardEvent"
-          description: OK
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: Request failed; body carries a human-readable message
-      tags:
-      - musallah-board-controller
-  /api/musallah/weekly-content:
-    get:
-      operationId: getCurrentWeeklyContent
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/WeeklyContent"
-          description: OK
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: Request failed; body carries a human-readable message
-      tags:
-      - musallah-board-controller
-  /api/musallah/weekly-content/{year}/{weekNumber}:
-    get:
-      operationId: getPublicWeeklyContent
-      parameters:
-      - in: path
-        name: year
-        required: true
-        schema:
-          type: integer
-          format: int32
-      - in: path
-        name: weekNumber
-        required: true
-        schema:
-          type: integer
-          format: int32
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/WeeklyContent"
-          description: OK
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: Request failed; body carries a human-readable message
-      summary: Fetch weekly content for a kiosk
-      tags:
-      - musallah-board-controller
   /api/upload/event/{eventId}:
     get:
       operationId: getUploadsByEvent
@@ -3041,6 +2895,8 @@ paths:
         required: true
         schema:
           type: string
+          maxLength: 255
+          minLength: 0
       - in: query
         name: contentType
         required: true
@@ -3052,16 +2908,21 @@ paths:
         schema:
           type: integer
           format: int64
+          exclusiveMinimum: 0
       - in: query
         name: instagramHandle
         required: false
         schema:
           type: string
+          maxLength: 255
+          minLength: 0
       - in: query
         name: description
         required: false
         schema:
           type: string
+          maxLength: 255
+          minLength: 0
       - in: query
         name: anon
         required: false
@@ -3073,6 +2934,7 @@ paths:
         required: true
         schema:
           type: string
+          pattern: "^[0-9a-fA-F]{64}$"
       responses:
         "200":
           content:
@@ -3103,6 +2965,8 @@ paths:
         required: true
         schema:
           type: string
+          maxLength: 255
+          minLength: 0
       - in: query
         name: contentType
         required: true
@@ -3114,11 +2978,13 @@ paths:
         schema:
           type: integer
           format: int64
+          exclusiveMinimum: 0
       - in: query
         name: expectedSha256
         required: true
         schema:
           type: string
+          pattern: "^[0-9a-fA-F]{64}$"
       responses:
         "200":
           content:
@@ -3359,10 +3225,15 @@ components:
       properties:
         agentVersion:
           type: string
+          maxLength: 255
+          minLength: 0
         hardwareModel:
           type: string
+          maxLength: 255
+          minLength: 0
         hostname:
           type: string
+          maxLength: 255
           minLength: 1
         publicKey:
           type: string
@@ -3409,6 +3280,8 @@ components:
         fetchedAt:
           type: string
           format: date-time
+          description: "When the server fetched the weather from OpenWeatherMap; when\
+            \ weather is null, when the server answered"
           example: 2026-09-24T14:05:00Z
         weather:
           $ref: "#/components/schemas/JsonNode"
@@ -3701,9 +3574,10 @@ components:
         location:
           type: string
           maxLength: 255
-          minLength: 0
+          minLength: 1
         name:
           type: string
+          maxLength: 255
           minLength: 1
         startEpochMs:
           type: integer
@@ -3736,12 +3610,15 @@ components:
           format: binary
         signupUrl:
           type: string
+          maxLength: 255
+          minLength: 0
           pattern: ""
         startTime:
           type: string
           format: date-time
         title:
           type: string
+          maxLength: 255
           minLength: 1
       required:
       - audience
@@ -3764,17 +3641,23 @@ components:
           minimum: 0
         footerText:
           type: string
+          maxLength: 1000
           minLength: 1
         handle:
           type: string
+          maxLength: 255
+          minLength: 0
         headerText:
           type: string
+          maxLength: 1000
           minLength: 1
         heroText:
           type: string
+          maxLength: 1000
           minLength: 1
         name:
           type: string
+          maxLength: 255
           minLength: 1
         type:
           type: string
@@ -3786,6 +3669,7 @@ components:
           - other
         url:
           type: string
+          maxLength: 255
           minLength: 1
           pattern: ""
       required:
@@ -3862,6 +3746,8 @@ components:
           type: array
           items:
             type: string
+            maxLength: 4000
+            minLength: 0
     DeviceSummary:
       type: object
       properties:
@@ -4044,6 +3930,7 @@ components:
           - both
         displayName:
           type: string
+          maxLength: 255
           minLength: 1
         expiresInMinutes:
           type: integer
@@ -4090,10 +3977,14 @@ components:
       properties:
         khatib:
           type: string
+          maxLength: 255
+          minLength: 0
         prayerTime:
           type: string
         room:
           type: string
+          maxLength: 255
+          minLength: 0
     JwtResponse:
       type: object
       properties:
@@ -4509,6 +4400,8 @@ components:
       properties:
         arabic:
           type: string
+          maxLength: 4000
+          minLength: 0
         durationSeconds:
           type: integer
           format: int32
@@ -4521,10 +4414,16 @@ components:
           - HADITH
         reference:
           type: string
+          maxLength: 1000
+          minLength: 0
         translation:
           type: string
+          maxLength: 4000
+          minLength: 0
         transliteration:
           type: string
+          maxLength: 4000
+          minLength: 0
     ResetPasswordRequest:
       type: object
       properties:
@@ -4684,6 +4583,8 @@ components:
           type: array
           items:
             type: string
+            maxLength: 4000
+            minLength: 0
     UpdateCalendarEventRequest:
       type: object
       properties:
@@ -4702,8 +4603,12 @@ components:
           format: date-time
         location:
           type: string
+          maxLength: 255
+          minLength: 0
         name:
           type: string
+          maxLength: 255
+          minLength: 0
         startTime:
           type: string
           format: date-time
@@ -4739,11 +4644,15 @@ components:
           format: date-time
         signupUrl:
           type: string
+          maxLength: 255
+          minLength: 0
         startTime:
           type: string
           format: date-time
         title:
           type: string
+          maxLength: 255
+          minLength: 0
     UpdateProfileRequest:
       type: object
       properties:
@@ -4776,14 +4685,24 @@ components:
           minimum: 0
         footerText:
           type: string
+          maxLength: 1000
+          minLength: 0
         handle:
           type: string
+          maxLength: 255
+          minLength: 0
         headerText:
           type: string
+          maxLength: 1000
+          minLength: 0
         heroText:
           type: string
+          maxLength: 1000
+          minLength: 0
         name:
           type: string
+          maxLength: 255
+          minLength: 0
         type:
           type: string
           enum:
@@ -4794,6 +4713,8 @@ components:
           - other
         url:
           type: string
+          maxLength: 255
+          minLength: 0
           pattern: ""
     UpdateTickerRequest:
       type: object
@@ -4804,6 +4725,8 @@ components:
           type: array
           items:
             type: string
+            maxLength: 4000
+            minLength: 0
     Updates:
       type: object
       properties:

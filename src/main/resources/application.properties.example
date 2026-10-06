@@ -45,6 +45,19 @@ musallahboard.enrollment.tokenPepper=
 musallahboard.defaultTimezone=America/Toronto
 # How often undelivered device commands are expired and in-flight ones timed out.
 musallahboard.command.reaperIntervalMs=60000
+# Agent WebSocket liveness: close a socket that has not authenticated within authTimeoutMs, or
+# an authenticated one silent for idleTimeoutMs (agents heartbeat every 30 s), so a dead board
+# drops off the online list instead of swallowing commands.
+musallahboard.agent.authTimeoutMs=15000
+musallahboard.agent.idleTimeoutMs=90000
+musallahboard.agent.sweepIntervalMs=5000
+# Heartbeat telemetry rows (one per board every 30 s) older than this are deleted daily.
+# 0 or less keeps them forever.
+musallahboard.telemetry.retentionDays=14
+musallahboard.telemetry.pruneCron=0 30 3 * * *
+# Raises the WebSocket text buffer to fit a screenshot result from the agent (base64, up to
+# 8 MiB). On by default; set false only if the container already configures this.
+lensbridge.websocket.container-customizer.enabled=true
 # Content signing key for board packages (.mbu): base64 of a 32-byte Ed25519 seed, e.g. from
 # `mbpack keygen` in the agent repo. Boards pin the matching public key at enrollment, and only
 # accept content signed by a pinned key. Optional: without it the app still starts, but
@@ -79,6 +92,9 @@ image-processing.thumbnail-width=400
 image-processing.thumbnail-height=400
 image-processing.thumbnail-quality=0.7
 image-processing.thumbnail-folder=thumbnails/
+# Images with more pixels than this are stored but not thumbnailed: decoding one takes
+# width x height x 4 bytes of heap, so a small file declaring huge dimensions could exhaust it.
+image-processing.max-source-pixels=50000000
 
 # Rate limiting
 ratelimit.requests=100
@@ -135,6 +151,10 @@ management.endpoint.health.probes.enabled=true
 # The mail health check opens an SMTP connection on every probe; an SMTP hiccup would mark the
 # whole container unhealthy.
 management.health.mail.enabled=false
+
+# Scheduled jobs (command reaper, agent session sweeper, event status refresh, token and
+# telemetry purges) share Spring's scheduler, which has a single thread by default.
+spring.task.scheduling.pool.size=4
 
 spring.jackson.serialization.write-dates-as-timestamps=false
 

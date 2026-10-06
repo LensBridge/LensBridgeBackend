@@ -15,7 +15,7 @@ import org.springframework.web.multipart.MultipartFile;
 @Data @Builder @NoArgsConstructor @AllArgsConstructor
 public class CreatePosterRequest {
     @NotBlank(message = "Title is required")
-    @Size(max = 255, message = "Title must be at most 255 characters")
+    @Size(min = 1, max = 255, message = "Title must be at most 255 characters")
     private String title;
 
     @Positive(message = "Duration must be positive")
