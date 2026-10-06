@@ -3,10 +3,10 @@ package com.ibrasoft.lensbridge.service.agent;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.EnrollmentToken;
 import com.ibrasoft.lensbridge.repository.sql.EnrollmentTokenRepository;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -21,9 +21,10 @@ import java.util.UUID;
  * Issues and consumes one-time enrollment tokens.
  * <p>
  * The plaintext token is returned to the admin once at issue time and is never persisted —
- * we only store its SHA-256 hash. Consumption is single-attempt: a successful consume marks
- * the row before the caller is told "ok," so two concurrent agents racing on the same token
- * cannot both win.
+ * we only store its SHA-256 hash. Consumption is single-attempt: it is one conditional
+ * {@code UPDATE ... WHERE consumed_at IS NULL AND expires_at > now} and succeeds only when
+ * exactly one row changed. The database decides the winner, so two concurrent agents racing
+ * on the same token cannot both enroll (a read-check-write in Java would let both through).
  */
 @Service
 @RequiredArgsConstructor
@@ -63,11 +64,15 @@ public class EnrollmentTokenService {
 
     /**
      * Atomically marks a token as consumed iff it is unconsumed and unexpired.
+     * <p>
+     * The device id is not known yet at this point (Hibernate generates it when the device is
+     * persisted), so the caller records it afterwards with {@link #recordConsumer}; both run in
+     * the enrollment transaction, so a failure in between rolls the consumption back too.
      *
      * @return the consumed row on success, empty if the token is unknown / expired / already used
      */
     @Transactional
-    public Optional<EnrollmentToken> consume(String plaintext, UUID consumedByDeviceId) {
+    public Optional<EnrollmentToken> consume(String plaintext) {
         if (plaintext == null || plaintext.isBlank()) return Optional.empty();
 
         Optional<EnrollmentToken> found = repository.findByTokenHash(hash(plaintext));
@@ -75,12 +80,18 @@ public class EnrollmentTokenService {
 
         EnrollmentToken row = found.get();
         Instant now = Instant.now();
-        if (row.getConsumedAt() != null) return Optional.empty();
-        if (row.getExpiresAt().isBefore(now)) return Optional.empty();
+        // Exactly one concurrent caller sees a row count of 1; everyone else sees 0.
+        if (repository.markConsumed(row.getId(), now) != 1) return Optional.empty();
 
+        // markConsumed detaches the row it loaded, so this only fixes up the copy we return.
         row.setConsumedAt(now);
-        row.setConsumedByDeviceId(consumedByDeviceId);
-        return Optional.of(repository.save(row));
+        return Optional.of(row);
+    }
+
+    /** Records which device a just-consumed token produced. */
+    @Transactional
+    public void recordConsumer(UUID tokenId, UUID deviceId) {
+        repository.recordConsumer(tokenId, deviceId);
     }
 
     private int clampTtl(Integer requested) {

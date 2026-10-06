@@ -16,6 +16,8 @@ public class DeviceConfig {
     private UUID id;
 
     @JsonIgnore
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     @OneToOne(fetch = FetchType.LAZY)
     @MapsId
     @JoinColumn(name = "device_id")

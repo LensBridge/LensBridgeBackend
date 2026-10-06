@@ -5,7 +5,9 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -33,6 +35,10 @@ public class Device {
     private Instant enrolledAt;
     private Instant lastHeartbeat;
 
+    // DeviceConfig points back at its device; without these exclusions the two @Data classes
+    // call each other's toString/equals/hashCode until the stack overflows.
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     @OneToOne(mappedBy = "device", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     private DeviceConfig config;
 
@@ -41,6 +47,7 @@ public class Device {
     private Audience audience;
 
     /** Ed25519 public key (32 bytes). Set during enrollment; null before. */
+    @ToString.Exclude
     @Column(name = "public_key", length = 32)
     private byte[] publicKey;
 
