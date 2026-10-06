@@ -21,9 +21,8 @@ import java.util.stream.Collectors;
  * Transforms a WeeklyContent entity into FrameDefinitions:
  * one per quote (VERSE/HADITH kind) and one for jummah prayer info.
  *
- * This intentionally does NOT implement FrameTransformer<T> because one source expands
- * to multiple frames — but it does implement {@link FrameProducer}, since that interface
- * already returns a List<FrameDefinition>.
+ * One weekly-content row expands to several frames, which is why this is a {@link FrameProducer}
+ * (returns a list) rather than a one-to-one mapping.
  */
 @Component
 @RequiredArgsConstructor
@@ -46,10 +45,7 @@ public class WeeklyContentFrameProducer implements FrameProducer {
         if (content == null) return out;
 
         for (IslamicQuote quote : content.getQuotes()) {
-            IslamicQuoteFrameConfig.Kind kind = quote.getKind() == IslamicQuote.Kind.VERSE
-                    ? IslamicQuoteFrameConfig.Kind.VERSE
-                    : IslamicQuoteFrameConfig.Kind.HADITH;
-            out.add(quoteFrame(quote, kind));
+            out.add(quoteFrame(quote, frameKind(quote.getKind())));
         }
 
         if (!content.getJummahPrayers().isEmpty()) {
@@ -57,6 +53,19 @@ public class WeeklyContentFrameProducer implements FrameProducer {
         }
 
         return out;
+    }
+
+    /**
+     * Maps by name, so a Kind added to one enum and not the other fails loudly with
+     * IllegalArgumentException instead of quietly rendering as a hadith. The column is nullable
+     * (rows saved without a kind exist), and a null is treated as a hadith: the frame still
+     * needs a kind, and the text is shown the same way for either.
+     */
+    static IslamicQuoteFrameConfig.Kind frameKind(IslamicQuote.Kind kind) {
+        if (kind == null) {
+            return IslamicQuoteFrameConfig.Kind.HADITH;
+        }
+        return IslamicQuoteFrameConfig.Kind.valueOf(kind.name());
     }
 
     private FrameDefinition quoteFrame(IslamicQuote quote, IslamicQuoteFrameConfig.Kind kind) {

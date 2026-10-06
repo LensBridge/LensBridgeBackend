@@ -30,8 +30,12 @@ public class DeviceConfig {
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "board_config_messages",
         joinColumns = @JoinColumn(name = "device_id"))
-    @Column(name = "message")
-    private List<String> scrollingMessages;
+    @Column(name = "message", length = MESSAGE_MAX)
+    private List<@jakarta.validation.constraints.Size(max = MESSAGE_MAX,
+            message = "Each scrolling message must be at most 4000 characters") String> scrollingMessages;
+
+    /** Longest ticker message. Matches V4__widen_board_text_columns. */
+    public static final int MESSAGE_MAX = 4000;
 
     /** Shortest and longest a slide may be pinned for. A 2s slide cannot be read; a 5m one is a hang. */
     public static final int MIN_SLIDE_SECONDS = 5;
@@ -53,10 +57,9 @@ public class DeviceConfig {
     /**
      * How long the next-prayer countdown is pinned for. Never null to a caller — see the getter.
      *
-     * The column stays nullable even though the API contract does not, because {@code
-     * ddl-auto=update} cannot add a NOT NULL column to a table that already has rows: Hibernate
-     * logs the failure and continues, leaving the column absent and every read broken. Nullable
-     * plus a defaulting getter reaches the same place without a migration.
+     * The column is nullable because rows created before it existed have no value for it, and
+     * backfilling them would store a duration nobody chose. The getter supplies the default
+     * instead, so those rows read the same as a freshly created one.
      */
     @Column(name = "next_prayer_duration_seconds")
     private Integer nextPrayerDurationSeconds;

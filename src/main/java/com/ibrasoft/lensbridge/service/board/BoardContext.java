@@ -7,13 +7,11 @@ import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 
 import java.time.DateTimeException;
-import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.time.temporal.TemporalAdjusters;
 
 /**
  * Everything a payload assembly needs to know about "when" and "where" for one board.
@@ -21,10 +19,10 @@ import java.time.temporal.TemporalAdjusters;
  * All boundaries are computed in the device's own timezone, never the server's. A board in
  * Toronto and a backend container running UTC must agree on which events are "today".
  * <p>
- * Weeks run <b>Monday to Sunday</b>, matching {@link com.ibrasoft.lensbridge.model.board.WeekId},
- * which keys the {@code weekly_content} table. The two used to disagree — events were
- * bucketed Sunday–Saturday — so on Sundays a board showed next week's events next to last
- * week's jummah times.
+ * Weekly content is keyed by {@link com.ibrasoft.lensbridge.model.board.WeekId} (ISO weeks,
+ * Monday to Sunday) from {@link #today()}, so a board's jummah times always come from the week
+ * its own calendar says it is. The agenda does not follow week boundaries: it looks ahead over
+ * a rolling window ({@link #rollingWindowEnd()}), so on a Saturday it still has days to show.
  */
 @Value
 @Builder
@@ -50,18 +48,6 @@ public class BoardContext {
         return now.toLocalDate();
     }
 
-    public Instant currentWeekStart() {
-        return now.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
-                  .with(LocalTime.MIN)
-                  .toInstant();
-    }
-
-    public Instant currentWeekEnd() {
-        return now.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY))
-                  .with(LocalTime.MAX)
-                  .toInstant();
-    }
-
     public Instant rollingWindowEnd() {
         return now.plusDays(6).with(LocalTime.MAX).toInstant();
     }
@@ -70,13 +56,9 @@ public class BoardContext {
         return now.with(LocalTime.MIN).toInstant();
     }
 
-    public Instant currentDayEnd() {
-        return now.with(LocalTime.MAX).toInstant();
-    }
-
     /**
      * First instant of the next day in the device's zone — the exclusive end of today. Use this
-     * rather than {@link #currentDayEnd()} for half-open ranges: a 23:59:59.999999999 bound
+     * rather than a 23:59:59.999999999 end bound for half-open ranges: that bound
      * gets rounded up to midnight by databases that store microseconds. Correct on DST
      * change days (23 or 25 hours after {@link #currentDayStart()}).
      */

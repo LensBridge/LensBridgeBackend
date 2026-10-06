@@ -289,10 +289,13 @@ class AgentContentControllerTest {
     }
 
     @Test
-    void weatherReturnsTheCachedWeatherVerbatimWithFetchedAt() throws Exception {
-        when(openWeatherService.getCurrentWeather()).thenReturn(new ObjectMapper().readTree(
-                "{\"name\":\"Mississauga\",\"main\":{\"temp\":12.5},\"weather\":[{\"icon\":\"04d\"}]}"));
-        Instant before = Instant.now();
+    void weatherReturnsTheCachedWeatherVerbatimWithTheTimeItWasFetched() throws Exception {
+        // Fetched an hour ago: fetchedAt must be that moment, not the moment of this request.
+        Instant fetched = Instant.now().minusSeconds(3600).truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+        when(openWeatherService.getCurrentObservation()).thenReturn(new OpenWeatherService.Observation(
+                new ObjectMapper().readTree(
+                        "{\"name\":\"Mississauga\",\"main\":{\"temp\":12.5},\"weather\":[{\"icon\":\"04d\"}]}"),
+                fetched));
 
         MvcResult result = mockMvc.perform(signedWeatherGet(new byte[0]))
                 .andExpect(status().isOk())
@@ -304,12 +307,12 @@ class AgentContentControllerTest {
         String fetchedAt = new ObjectMapper().readTree(result.getResponse().getContentAsString())
                 .get("fetchedAt").asText();
         assertThat(fetchedAt).endsWith("Z");
-        assertThat(Instant.parse(fetchedAt)).isBetween(before, Instant.now());
+        assertThat(Instant.parse(fetchedAt)).isEqualTo(fetched);
     }
 
     @Test
     void weatherIsAnExplicitNullWhenTheServerHasNone() throws Exception {
-        when(openWeatherService.getCurrentWeather()).thenReturn(null);
+        when(openWeatherService.getCurrentObservation()).thenReturn(null);
 
         mockMvc.perform(signedWeatherGet(new byte[0]))
                 .andExpect(status().isOk())
@@ -320,7 +323,7 @@ class AgentContentControllerTest {
 
     @Test
     void weatherIsNullNotA5xxWhenTheServiceFails() throws Exception {
-        when(openWeatherService.getCurrentWeather()).thenThrow(new IllegalStateException("upstream down"));
+        when(openWeatherService.getCurrentObservation()).thenThrow(new IllegalStateException("upstream down"));
 
         mockMvc.perform(signedWeatherGet(new byte[0]))
                 .andExpect(status().isOk())

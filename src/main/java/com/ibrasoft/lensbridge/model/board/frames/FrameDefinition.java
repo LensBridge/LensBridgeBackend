@@ -15,11 +15,12 @@ public class FrameDefinition {
      * Stable identity for this frame, independent of its position in the response.
      * Entity-backed, multi-instance types use {@code "<type>:<entityId>"} (e.g.
      * {@code "poster:3fa8..."}); singleton types (there is only ever one per assembly, e.g.
-     * {@code daily_schedule} or {@code agenda}) use a fixed slug equal to the type name.
+     * {@code agenda}) use a fixed slug equal to the type name.
      * <p>
-     * This is what a future per-frame ordering override will reference, so it must stay
-     * stable across payload rebuilds even though {@code FrameDefinition} itself is
-     * reconstructed from scratch on every request.
+     * A {@code FrameDefinition} is rebuilt from the stored entities each time a payload or
+     * content package is assembled, so this id is the only thing that identifies "the same
+     * frame" between two assemblies. It must therefore be derived from stable data (the
+     * entity id or the fixed slug), never from position or content.
      */
     private String frameId;
 
