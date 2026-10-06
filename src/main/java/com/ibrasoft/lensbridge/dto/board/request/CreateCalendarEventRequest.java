@@ -9,21 +9,25 @@ import lombok.*;
 @Data @Builder @NoArgsConstructor @AllArgsConstructor
 public class CreateCalendarEventRequest {
     @NotBlank(message = "Event name is required")
+    @Size(max = 255, message = "Name must be at most 255 characters")
     private String name;
     
     @NotBlank(message = "Event description is required")
     private String description;
     
     @NotBlank(message = "Event location is required")
-    @Size(max = 255, message = "Location must be less than 255 characters")
+    @Size(max = 255, message = "Location must be at most 255 characters")
     private String location;
     
+    // Boxed: @NotNull on a primitive never fires (an absent field deserialises to 0), so an
+    // omitted time used to create an event in 1970.
     @NotNull(message = "Start time is required")
-    private long startEpochMs;
+    private Long startEpochMs;
     
     @NotNull(message = "End time is required")
-    private long endEpochMs;
+    private Long endEpochMs;
     
+    /** Optional: null is treated as false. */
     private Boolean allDay;
     
     @NotNull(message = "Audience is required")
