@@ -6,24 +6,22 @@ import com.ibrasoft.lensbridge.security.CurrentUserArgumentResolver;
 import com.ibrasoft.lensbridge.service.agent.http.AuthenticatedDeviceArgumentResolver;
 import com.ibrasoft.lensbridge.service.agent.http.DeviceAuthInterceptor;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.lang.NonNull;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
-import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+/**
+ * MVC wiring. CORS is deliberately not configured here: it is declared once, in
+ * {@code WebSecurityConfig.corsConfigurationSource}, and Spring Security's CorsFilter answers
+ * before MVC ever sees the request. A second mapping here was dead weight that had already
+ * drifted (it omitted PATCH).
+ */
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
-
-    @Value("${frontend.baseurl}")
-    String frontendBaseUrl;
-
-    @Value("${musallahboard.baseurl}")
-    String musallahBoardBaseUrl;
 
     @Autowired
     private RateLimitingFilter rateLimitingFilter;
@@ -56,14 +54,5 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addInterceptors(@NonNull InterceptorRegistry registry) {
         registry.addInterceptor(deviceAuthInterceptor).addPathPatterns("/api/agent/**");
-    }
-
-    @Override
-    public void addCorsMappings(@NonNull CorsRegistry registry) {
-        registry.addMapping("/api/**")
-                .allowedOrigins(frontendBaseUrl, musallahBoardBaseUrl)
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-                .allowedHeaders("*")
-                .allowCredentials(true); 
     }
 }

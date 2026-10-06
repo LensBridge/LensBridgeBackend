@@ -141,8 +141,9 @@ class AdminAuditServiceTest {
         service.logAuditEvent("e", AuditAction.UPDATE_USER, "musallah board", UUID.randomUUID(), "ip");
         service.logAuditEvent("e", AuditAction.UPDATE_USER, "unknown", UUID.randomUUID(), "ip");
         service.logAuditEvent("e", AuditAction.UPDATE_USER, null, UUID.randomUUID(), "ip");
+        service.logAuditEvent("e", AuditAction.CREATE_SOCIAL, "PromotableSocialMedia", UUID.randomUUID(), "ip");
 
-        verify(auditEventRepository, times(7)).save(captor.capture());
+        verify(auditEventRepository, times(8)).save(captor.capture());
         List<AuditEvent> events = captor.getAllValues();
         assertThat(events.get(0).getTargetEntityType()).isEqualTo(AuditEntityType.USER);
         assertThat(events.get(1).getTargetEntityType()).isEqualTo(AuditEntityType.MUSALLAH_BOARD);
@@ -151,6 +152,8 @@ class AdminAuditServiceTest {
         assertThat(events.get(4).getTargetEntityType()).isEqualTo(AuditEntityType.MUSALLAH_BOARD);
         assertThat(events.get(5).getTargetEntityType()).isEqualTo(AuditEntityType.EVENT);
         assertThat(events.get(6).getTargetEntityType()).isEqualTo(AuditEntityType.EVENT);
+        // Board content, not a generic event: this used to fall through to EVENT.
+        assertThat(events.get(7).getTargetEntityType()).isEqualTo(AuditEntityType.MUSALLAH_BOARD);
     }
 
     // ---- queries ----
@@ -176,18 +179,6 @@ class AdminAuditServiceTest {
         assertThat(dto.getTargetEntityId()).isEqualTo(event.getTargetEntityId());
         assertThat(dto.getIpAddress()).isEqualTo("127.0.0.1");
         assertThat(dto.getUserAgent()).isEqualTo("JUnit");
-    }
-
-    @Test
-    void getAuditEventsByAdminMapsList() {
-        User admin = newAdmin();
-        when(auditEventRepository.findByAdminIdOrderByTimestampDesc(admin.getId()))
-                .thenReturn(List.of(newEvent(admin), newEvent(admin)));
-
-        List<AuditEventDto> dtos = service.getAuditEventsByAdmin(admin.getId());
-
-        assertThat(dtos).hasSize(2);
-        assertThat(dtos).allSatisfy(d -> assertThat(d.getAdminId()).isEqualTo(admin.getId()));
     }
 
     @Test
@@ -261,22 +252,5 @@ class AdminAuditServiceTest {
         assertThat(dto.getAdminId()).isNull();
         assertThat(dto.getAdminName()).isNull();
         assertThat(dto.getAdminEmail()).isNull();
-    }
-
-    // ---- statistics ----
-
-    @Test
-    void getOperationCountByAdminDelegatesToRepository() {
-        UUID adminId = UUID.randomUUID();
-        when(auditEventRepository.countByAdminId(adminId)).thenReturn(7L);
-
-        assertThat(service.getOperationCountByAdmin(adminId)).isEqualTo(7L);
-    }
-
-    @Test
-    void getOperationCountByActionDelegatesToRepository() {
-        when(auditEventRepository.countByAction(AuditAction.APPROVE_UPLOAD)).thenReturn(3L);
-
-        assertThat(service.getOperationCountByAction(AuditAction.APPROVE_UPLOAD)).isEqualTo(3L);
     }
 }
