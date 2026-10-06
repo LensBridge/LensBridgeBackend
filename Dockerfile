@@ -10,11 +10,11 @@ RUN mvn -B -e -ntp -DskipTests package \
 
 FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
-RUN useradd -r -u 1001 -g root lensbridge \
- && mkdir -p /app/thumbnails \
- && chown -R lensbridge:root /app
+RUN groupadd -r -g 1001 lensbridge \
+ && useradd -r -u 1001 -g lensbridge lensbridge \
+ && chown -R lensbridge:lensbridge /app
 COPY --from=build /build/app.jar /app/app.jar
 USER lensbridge
 EXPOSE 8085
-ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0"
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError"
 ENTRYPOINT ["sh","-c","exec java $JAVA_OPTS -jar /app/app.jar"]

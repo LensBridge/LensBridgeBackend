@@ -2,9 +2,9 @@
 
 # LensBridge Backend 
 
-![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.14-blue)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.16-blue)
 ![Java](https://img.shields.io/badge/Java-21-orange)
-![Maven](https://img.shields.io/badge/Maven-3.3.2-red)
+![Maven](https://img.shields.io/badge/Maven-3.9-red)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue)
 
 </p>
@@ -18,7 +18,7 @@ LensBridge is the _ultimate_ platform for collecting and sharing photos from eve
 ### Prerequisites
 
 - Java 21 or higher
-- Maven 3.3.2 or higher (Or use the wrapper)
+- Maven 3.9 or higher (Or use the wrapper)
 - Some form of SQL distribution (PostgreSQL, MySQL, etc.) - I use PostgreSQL in prod and SQLite for local development.
 - Cloudflare R2 (Or any S3-compatible storage service) for file storage
 - (Optional) SMTP server for email notifications
@@ -77,4 +77,10 @@ http://localhost:8080/swagger-ui.html
 
 Consider disabling this in production. This _is_ an open source project, though; Not sure how effective that would be.
 
-A local copy of the API documentation will be added sometime in the distant future
+A local copy lives in [`openapi.yaml`](openapi.yaml). It is the contract the LensBridge frontend, the MusallahBoard app and the board agent generate their clients from, and CI fails when it no longer matches the controllers. After changing a request or response shape, regenerate it and commit the result:
+
+```bash
+./mvnw -P openapi verify -DskipTests
+```
+
+This boots the app with the placeholder settings in `tools/openapi-gen.properties`, so it does not need your own `application.properties`.

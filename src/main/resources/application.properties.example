@@ -119,17 +119,22 @@ lensbridge.app.maxRefreshTokensPerUser=5
 auth.token.verification-expiration-ms=86400000
 auth.token.password-reset-expiration-ms=3600000
 
-# Onboarding
-lensbridge.onboarding.secret=replace-with-base64-32-bytes
-lensbridge.onboarding.expiration-ms=86400000
-
-# Behind a reverse proxy (nginx): honor X-Forwarded-* headers
+# Behind a reverse proxy (nginx): honor X-Forwarded-* headers. The client address used for rate
+# limiting and audit logs is request.getRemoteAddr(), which this setting derives from
+# X-Forwarded-For. That header is only as trustworthy as the proxy that writes it: nginx's
+# $proxy_add_x_forwarded_for appends to whatever the client sent. Either have the edge proxy
+# overwrite it (proxy_set_header X-Forwarded-For $remote_addr), or use
+# server.forward-headers-strategy=native with server.tomcat.remoteip.internal-proxies, which
+# reads the header from the right and skips only trusted proxies.
 server.forward-headers-strategy=framework
 
 # Actuator (prod): only health, no details leak
 management.endpoints.web.exposure.include=health
 management.endpoint.health.show-details=never
 management.endpoint.health.probes.enabled=true
+# The mail health check opens an SMTP connection on every probe; an SMTP hiccup would mark the
+# whole container unhealthy.
+management.health.mail.enabled=false
 
 spring.jackson.serialization.write-dates-as-timestamps=false
 

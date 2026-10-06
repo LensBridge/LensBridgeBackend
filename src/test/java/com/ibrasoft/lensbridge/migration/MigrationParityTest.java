@@ -24,8 +24,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Nothing about that is enforced by Flyway or the build. A migration added to only one
  * directory compiles, passes every other test, and runs fine locally — then either fails on
  * deploy or, worse, succeeds and leaves the other environment silently a version behind.
- * Since {@code spring.flyway.locations} uses {@code {vendor}}, neither environment can even
- * see the other's directory to notice.
+ * Each profile points {@code spring.flyway.locations} at its own directory, so neither
+ * environment can even see the other's to notice.
  * <p>
  * This is a file-listing test rather than a schema-comparison one: it cannot tell you the two
  * scripts describe the same tables, only that you did not forget one. That is the mistake
