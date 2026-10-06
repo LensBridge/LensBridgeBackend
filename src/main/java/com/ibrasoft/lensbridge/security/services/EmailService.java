@@ -8,6 +8,7 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
+import org.springframework.web.util.HtmlUtils;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -56,41 +57,48 @@ public class EmailService {
 
     /**
      * Sends a verification email with a link.
-     * 
-     * @param to
-     * @param verificationUrl
-     */
-    public void sendWelcomeEmail(String to, String name) {
-        String subject = "Verify Your Email Address";
-        String htmlContent = loadEmailTemplate("email-verification.html");
-        htmlContent = htmlContent.replaceAll("\\{\\{USER_NAME\\}\\}", name);
-        sendHtmlEmail(to, subject, htmlContent);
-    }
-
-    /**
-     * Sends a verification email with a link.
-     * 
-     * @param to
-     * @param verificationUrl
+     *
+     * @param to              the recipient's email address
+     * @param name            the recipient's first name (user-controlled, so HTML-escaped)
+     * @param verificationUrl the link that confirms the address
      */
     public void sendVerificationEmail(String to, String name, String verificationUrl) {
         String subject = "Verify Your Email Address";
-        String htmlContent = loadEmailTemplate("email-verification.html");
-        htmlContent = htmlContent.replaceAll("\\{\\{USER_NAME\\}\\}", name)
-                .replaceAll("\\{\\{ACTIVATE_URL\\}\\}", verificationUrl);
-        sendHtmlEmail(to, subject, htmlContent);
+        String htmlContent = fillTemplate("email-verification.html", name, verificationUrl);
+        String plainText = plainTextBody(name, "Verify your email address using this link:", verificationUrl);
+        sendHtmlEmail(to, subject, htmlContent, plainText);
     }
 
     public void sendPasswordResetEmail(String to, String name, String resetUrl) {
         String subject = "Password Reset Request";
-        String htmlContent = loadEmailTemplate("password-reset.html");
-        htmlContent = htmlContent
-            .replaceAll("\\{\\{ACTIVATE_URL\\}\\}", resetUrl)
-            .replaceAll("\\{\\{USER_NAME\\}\\}", name);
-        sendHtmlEmail(to, subject, htmlContent);
+        String htmlContent = fillTemplate("password-reset.html", name, resetUrl);
+        String plainText = plainTextBody(name, "Reset your password using this link:", resetUrl);
+        sendHtmlEmail(to, subject, htmlContent, plainText);
     }
 
-    private void sendHtmlEmail(String to, String subject, String htmlContent) {
+    /**
+     * Substitutes the placeholders with literal {@code String.replace}, not {@code replaceAll}:
+     * the name is user-controlled and a {@code $} or {@code \} in it is a regex replacement
+     * escape that throws or corrupts the output. Both values are HTML-escaped because they land
+     * in markup: the name in text, the URL in attributes and text (so {@code &} becomes
+     * {@code &amp;}, which is what a correct href needs).
+     */
+    private String fillTemplate(String templateName, String name, String url) {
+        return loadEmailTemplate(templateName)
+                .replace("{{USER_NAME}}", HtmlUtils.htmlEscape(name))
+                .replace("{{ACTIVATE_URL}}", HtmlUtils.htmlEscape(url));
+    }
+
+    /**
+     * Plain-text body for the fallback send. Built directly rather than by stripping tags from
+     * the HTML, which left the stylesheet text in and lost the link that is the whole point of
+     * the message.
+     */
+    private String plainTextBody(String name, String instruction, String url) {
+        return "Assalamu alaikum, " + name + "\n\n" + instruction + "\n" + url + "\n";
+    }
+
+    private void sendHtmlEmail(String to, String subject, String htmlContent, String plainTextFallback) {
         try {
             logger.info("Attempting to send HTML email to: {} with subject: {}", to, subject);
             MimeMessage message = mailSender.createMimeMessage();
@@ -109,8 +117,7 @@ public class EmailService {
             logger.info("Attempting fallback to plain text email for: {}", to);
             try {
                 // Fallback to plain text
-                String plainText = htmlContent.replaceAll("<[^>]*>", "").replaceAll("\\s+", " ").trim();
-                sendEmail(to, subject, plainText);
+                sendEmail(to, subject, plainTextFallback);
             } catch (Exception fallbackError) {
                 logger.error("Fallback plain text email also failed for: {} - Error: {}", to,
                         fallbackError.getMessage(), fallbackError);
@@ -129,10 +136,5 @@ public class EmailService {
             logger.error("Failed to load email template: {} - Error: {}", templateName, e.getMessage(), e);
             throw new RuntimeException("Failed to load email template", e);
         }
-    }
-
-    // Generate a random token for verification or password reset
-    public String generateToken() {
-        return java.util.UUID.randomUUID().toString();
     }
 }
