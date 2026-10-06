@@ -68,15 +68,6 @@ class BoardServiceTest {
     // ==================== Board Config ====================
 
     @Test
-    void getBoardConfigReturnsOptional() {
-        UUID id = UUID.randomUUID();
-        DeviceConfig c = config(id);
-        when(boardConfigRepository.findById(id)).thenReturn(Optional.of(c));
-
-        assertThat(service.getBoardConfig(id)).contains(c);
-    }
-
-    @Test
     void getBoardConfigOrThrowThrowsNotFound() {
         UUID id = UUID.randomUUID();
         when(boardConfigRepository.findById(id)).thenReturn(Optional.empty());
@@ -149,14 +140,6 @@ class BoardServiceTest {
     // ==================== Weekly Content ====================
 
     @Test
-    void getWeeklyContentDelegatesByYearAndWeek() {
-        WeeklyContent wc = WeeklyContent.builder().year(2026).weekNumber(20).build();
-        when(weeklyContentRepository.findByYearAndWeekNumber(2026, 20)).thenReturn(Optional.of(wc));
-
-        assertThat(service.getWeeklyContent(2026, 20)).contains(wc);
-    }
-
-    @Test
     void getWeeklyContentOrThrowThrowsWhenMissing() {
         when(weeklyContentRepository.findByYearAndWeekNumber(2026, 20)).thenReturn(Optional.empty());
 
@@ -164,17 +147,6 @@ class BoardServiceTest {
                 .isInstanceOf(ApiResponseException.class)
                 .satisfies(e -> assertThat(((ApiResponseException) e).getStatus())
                         .isEqualTo(HttpStatus.NOT_FOUND));
-    }
-
-    @Test
-    void getCurrentWeeklyContentResolvesViaWeekIdFromToday() {
-        WeekId current = WeekId.fromDate(LocalDate.now());
-        WeeklyContent wc = WeeklyContent.builder()
-                .year(current.getYear()).weekNumber(current.getWeekNumber()).build();
-        when(weeklyContentRepository.findByYearAndWeekNumber(
-                current.getYear(), current.getWeekNumber())).thenReturn(Optional.of(wc));
-
-        assertThat(service.getCurrentWeeklyContent()).contains(wc);
     }
 
     @Test
@@ -294,15 +266,6 @@ class BoardServiceTest {
     }
 
     @Test
-    void getUpcomingEventsForAudienceDelegates() {
-        List<BoardEvent> events = List.of(BoardEvent.builder().name("e").build());
-        when(boardEventRepository.findUpcomingByAudienceOrBoth(eq(Audience.BROTHERS), any(Instant.class)))
-                .thenReturn(events);
-
-        assertThat(service.getUpcomingEventsForAudience(Audience.BROTHERS)).isEqualTo(events);
-    }
-
-    @Test
     void getEventsForAudienceInRangeDelegatesWithRange() {
         Instant start = Instant.now();
         Instant end = start.plusSeconds(3600);
@@ -313,26 +276,99 @@ class BoardServiceTest {
         assertThat(service.getEventsForAudienceInRange(Audience.BOTH, start, end)).isEqualTo(events);
     }
 
-    // @Test
-    // void createEventBuildsAndPersists() {
-    //     when(boardEventRepository.save(any(BoardEvent.class))).thenAnswer(inv -> inv.getArgument(0));
-    //     Instant start = Instant.now();
-    //     CreateCalendarEventRequest request = CreateCalendarEventRequest.builder()
-    //             .name("Halaqa")
-    //             .description("desc")
-    //             .location("MSA Room")
-    //             .startTime(start)
-    //             .endTime(start.plusSeconds(3600))
-    //             .allDay(false)
-    //             .audience(Audience.BOTH)
-    //             .build();
+    private CreateCalendarEventRequest.CreateCalendarEventRequestBuilder eventRequest(Instant start) {
+        return CreateCalendarEventRequest.builder()
+                .name("Halaqa")
+                .description("desc")
+                .location("MSA Room")
+                .startEpochMs(start.toEpochMilli())
+                .endEpochMs(start.plusSeconds(3600).toEpochMilli())
+                .allDay(false)
+                .audience(Audience.BOTH);
+    }
 
-    //     BoardEvent created = service.createEvent(request);
+    @Test
+    void createEventBuildsAndPersists() {
+        when(boardEventRepository.save(any(BoardEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+        Instant start = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
 
-    //     assertThat(created.getName()).isEqualTo("Halaqa");
-    //     assertThat(created.getLocation()).isEqualTo("MSA Room");
-    //     assertThat(created.getAudience()).isEqualTo(Audience.BOTH);
-    // }
+        BoardEvent created = service.createEvent(eventRequest(start).build());
+
+        assertThat(created.getName()).isEqualTo("Halaqa");
+        assertThat(created.getLocation()).isEqualTo("MSA Room");
+        assertThat(created.getAudience()).isEqualTo(Audience.BOTH);
+        assertThat(created.getStartTime()).isEqualTo(start);
+        assertThat(created.getEndTime()).isEqualTo(start.plusSeconds(3600));
+        verify(boardStream).contentChanged("events");
+    }
+
+    /** allDay is optional in the contract; null must not reach the NOT NULL column. */
+    @Test
+    void createEventTreatsAMissingAllDayAsFalse() {
+        when(boardEventRepository.save(any(BoardEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        BoardEvent created = service.createEvent(eventRequest(Instant.now()).allDay(null).build());
+
+        assertThat(created.getAllDay()).isFalse();
+    }
+
+    @Test
+    void createEventKeepsAnExplicitAllDayTrue() {
+        when(boardEventRepository.save(any(BoardEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        BoardEvent created = service.createEvent(eventRequest(Instant.now()).allDay(true).build());
+
+        assertThat(created.getAllDay()).isTrue();
+    }
+
+    @Test
+    void createEventRejectsAnEndBeforeTheStart() {
+        Instant start = Instant.now();
+        CreateCalendarEventRequest request = eventRequest(start)
+                .endEpochMs(start.minusSeconds(1).toEpochMilli())
+                .build();
+
+        assertThatThrownBy(() -> service.createEvent(request))
+                .isInstanceOf(ApiResponseException.class)
+                .satisfies(e -> assertThat(((ApiResponseException) e).getStatus())
+                        .isEqualTo(HttpStatus.BAD_REQUEST));
+        verify(boardEventRepository, never()).save(any());
+    }
+
+    @Test
+    void updateEventRejectsAnEndBeforeTheStoredStart() {
+        UUID id = UUID.randomUUID();
+        Instant start = Instant.now();
+        BoardEvent existing = BoardEvent.builder().id(id).name("e")
+                .startTime(start).endTime(start.plusSeconds(3600)).audience(Audience.BOTH).build();
+        when(boardEventRepository.findById(id)).thenReturn(Optional.of(existing));
+
+        // Only the end is patched: it is still held against the stored start.
+        UpdateCalendarEventRequest request = UpdateCalendarEventRequest.builder()
+                .endTime(start.minusSeconds(60)).build();
+
+        assertThatThrownBy(() -> service.updateEvent(id, request))
+                .isInstanceOf(ApiResponseException.class)
+                .satisfies(e -> assertThat(((ApiResponseException) e).getStatus())
+                        .isEqualTo(HttpStatus.BAD_REQUEST));
+        verify(boardEventRepository, never()).save(any());
+    }
+
+    @Test
+    void updateEventRejectsAStartAfterTheStoredEnd() {
+        UUID id = UUID.randomUUID();
+        Instant start = Instant.now();
+        BoardEvent existing = BoardEvent.builder().id(id).name("e")
+                .startTime(start).endTime(start.plusSeconds(3600)).audience(Audience.BOTH).build();
+        when(boardEventRepository.findById(id)).thenReturn(Optional.of(existing));
+
+        UpdateCalendarEventRequest request = UpdateCalendarEventRequest.builder()
+                .startTime(start.plusSeconds(7200)).build();
+
+        assertThatThrownBy(() -> service.updateEvent(id, request))
+                .isInstanceOf(ApiResponseException.class);
+        verify(boardEventRepository, never()).save(any());
+    }
 
     @Test
     void updateEventPatchesOnlyNonNullFields() {
@@ -373,20 +409,258 @@ class BoardServiceTest {
         verify(boardEventRepository).delete(existing);
     }
 
+    // ==================== location merge ====================
+
+    private DeviceConfig configWithLocation(UUID id) {
+        DeviceConfig existing = config(id);
+        existing.setLocation(Location.builder()
+                .city("Mississauga").country("CA")
+                .latitude(43.589).longitude(-79.644)
+                .timezone("America/Toronto").method(com.ibrasoft.lensbridge.model.board.CalculationMethod.ISNA)
+                .build());
+        when(boardConfigRepository.findById(id)).thenReturn(Optional.of(existing));
+        // Lenient: the rejection tests never reach the save.
+        org.mockito.Mockito.lenient().when(boardConfigRepository.save(any(DeviceConfig.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        return existing;
+    }
+
+    private UpdateBoardConfigRequest locationPatch(Location location) {
+        return UpdateBoardConfigRequest.builder().location(location).build();
+    }
+
     @Test
-    void updateBoardConfigCapturesPatchedLocation() {
+    void updateBoardConfigMergesALocationPatchFieldByField() {
+        UUID id = UUID.randomUUID();
+        configWithLocation(id);
+
+        DeviceConfig saved = service.updateBoardConfig(id,
+                locationPatch(Location.builder().city("Toronto").build()));
+
+        assertThat(saved.getLocation().getCity()).isEqualTo("Toronto");
+        assertThat(saved.getLocation().getCountry()).isEqualTo("CA");
+        assertThat(saved.getLocation().getTimezone()).isEqualTo("America/Toronto");
+        assertThat(saved.getLocation().getMethod())
+                .isEqualTo(com.ibrasoft.lensbridge.model.board.CalculationMethod.ISNA);
+    }
+
+    /** The regression: replacing the embeddable zeroed the primitive coordinates. */
+    @Test
+    void aTimezoneOnlyPatchLeavesTheCoordinatesAlone() {
+        UUID id = UUID.randomUUID();
+        configWithLocation(id);
+
+        DeviceConfig saved = service.updateBoardConfig(id,
+                locationPatch(Location.builder().timezone("America/Vancouver").build()));
+
+        assertThat(saved.getLocation().getTimezone()).isEqualTo("America/Vancouver");
+        assertThat(saved.getLocation().getLatitude()).isEqualTo(43.589);
+        assertThat(saved.getLocation().getLongitude()).isEqualTo(-79.644);
+    }
+
+    @Test
+    void aCoordinatePatchOverwritesOnlyThatCoordinate() {
+        UUID id = UUID.randomUUID();
+        configWithLocation(id);
+
+        DeviceConfig saved = service.updateBoardConfig(id,
+                locationPatch(Location.builder().latitude(0.0).build()));
+
+        // An explicit 0.0 is a real value, distinct from "absent".
+        assertThat(saved.getLocation().getLatitude()).isEqualTo(0.0);
+        assertThat(saved.getLocation().getLongitude()).isEqualTo(-79.644);
+    }
+
+    @Test
+    void aLocationPatchOnAConfigWithoutOneCreatesIt() {
         UUID id = UUID.randomUUID();
         DeviceConfig existing = config(id);
         when(boardConfigRepository.findById(id)).thenReturn(Optional.of(existing));
         when(boardConfigRepository.save(any(DeviceConfig.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
-        Location loc = Location.builder().city("Toronto").timezone("America/Toronto").build();
-        service.updateBoardConfig(id, UpdateBoardConfigRequest.builder().location(loc).build());
+        DeviceConfig saved = service.updateBoardConfig(id,
+                locationPatch(Location.builder().city("Toronto").timezone("America/Toronto").build()));
+
+        assertThat(saved.getLocation().getCity()).isEqualTo("Toronto");
+        assertThat(saved.getLocation().getLatitude()).isNull();
+    }
+
+    private void assertLocationRejected(Location bad) {
+        UUID id = UUID.randomUUID();
+        DeviceConfig existing = configWithLocation(id);
+
+        assertThatThrownBy(() -> service.updateBoardConfig(id, locationPatch(bad)))
+                .isInstanceOf(ApiResponseException.class)
+                .satisfies(e -> assertThat(((ApiResponseException) e).getStatus())
+                        .isEqualTo(HttpStatus.BAD_REQUEST));
+        verify(boardConfigRepository, never()).save(any());
+        // Rejected before anything is applied.
+        assertThat(existing.getLocation().getTimezone()).isEqualTo("America/Toronto");
+        assertThat(existing.getLocation().getLatitude()).isEqualTo(43.589);
+    }
+
+    @Test
+    void anUnknownTimezoneIsRejected() {
+        assertLocationRejected(Location.builder().timezone("Mars/Olympus").build());
+    }
+
+    @Test
+    void aLatitudeOutOfRangeIsRejected() {
+        assertLocationRejected(Location.builder().latitude(90.5).build());
+        assertLocationRejected(Location.builder().latitude(-91.0).build());
+    }
+
+    @Test
+    void aLongitudeOutOfRangeIsRejected() {
+        assertLocationRejected(Location.builder().longitude(180.5).build());
+        assertLocationRejected(Location.builder().longitude(-181.0).build());
+    }
+
+    @Test
+    void theBoundaryCoordinatesAreAccepted() {
+        UUID id = UUID.randomUUID();
+        configWithLocation(id);
+
+        DeviceConfig saved = service.updateBoardConfig(id,
+                locationPatch(Location.builder().latitude(-90.0).longitude(180.0).build()));
+
+        assertThat(saved.getLocation().getLatitude()).isEqualTo(-90.0);
+        assertThat(saved.getLocation().getLongitude()).isEqualTo(180.0);
+    }
+
+    // ==================== saveBoardConfig (PUT) ====================
+
+    @Test
+    void saveBoardConfigForcesTheIdToThePathDeviceWhenTheBodyHasNone() {
+        UUID id = UUID.randomUUID();
+        Device device = Device.builder().id(id).displayName("d").build();
+        DeviceConfig body = new DeviceConfig(); // no id
+        when(deviceRepository.findById(id)).thenReturn(Optional.of(device));
+        when(boardConfigRepository.save(any(DeviceConfig.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        DeviceConfig saved = service.saveBoardConfig(id, body);
+
+        assertThat(saved.getId()).isEqualTo(id);
+        assertThat(saved.getDevice()).isSameAs(device);
+    }
+
+    /** A body naming another device must not overwrite that device's row. */
+    @Test
+    void saveBoardConfigIgnoresAnIdInTheBodyThatIsNotThePathDevice() {
+        UUID id = UUID.randomUUID();
+        UUID other = UUID.randomUUID();
+        Device device = Device.builder().id(id).displayName("d").build();
+        DeviceConfig body = config(other);
+        when(deviceRepository.findById(id)).thenReturn(Optional.of(device));
+        when(boardConfigRepository.save(any(DeviceConfig.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.saveBoardConfig(id, body);
 
         ArgumentCaptor<DeviceConfig> captor = ArgumentCaptor.forClass(DeviceConfig.class);
         verify(boardConfigRepository).save(captor.capture());
-        assertThat(captor.getValue().getLocation()).isSameAs(loc);
+        assertThat(captor.getValue().getId()).isEqualTo(id);
+    }
+
+    @Test
+    void saveBoardConfigRejectsALocationWithoutCoordinates() {
+        UUID id = UUID.randomUUID();
+        Device device = Device.builder().id(id).displayName("d").build();
+        DeviceConfig body = config(id);
+        body.setLocation(Location.builder().city("Toronto").timezone("America/Toronto").build());
+        when(deviceRepository.findById(id)).thenReturn(Optional.of(device));
+
+        assertThatThrownBy(() -> service.saveBoardConfig(id, body))
+                .isInstanceOf(ApiResponseException.class)
+                .satisfies(e -> assertThat(((ApiResponseException) e).getStatus())
+                        .isEqualTo(HttpStatus.BAD_REQUEST));
+        verify(boardConfigRepository, never()).save(any());
+    }
+
+    @Test
+    void saveBoardConfigRejectsAnUnknownTimezone() {
+        UUID id = UUID.randomUUID();
+        Device device = Device.builder().id(id).displayName("d").build();
+        DeviceConfig body = config(id);
+        body.setLocation(Location.builder().latitude(1.0).longitude(2.0).timezone("Nowhere/Land").build());
+        when(deviceRepository.findById(id)).thenReturn(Optional.of(device));
+
+        assertThatThrownBy(() -> service.saveBoardConfig(id, body))
+                .isInstanceOf(ApiResponseException.class);
+        verify(boardConfigRepository, never()).save(any());
+    }
+
+    // ==================== weekly content: times and notification ====================
+
+    @Test
+    void saveWeeklyContentRejectsAMalformedJummahTime() {
+        when(weeklyContentRepository.findByYearAndWeekNumber(2026, 20)).thenReturn(Optional.empty());
+
+        WeeklyContentRequest request = WeeklyContentRequest.builder()
+                .jummahPrayers(List.of(new WeeklyContentRequest.JummahSlot("1:30pm", "Imam", "Hall")))
+                .build();
+
+        assertThatThrownBy(() -> service.saveWeeklyContent(2026, 20, request))
+                .isInstanceOf(ApiResponseException.class)
+                .satisfies(e -> assertThat(((ApiResponseException) e).getStatus())
+                        .isEqualTo(HttpStatus.BAD_REQUEST));
+        verify(weeklyContentRepository, never()).save(any());
+    }
+
+    @Test
+    void saveWeeklyContentRejectsAnOutOfRangeJummahTime() {
+        when(weeklyContentRepository.findByYearAndWeekNumber(2026, 20)).thenReturn(Optional.empty());
+
+        WeeklyContentRequest request = WeeklyContentRequest.builder()
+                .jummahPrayers(List.of(new WeeklyContentRequest.JummahSlot("25:99", null, null)))
+                .build();
+
+        assertThatThrownBy(() -> service.saveWeeklyContent(2026, 20, request))
+                .isInstanceOf(ApiResponseException.class);
+    }
+
+    @Test
+    void saveWeeklyContentAcceptsANullJummahTime() {
+        when(weeklyContentRepository.findByYearAndWeekNumber(2026, 20)).thenReturn(Optional.empty());
+        when(weeklyContentRepository.save(any(WeeklyContent.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        WeeklyContent saved = service.saveWeeklyContent(2026, 20, WeeklyContentRequest.builder()
+                .jummahPrayers(List.of(new WeeklyContentRequest.JummahSlot(null, "Imam", "Hall")))
+                .build());
+
+        assertThat(saved.getJummahPrayers().get(0).getPrayerTime()).isNull();
+    }
+
+    @Test
+    void saveWeeklyContentNotifiesImmediatelyWhenThereIsNoTransaction() {
+        when(weeklyContentRepository.findByYearAndWeekNumber(2026, 20)).thenReturn(Optional.empty());
+        when(weeklyContentRepository.save(any(WeeklyContent.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.saveWeeklyContent(2026, 20, WeeklyContentRequest.builder().build());
+
+        verify(boardStream).contentChanged("weekly-content");
+    }
+
+    /** Notifying before the commit let a board refetch and read the old content. */
+    @Test
+    void saveWeeklyContentNotifiesOnlyAfterTheTransactionCommits() {
+        when(weeklyContentRepository.findByYearAndWeekNumber(2026, 20)).thenReturn(Optional.empty());
+        when(weeklyContentRepository.save(any(WeeklyContent.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.saveWeeklyContent(2026, 20, WeeklyContentRequest.builder().build());
+
+            verify(boardStream, never()).contentChanged(any());
+
+            for (var sync : org.springframework.transaction.support.TransactionSynchronizationManager
+                    .getSynchronizations()) {
+                sync.afterCommit();
+            }
+            verify(boardStream).contentChanged("weekly-content");
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 
     // ==================== slide durations ====================

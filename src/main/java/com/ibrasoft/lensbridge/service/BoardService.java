@@ -21,9 +21,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.time.DateTimeException;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeParseException;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
@@ -42,10 +48,6 @@ public class BoardService {
 
     // ==================== Board Config ====================
 
-    public Optional<DeviceConfig> getBoardConfig(UUID deviceId) {
-        return boardConfigRepository.findById(deviceId);
-    }
-
     public DeviceConfig getBoardConfigOrThrow(UUID deviceId) {
         return boardConfigRepository.findById(deviceId)
                 .orElseThrow(() -> new ApiResponseException(
@@ -58,7 +60,20 @@ public class BoardService {
                 .orElseThrow(() -> new ApiResponseException(
                         HttpStatus.NOT_FOUND,
                         ErrorResponse.of("Device not found: " + deviceId)));
+        // The row is keyed by the device (@MapsId), so the path decides which row this writes,
+        // never the body: a body without an id would otherwise insert a clashing row, and a
+        // body carrying another device's id would overwrite that device's config.
+        deviceConfig.setId(deviceId);
         deviceConfig.setDevice(device);
+        Location location = deviceConfig.getLocation();
+        if (location != null) {
+            // A PUT replaces the whole config, so there is nothing stored to fall back on:
+            // the coordinates have to be in the body or the board has no place to calculate for.
+            if (location.getLatitude() == null || location.getLongitude() == null) {
+                throw badRequest("location.latitude and location.longitude are required");
+            }
+            validateLocation(location);
+        }
         DeviceConfig saved = boardConfigRepository.save(deviceConfig);
         log.info("Saved board config for device: {}", deviceId);
         boardStream.configChanged(deviceId);
@@ -67,7 +82,7 @@ public class BoardService {
 
     public DeviceConfig updateBoardConfig(UUID deviceId, UpdateBoardConfigRequest request) {
         DeviceConfig existing = getBoardConfigOrThrow(deviceId);
-        Patch.apply(request.getLocation(), existing::setLocation);
+        mergeLocation(existing, request.getLocation());
         Patch.apply(request.getDarkModeAfterIsha(), existing::setDarkModeAfterIsha);
         Patch.apply(request.getEnableScrollingMessage(), existing::setEnableScrollingMessage);
         Patch.apply(request.getScrollingMessages(), existing::setScrollingMessages);
@@ -77,6 +92,57 @@ public class BoardService {
         log.info("Updated board config for device: {}", deviceId);
         boardStream.configChanged(deviceId);
         return saved;
+    }
+
+    /**
+     * Merges a partial location into the stored one, field by field. Replacing the whole
+     * embeddable would reset every field the request left out: a body with only a timezone
+     * would zero the coordinates and silently shift every prayer time on the board.
+     * <p>
+     * The merged result is validated before anything is written to the entity, so a rejected
+     * request changes nothing.
+     */
+    private void mergeLocation(DeviceConfig existing, Location patch) {
+        if (patch == null) return;
+        Location current = existing.getLocation();
+        Location merged = Location.builder()
+                .city(patch.getCity() != null ? patch.getCity() : current == null ? null : current.getCity())
+                .country(patch.getCountry() != null ? patch.getCountry() : current == null ? null : current.getCountry())
+                .latitude(patch.getLatitude() != null ? patch.getLatitude() : current == null ? null : current.getLatitude())
+                .longitude(patch.getLongitude() != null ? patch.getLongitude() : current == null ? null : current.getLongitude())
+                .timezone(patch.getTimezone() != null ? patch.getTimezone() : current == null ? null : current.getTimezone())
+                .method(patch.getMethod() != null ? patch.getMethod() : current == null ? null : current.getMethod())
+                .build();
+        validateLocation(merged);
+        existing.setLocation(merged);
+    }
+
+    /**
+     * Rejects a location the board could not use. Coordinates and timezone that are absent are
+     * allowed (the column is nullable); present ones must be real, because a typo here shifts
+     * every prayer time without any visible error.
+     */
+    private static void validateLocation(Location location) {
+        Double lat = location.getLatitude();
+        if (lat != null && (lat.isNaN() || lat < -90 || lat > 90)) {
+            throw badRequest("latitude must be between -90 and 90");
+        }
+        Double lon = location.getLongitude();
+        if (lon != null && (lon.isNaN() || lon < -180 || lon > 180)) {
+            throw badRequest("longitude must be between -180 and 180");
+        }
+        String timezone = location.getTimezone();
+        if (timezone != null) {
+            try {
+                ZoneId.of(timezone);
+            } catch (DateTimeException e) {
+                throw badRequest("Unknown timezone: " + timezone);
+            }
+        }
+    }
+
+    private static ApiResponseException badRequest(String message) {
+        return new ApiResponseException(HttpStatus.BAD_REQUEST, ErrorResponse.of(message));
     }
 
     /**
@@ -118,10 +184,6 @@ public class BoardService {
         return weeklyContentRepository.findAll();
     }
 
-    public Optional<WeeklyContent> getWeeklyContent(int year, int weekNumber) {
-        return weeklyContentRepository.findByYearAndWeekNumber(year, weekNumber);
-    }
-
     public WeeklyContent getWeeklyContentOrThrow(int year, int weekNumber) {
         return weeklyContentRepository.findByYearAndWeekNumber(year, weekNumber)
                 .orElseThrow(() -> new ApiResponseException(
@@ -137,11 +199,6 @@ public class BoardService {
     public Optional<WeeklyContent> getWeeklyContentFor(LocalDate today) {
         WeekId week = WeekId.fromDate(today);
         return weeklyContentRepository.findByYearAndWeekNumber(week.getYear(), week.getWeekNumber());
-    }
-
-    /** Current week in the server's zone. For callers with no device context. */
-    public Optional<WeeklyContent> getCurrentWeeklyContent() {
-        return getWeeklyContentFor(LocalDate.now());
     }
 
     public List<WeeklyContent> getWeeklyContentByYear(int year) {
@@ -174,9 +231,7 @@ public class BoardService {
             for (WeeklyContentRequest.JummahSlot slot : request.getJummahPrayers()) {
                 JummahPrayer prayer = JummahPrayer.builder()
                         .weeklyContent(content)
-                        .prayerTime(slot.prayerTime() != null
-                                ? java.time.LocalTime.parse(slot.prayerTime(), DateTimeFormatter.ofPattern("HH:mm"))
-                                : null)
+                        .prayerTime(parsePrayerTime(slot.prayerTime()))
                         .khatib(slot.khatib())
                         .room(slot.room())
                         .build();
@@ -186,8 +241,37 @@ public class BoardService {
 
         WeeklyContent saved = weeklyContentRepository.save(content);
         log.info("Saved weekly content for week {} of {}", weekNumber, year);
-        boardStream.contentChanged("weekly-content");
+        contentChangedAfterCommit("weekly-content");
         return saved;
+    }
+
+    /** Parses a 24-hour {@code HH:mm} time; anything else is the client's mistake, not a 500. */
+    private static LocalTime parsePrayerTime(String value) {
+        if (value == null) return null;
+        try {
+            return LocalTime.parse(value, DateTimeFormatter.ofPattern("HH:mm"));
+        } catch (DateTimeParseException e) {
+            throw badRequest("prayerTime must be a 24-hour HH:mm time, got: " + value);
+        }
+    }
+
+    /**
+     * Tells the boards to refetch once the surrounding transaction has committed. Notifying
+     * inside it lets a board refetch before the commit and read the old content, then stay on
+     * it until the next change. With no transaction active the save has already committed, so
+     * it notifies immediately, as every other mutator here does.
+     */
+    private void contentChangedAfterCommit(String what) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    boardStream.contentChanged(what);
+                }
+            });
+        } else {
+            boardStream.contentChanged(what);
+        }
     }
 
     /** @return the id of the deleted row, so callers can record what was destroyed. */
@@ -220,22 +304,23 @@ public class BoardService {
         return boardEventRepository.findByAudienceOrBoth(audience);
     }
 
-    public List<BoardEvent> getUpcomingEventsForAudience(Audience audience) {
-        return boardEventRepository.findUpcomingByAudienceOrBoth(audience, Instant.now());
-    }
-
     public List<BoardEvent> getEventsForAudienceInRange(Audience audience, Instant rangeStart, Instant rangeEnd) {
         return boardEventRepository.findOverlappingForAudienceOrBoth(audience, rangeStart, rangeEnd);
     }
 
     public BoardEvent createEvent(CreateCalendarEventRequest request) {
+        Instant start = Instant.ofEpochMilli(request.getStartEpochMs());
+        Instant end = Instant.ofEpochMilli(request.getEndEpochMs());
+        validateEventTimes(start, end);
         BoardEvent boardEvent = BoardEvent.builder()
                 .name(request.getName())
                 .description(request.getDescription())
                 .location(request.getLocation())
-                .startTime(Instant.ofEpochMilli(request.getStartEpochMs()))
-                .endTime(Instant.ofEpochMilli(request.getEndEpochMs()))
-                .allDay(request.getAllDay())
+                .startTime(start)
+                .endTime(end)
+                // Optional in the contract. An explicit null would override the builder
+                // default and hit the NOT NULL column, so null means false here.
+                .allDay(Boolean.TRUE.equals(request.getAllDay()))
                 .audience(request.getAudience())
                 .build();
         BoardEvent saved = boardEventRepository.save(boardEvent);
@@ -253,10 +338,18 @@ public class BoardService {
         Patch.apply(request.getEndTime(), existing::setEndTime);
         Patch.apply(request.getAllDay(), existing::setAllDay);
         Patch.apply(request.getAudience(), existing::setAudience);
+        // Checked on the merged result, so patching only one end is held to the other.
+        validateEventTimes(existing.getStartTime(), existing.getEndTime());
         BoardEvent saved = boardEventRepository.save(existing);
         log.info("Updated event: id={}", eventId);
         boardStream.contentChanged("events");
         return saved;
+    }
+
+    private static void validateEventTimes(Instant start, Instant end) {
+        if (start != null && end != null && end.isBefore(start)) {
+            throw badRequest("End time must not be before start time");
+        }
     }
 
     public void deleteEvent(UUID eventId) {
