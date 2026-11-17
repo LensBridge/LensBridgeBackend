@@ -55,6 +55,12 @@ musallahboard.agent.sweepIntervalMs=5000
 # 0 or less keeps them forever.
 musallahboard.telemetry.retentionDays=14
 musallahboard.telemetry.pruneCron=0 30 3 * * *
+# Board refresh stream (/api/refresh-musallahboard). Agents that sign its upgrade with the device
+# key (X-MB-* headers) are always verified, and a bad signature is always refused. While this is
+# false, agents that predate signing may still connect unsigned (logged as "Board stream accepted
+# an unsigned upgrade ..."), but can never take over from a signed connection. Set it to true
+# once those log lines stop: every board then runs an agent that signs.
+musallahboard.board-stream.require-signature=false
 # Raises the WebSocket text buffer to fit a screenshot result from the agent (base64, up to
 # 8 MiB). On by default; set false only if the container already configures this.
 lensbridge.websocket.container-customizer.enabled=true

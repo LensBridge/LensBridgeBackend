@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -226,6 +227,117 @@ class BoardStreamHandlerTest {
         assertThat(s.sent).isEmpty();
     }
 
+    // ── signed and unsigned connections (staged rollout) ──────────────────
+
+    @Test
+    void signedConnectionTakesTheDeviceFromTheVerifiedSignatureNotTheQuery() throws Exception {
+        UUID device = enrolled();
+        Session s = connectSigned(device, null);
+
+        handler.configChanged(device);
+
+        assertThat(s.closedWith).isNull();
+        assertThat(s.sent).hasSize(1);
+    }
+
+    @Test
+    void unsignedConnectionCannotEvictASignedOne() throws Exception {
+        UUID device = enrolled();
+        Session board = connectSigned(device, "deviceId=" + device);
+        Session intruder = connect(device);
+
+        assertThat(intruder.closedWith.getCode()).isEqualTo(4004);
+        assertThat(board.closedWith).isNull();
+        handler.configChanged(device);
+        assertThat(board.sent).hasSize(1);
+        assertThat(intruder.sent).isEmpty();
+
+        // The refused session's close callback must not unregister the board.
+        handler.afterConnectionClosed(intruder.ws, CloseStatus.NORMAL);
+        handler.configChanged(device);
+        assertThat(board.sent).hasSize(2);
+    }
+
+    @Test
+    void signedConnectionSupersedesAnUnsignedOne() throws Exception {
+        UUID device = enrolled();
+        Session squatter = connect(device);
+        Session board = connectSigned(device, "deviceId=" + device);
+
+        assertThat(squatter.closedWith).isEqualTo(BoardStreamHandler.CLOSE_SUPERSEDED);
+        handler.configChanged(device);
+        assertThat(board.sent).hasSize(1);
+    }
+
+    @Test
+    void signedReconnectSupersedesTheBoardsOwnStaleSignedSession() throws Exception {
+        UUID device = enrolled();
+        Session stale = connectSigned(device, null);
+        Session fresh = connectSigned(device, null);
+
+        assertThat(stale.closedWith).isEqualTo(BoardStreamHandler.CLOSE_SUPERSEDED);
+        handler.configChanged(device);
+        assertThat(fresh.sent).hasSize(1);
+    }
+
+    /** A legacy board reconnecting replaces its own earlier unsigned socket, as before. */
+    @Test
+    void unsignedReconnectStillSupersedesAnUnsignedSession() throws Exception {
+        UUID device = enrolled();
+        Session first = connect(device);
+        Session second = connect(device);
+
+        assertThat(first.closedWith).isEqualTo(BoardStreamHandler.CLOSE_SUPERSEDED);
+        assertThat(second.closedWith).isNull();
+    }
+
+    @Test
+    void unsignedConnectionMayRegisterOnceTheSignedSessionHasGone() throws Exception {
+        UUID device = enrolled();
+        Session board = connectSigned(device, null);
+        board.open = false; // dropped, close callback not yet delivered
+        Session legacy = connect(device);
+
+        assertThat(legacy.closedWith).isNull();
+        handler.configChanged(device);
+        assertThat(legacy.sent).hasSize(1);
+    }
+
+    @Test
+    void signedConnectionForARevokedDeviceIsStillRefused() throws Exception {
+        UUID id = UUID.randomUUID();
+        Device revoked = Device.builder().id(id).displayName("d").build();
+        revoked.setRevokedAt(Instant.now());
+        when(deviceRepository.findById(id)).thenReturn(Optional.of(revoked));
+
+        Session s = connectSigned(id, null);
+
+        assertThat(s.closedWith.getCode()).isEqualTo(4003);
+    }
+
+    // ── revoke ────────────────────────────────────────────────────────────
+
+    @Test
+    void disconnectClosesTheDevicesSessionAsRevokedAndStopsDelivery() throws Exception {
+        UUID device = enrolled();
+        Session mine = connectSigned(device, null);
+        Session other = connect(enrolled());
+
+        handler.disconnect(device);
+
+        assertThat(mine.closedWith).isEqualTo(BoardStreamHandler.CLOSE_REVOKED);
+        assertThat(other.closedWith).isNull();
+        mine.open = true; // a leftover registration would write to it
+        handler.contentChanged("posters");
+        assertThat(mine.sent).isEmpty();
+        assertThat(other.sent).hasSize(1);
+    }
+
+    @Test
+    void disconnectOfABoardWithNoSessionIsANoOp() {
+        handler.disconnect(UUID.randomUUID());
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────
 
     /** Registers a device the repository will vouch for, and returns its id. */
@@ -246,10 +358,19 @@ class BoardStreamHandlerTest {
         return session;
     }
 
+    /** A connection whose upgrade signature {@link BoardStreamHandshakeInterceptor} verified. */
+    private Session connectSigned(UUID deviceId, String query) throws Exception {
+        Session session = new Session(query);
+        session.attributes.put(BoardStreamHandshakeInterceptor.SIGNED_DEVICE_ATTR, deviceId);
+        handler.afterConnectionEstablished(session.ws);
+        return session;
+    }
+
     /** Minimal stand-in that records what the handler writes and how it closes. */
     private static class Session {
         final WebSocketSession ws = mock(WebSocketSession.class);
         final List<String> sent = new ArrayList<>();
+        final Map<String, Object> attributes = new HashMap<>();
         boolean open = true;
         CloseStatus closedWith;
 
@@ -258,7 +379,7 @@ class BoardStreamHandlerTest {
             when(ws.getUri()).thenReturn(URI.create(
                     "ws://board.local/api/refresh-musallahboard" + (query == null ? "" : "?" + query)));
             when(ws.isOpen()).thenAnswer(inv -> open);
-            when(ws.getAttributes()).thenReturn(new HashMap<>());
+            when(ws.getAttributes()).thenReturn(attributes);
             doAnswer(inv -> {
                 sent.add(((TextMessage) inv.getArgument(0)).getPayload());
                 return null;

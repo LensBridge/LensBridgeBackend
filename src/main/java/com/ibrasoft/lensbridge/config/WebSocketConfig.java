@@ -10,6 +10,7 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 
 import com.ibrasoft.lensbridge.handler.AgentWebSocketHandler;
 import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
+import com.ibrasoft.lensbridge.handler.BoardStreamHandshakeInterceptor;
 import org.springframework.web.socket.config.annotation.WebSocketTransportRegistration;
 import org.springframework.web.socket.server.standard.ServletServerContainerFactoryBean;
 
@@ -18,6 +19,7 @@ import org.springframework.web.socket.server.standard.ServletServerContainerFact
 public class WebSocketConfig implements WebSocketConfigurer {
 
     private final BoardStreamHandler boardStreamHandler;
+    private final BoardStreamHandshakeInterceptor boardStreamHandshakeInterceptor;
     private final AgentWebSocketHandler agentWebSocketHandler;
 
     @Value("${frontend.baseurl}")
@@ -27,15 +29,19 @@ public class WebSocketConfig implements WebSocketConfigurer {
     String musallahBoardBaseUrl;
 
     public WebSocketConfig(BoardStreamHandler boardStreamHandler,
+                           BoardStreamHandshakeInterceptor boardStreamHandshakeInterceptor,
                            AgentWebSocketHandler agentWebSocketHandler) {
         this.boardStreamHandler = boardStreamHandler;
+        this.boardStreamHandshakeInterceptor = boardStreamHandshakeInterceptor;
         this.agentWebSocketHandler = agentWebSocketHandler;
     }
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-        // Path is the deployed kiosk's; boards scope themselves with ?deviceId=<uuid>.
+        // Board agents connect here. The upgrade is device-signed (X-MB-* headers), checked by
+        // the interceptor; older agents only name themselves with ?deviceId=<uuid>.
         registry.addHandler(boardStreamHandler, "/api/refresh-musallahboard")
+                .addInterceptors(boardStreamHandshakeInterceptor)
                 .setAllowedOrigins(frontendBaseUrl, musallahBoardBaseUrl);
 
         // Agents authenticate per-frame inside the channel; the WS upgrade itself is open.
