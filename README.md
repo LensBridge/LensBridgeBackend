@@ -67,6 +67,8 @@ docker compose up --build
 
 ...aaaand that's it. Pretty anti-climactic. Make sure to include your SSL certs in the `docker/nginx/certs` directory and configure the environment variables accordingly. Once the container is running, the API will be accessible at `https://localhost/api/`.
 
+The app container publishes port 8085 on `127.0.0.1` only (override with `LENSBRIDGE_BIND_ADDRESS`); put nginx in front of it with `docker/nginx/nginx.conf`. The app takes the client address from `X-Forwarded-For` only when the connection comes from a trusted proxy (`server.forward-headers-strategy=native`, see `application.properties.example`), so rate limits and audit logs cannot be steered by a client's own headers.
+
 ## API Documentation
 
 This project uses SpringDoc OpenAPI to generate API documentation. Once the application is running, you can access the API docs at:
