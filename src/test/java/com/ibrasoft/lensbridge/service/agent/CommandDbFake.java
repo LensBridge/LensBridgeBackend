@@ -50,6 +50,11 @@ final class CommandDbFake {
         return cmd;
     }
 
+    /** Every row, for asserting that nothing was stored. */
+    java.util.Collection<DeviceCommand> rows() {
+        return table.values();
+    }
+
     /** The row as the database currently has it. */
     DeviceCommand row(UUID id) {
         return table.get(id);

@@ -167,9 +167,16 @@ public class DeviceAdminController {
             summary = "Queue a command for a device",
             description = "Returns as soon as the command is queued; delivery and execution are reported "
                     + "asynchronously over the agent websocket. The permission required depends on the "
-                    + "command kind: board:command:benign, :disruptive, or :inspect.")
+                    + "command kind: board:command:benign, :disruptive, or :inspect. ttlSeconds is capped per "
+                    + "kind (10 minutes for kiosk.restart, system.reboot and update.install_now; 15 for "
+                    + "chrome.screenshot and logs.tail; an hour for chrome.reload and config.refresh), "
+                    + "deadlineMs at 15 minutes. Only logs.tail takes a payload, {\"lines\": 1..500}; for "
+                    + "the others it must be absent, null or {}.")
     @ApiResponses({
             @ApiResponse(responseCode = "202", description = "Command accepted and queued for delivery"),
+            @ApiResponse(responseCode = "400", description = "Unknown kind, a payload the kind does not take, "
+                    + "or a deadline or time-to-live over its limit",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class))),
             @ApiResponse(responseCode = "403", description = "Caller lacks the permission for this command kind",
                     content = @Content(schema = @Schema(implementation = MessageResponse.class)))
     })
