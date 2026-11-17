@@ -1,6 +1,7 @@
 package com.ibrasoft.lensbridge.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
 import com.ibrasoft.lensbridge.model.audit.AuditAction;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.Device;
@@ -46,6 +47,7 @@ class DeviceAdminControllerTest {
         CommandDispatcher commandDispatcher = mock(CommandDispatcher.class);
         AgentSessionRegistry registry = new AgentSessionRegistry(mock(DeviceEventPublisher.class));
         AdminAuditService auditService = mock(AdminAuditService.class);
+        BoardStreamHandler boardStream = mock(BoardStreamHandler.class);
 
         DeviceAdminController controller = new DeviceAdminController(
                 enrollmentTokenService,
@@ -55,7 +57,8 @@ class DeviceAdminControllerTest {
                 new ObjectMapper(),
                 registry,
                 auditService,
-                mock(OfflineBundleService.class));
+                mock(OfflineBundleService.class),
+                boardStream);
 
         UUID deviceId = UUID.randomUUID();
         Device device = Device.builder()
@@ -84,6 +87,7 @@ class DeviceAdminControllerTest {
         verify(transport).close(argThat(status ->
                 status.getCode() == CloseStatus.POLICY_VIOLATION.getCode()
                         && "device_revoked".equals(status.getReason())));
+        verify(boardStream).disconnect(deviceId);
         verify(auditService).logAuditEvent(
                 eq("root@example.com"), eq(AuditAction.REVOKE_DEVICE),
                 eq("Device"), eq(deviceId), eq("10.0.0.1"));
@@ -102,7 +106,8 @@ class DeviceAdminControllerTest {
                 new ObjectMapper(),
                 new AgentSessionRegistry(mock(DeviceEventPublisher.class)),
                 auditService,
-                mock(OfflineBundleService.class));
+                mock(OfflineBundleService.class),
+                mock(BoardStreamHandler.class));
 
         UUID deviceId = UUID.randomUUID();
         Instant revokedAt = Instant.now().minusSeconds(3600);
