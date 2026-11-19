@@ -69,7 +69,7 @@ public class OfflineBundleService {
      * {@link com.ibrasoft.lensbridge.dto.board.request.ContentBundleRequest#DEFAULT_DAYS}).
      */
     public static final int DEFAULT_DAYS = 14;
-    public static final int MAX_DAYS = 31;
+    public static final int MAX_DAYS = 92;
 
     /** Media type of a {@code .mbu} package. */
     public static final String MBU_CONTENT_TYPE = "application/vnd.musallahboard.mbu";

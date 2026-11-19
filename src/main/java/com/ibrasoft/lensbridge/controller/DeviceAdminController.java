@@ -257,7 +257,7 @@ public class DeviceAdminController {
                             schema = @Schema(type = "string")),
                     content = @Content(mediaType = OfflineBundleService.MBU_CONTENT_TYPE,
                             schema = @Schema(type = "string", format = "binary"))),
-            @ApiResponse(responseCode = "400", description = "days outside 1-31",
+            @ApiResponse(responseCode = "400", description = "days outside 1-92",
                     content = @Content(schema = @Schema(implementation = MessageResponse.class))),
             @ApiResponse(responseCode = "404", description = "No device with that id",
                     content = @Content(schema = @Schema(implementation = MessageResponse.class))),

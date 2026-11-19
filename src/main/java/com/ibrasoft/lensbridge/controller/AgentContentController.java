@@ -80,7 +80,7 @@ public class AgentContentController {
                             schema = @Schema(type = "string")),
                     content = @Content(mediaType = OfflineBundleService.MBU_CONTENT_TYPE,
                             schema = @Schema(type = "string", format = "binary"))),
-            @ApiResponse(responseCode = "400", description = "Malformed body, days outside 1-31, or a bad haveMedia entry",
+            @ApiResponse(responseCode = "400", description = "Malformed body, days outside 1-92, or a bad haveMedia entry",
                     content = @Content(schema = @Schema(implementation = MessageResponse.class))),
             @ApiResponse(responseCode = "502", description = "A poster image could not be fetched; the message names the poster",
                     content = @Content(schema = @Schema(implementation = MessageResponse.class))),
