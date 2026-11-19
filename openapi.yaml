@@ -493,11 +493,46 @@ paths:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
           description: Request failed; body carries a human-readable message
-      summary: List every enrolled board device
+      summary: "List every board, connected or not"
+      tags:
+      - device-admin-controller
+    post:
+      description: "Creates the board before it is ever switched on, with no device\
+        \ key. Its config, content packages and setup file work at once; it gets a\
+        \ key only if it later claims online. Requires board:device:enroll."
+      operationId: createDevice
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDeviceRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceSummary"
+          description: Board created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: "Missing name or audience, or an unusable location"
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      summary: Add a board
       tags:
       - device-admin-controller
   /api/admin/board/devices/enrollment-tokens:
     post:
+      description: "The token creates a new device when used. To enroll a board already\
+        \ added in the console, use POST /api/admin/board/devices/{deviceId}/enrollment-tokens."
       operationId: issueEnrollmentToken
       requestBody:
         content:
@@ -518,7 +553,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
           description: Request failed; body carries a human-readable message
-      summary: Mint a one-time token a new device can exchange for an identity
+      summary: Mint a one-time token that enrolls a new device over SSH (legacy)
       tags:
       - device-admin-controller
   /api/admin/board/devices/{deviceId}:
@@ -574,15 +609,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeviceSummary"
-          description: OK
+          description: Device updated
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Blank or over-long displayName
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: No device with that id
         default:
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
           description: Request failed; body carries a human-readable message
+      summary: Rename a board or change its audience
       tags:
-      - board-admin-controller
+      - device-admin-controller
   /api/admin/board/devices/{deviceId}/commands:
     get:
       operationId: listDeviceCommands
@@ -663,6 +711,55 @@ paths:
       summary: Queue a command for a device
       tags:
       - device-admin-controller
+  /api/admin/board/devices/{deviceId}/enrollment-tokens:
+    post:
+      description: "For musallahboard-agent enroll --token on the board. The token\
+        \ binds the board's key to this device, replacing any key it had (for example\
+        \ after an SD card swap). Boards set up with an online setup file claim by\
+        \ themselves and need no token."
+      operationId: issueDeviceEnrollmentToken
+      parameters:
+      - in: path
+        name: deviceId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - description: "Lifetime of the token in minutes (1-1440, default 30)"
+        in: query
+        name: expiresInMinutes
+        required: false
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssueEnrollmentTokenResponse"
+          description: Token issued; the plaintext is returned exactly once
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: No device with that id
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Device is revoked
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      summary: Mint a one-time token that enrolls this board over SSH (maintainers)
+      tags:
+      - device-admin-controller
   /api/admin/board/devices/{deviceId}/offline-bundle:
     get:
       description: "A signed .mbu content package (format version 2) holding one fully\
@@ -686,7 +783,7 @@ paths:
           type: integer
           format: int32
           default: 14
-          maximum: 31
+          maximum: 92
           minimum: 1
       responses:
         "200":
@@ -708,7 +805,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
-          description: days outside 1-31
+          description: days outside 1-92
         "404":
           content:
             application/json:
@@ -745,8 +842,8 @@ paths:
       - device-admin-controller
   /api/admin/board/devices/{deviceId}/revoke:
     post:
-      description: "Closes any live agent session and refresh stream. Idempotent:\
-        \ re-revoking an already revoked device is a no-op."
+      description: "Closes any live agent session. Idempotent: re-revoking an already\
+        \ revoked device is a no-op."
       operationId: revokeDevice
       parameters:
       - in: path
@@ -777,6 +874,173 @@ paths:
       summary: Revoke a device's enrollment
       tags:
       - device-admin-controller
+  /api/admin/board/devices/{deviceId}/setup-file:
+    get:
+      description: "A signed .mbu provision package (provision.json: deviceId, displayName,\
+        \ sequence, issuedAt and, with online=true, backendUrl and a claimSecret).\
+        \ Plugged into a fresh board on a USB stick, it makes the board this one.\
+        \ Every download has a newer sequence; an online one also replaces the claim\
+        \ secret, so earlier online files can no longer claim the board. Requires\
+        \ board:device:enroll."
+      operationId: downloadSetupFile
+      parameters:
+      - in: path
+        name: deviceId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - description: "Include the backend URL and a new claim secret, for a board\
+          \ that will be online. Default: an offline-only board."
+        in: query
+        name: online
+        required: false
+        schema:
+          type: boolean
+          default: false
+      responses:
+        "200":
+          content:
+            application/vnd.musallahboard.mbu:
+              schema:
+                type: string
+                format: binary
+          description: The setup file
+          headers:
+            Content-Disposition:
+              description: attachment; filename="musallahboard-setup-<first 8 chars
+                of deviceId>.mbu"
+              schema:
+                type: string
+              style: simple
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: No device with that id
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Device is revoked
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: "No content signing key, or (online) no backend URL, is configured\
+            \ on the server"
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      summary: Download a board's setup file
+      tags:
+      - device-admin-controller
+  /api/admin/board/devices/{deviceId}/usb-kit:
+    get:
+      description: "A zip holding one folder, MusallahBoard/, with content-<id8>.mbu,\
+        \ setup-<id8>.mbu (includeSetup=true; online=true adds the backend URL and\
+        \ a new claim secret), and the latest board app and arm64 agent packages from\
+        \ their GitHub release channels. When a channel cannot be reached the kit\
+        \ goes without that package and the X-Usb-Kit-Omitted header says why. Requires\
+        \ board:device:read, and board:device:enroll with includeSetup."
+      operationId: downloadUsbKit
+      parameters:
+      - in: path
+        name: deviceId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - description: "Days of content, starting today in each board's timezone"
+        in: query
+        name: days
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 14
+          maximum: 92
+          minimum: 1
+      - description: Include the board's setup file
+        in: query
+        name: includeSetup
+        required: false
+        schema:
+          type: boolean
+          default: false
+      - description: Make the setup file an online one (backend URL and a new claim
+          secret)
+        in: query
+        name: online
+        required: false
+        schema:
+          type: boolean
+          default: false
+      responses:
+        "200":
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+          description: The kit
+          headers:
+            Content-Disposition:
+              description: attachment; filename="musallahboard-usb-kit-<id8>-<date>.zip"
+              schema:
+                type: string
+              style: simple
+            X-Usb-Kit-Omitted:
+              description: "Present when the kit is missing the app or agent package:\
+                \ what, and why"
+              schema:
+                type: string
+              style: simple
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: days outside 1-92
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: No device with that id
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Device is revoked
+        "502":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: A poster image could not be fetched
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: "No content signing key (or, online, no backend URL) is configured"
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      summary: Download a USB kit for one board
+      tags:
+      - usb-kit-controller
   /api/admin/board/events:
     get:
       operationId: getBoardEvents
@@ -1121,7 +1385,7 @@ paths:
       - board-admin-controller
   /api/admin/board/refresh:
     post:
-      operationId: refreshSignboard
+      operationId: refreshBoards
       responses:
         "200":
           content:
@@ -1135,6 +1399,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
           description: Request failed; body carries a human-readable message
+      summary: Ask every connected board to sync its content now
       tags:
       - board-admin-controller
   /api/admin/board/socials:
@@ -1289,6 +1554,90 @@ paths:
           description: Request failed; body carries a human-readable message
       tags:
       - board-admin-controller
+  /api/admin/board/usb-kit:
+    get:
+      description: "As the one-board kit, with the files of every board that is not\
+        \ revoked. One stick then updates any of them: each board keeps only its own\
+        \ files."
+      operationId: downloadAllBoardsUsbKit
+      parameters:
+      - description: "Days of content, starting today in each board's timezone"
+        in: query
+        name: days
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 14
+          maximum: 92
+          minimum: 1
+      - description: Include every board's setup file
+        in: query
+        name: includeSetup
+        required: false
+        schema:
+          type: boolean
+          default: false
+      - description: Make the setup files online ones (backend URL and new claim secrets)
+        in: query
+        name: online
+        required: false
+        schema:
+          type: boolean
+          default: false
+      responses:
+        "200":
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+          description: The kit
+          headers:
+            Content-Disposition:
+              description: attachment; filename="musallahboard-usb-kit-all-<date>.zip"
+              schema:
+                type: string
+              style: simple
+            X-Usb-Kit-Omitted:
+              description: "Present when the kit is missing the app or agent package:\
+                \ what, and why"
+              schema:
+                type: string
+              style: simple
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: days outside 1-92
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: There are no boards
+        "502":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: A poster image could not be fetched
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: "No content signing key (or, online, no backend URL) is configured"
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      summary: Download a USB kit for every board
+      tags:
+      - usb-kit-controller
   /api/admin/board/weekly-content:
     get:
       operationId: getAllWeeklyContent
@@ -2126,6 +2475,54 @@ paths:
           description: Request failed; body carries a human-readable message
       tags:
       - admin-controller
+  /api/agent/claim:
+    post:
+      description: "proof is base64url(HMAC-SHA256(key = the setup file's claimSecret\
+        \ bytes, msg = deviceId + \"\\n\" + publicKey)), with the lowercase deviceId\
+        \ and the publicKey string exactly as sent. Idempotent: claiming again with\
+        \ the same key succeeds. The response is the same as enrollment's."
+      operationId: claimAgent
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentClaimRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentEnrollResponse"
+          description: Key bound (or already bound to this key)
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: "Malformed body, public key or proof"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: "Unknown or revoked device, no online setup file issued for\
+            \ it, or a wrong proof (a setup file older than the latest online one)"
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: The device is already bound to a different key
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      summary: Bind a board's device key to its pre-created device (online setup file)
+      tags:
+      - agent-enrollment-controller
   /api/agent/content-bundle:
     post:
       description: "Device-authenticated with the X-MB-* headers (Ed25519 signature\
@@ -2181,7 +2578,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
-          description: "Malformed body, days outside 1-31, or a bad haveMedia entry"
+          description: "Malformed body, days outside 1-92, or a bad haveMedia entry"
         "401":
           content:
             application/json:
@@ -3232,6 +3629,32 @@ components:
               $ref: "#/components/schemas/DayBucket"
           heading:
             type: string
+    AgentClaimRequest:
+      type: object
+      properties:
+        agentVersion:
+          type: string
+          maxLength: 255
+          minLength: 0
+        deviceId:
+          type: string
+          format: uuid
+        hostname:
+          type: string
+          maxLength: 255
+          minLength: 0
+        proof:
+          type: string
+          maxLength: 64
+          minLength: 0
+        publicKey:
+          type: string
+          maxLength: 64
+          minLength: 0
+      required:
+      - deviceId
+      - proof
+      - publicKey
     AgentEnrollRequest:
       type: object
       properties:
@@ -3557,7 +3980,7 @@ components:
           type: integer
           format: int32
           default: 7
-          maximum: 31
+          maximum: 92
           minimum: 1
         haveMedia:
           type: array
@@ -3601,6 +4024,24 @@ components:
       - location
       - name
       - startEpochMs
+    CreateDeviceRequest:
+      type: object
+      properties:
+        audience:
+          type: string
+          enum:
+          - brothers
+          - sisters
+          - both
+        displayName:
+          type: string
+          maxLength: 255
+          minLength: 0
+        location:
+          $ref: "#/components/schemas/Location"
+      required:
+      - audience
+      - displayName
     CreatePosterRequest:
       type: object
       properties:
