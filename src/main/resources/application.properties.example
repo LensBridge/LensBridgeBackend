@@ -17,7 +17,7 @@ spring.jpa.open-in-view=false
 # Schema is owned by Flyway; Hibernate only validates against it. Do not set ddl-auto=update
 # here -- it would let Hibernate patch a schema Flyway believes it controls, and the two would
 # disagree about what has been applied. Migrations are per-vendor because dev is SQLite and
-# prod is Postgres; see docs/MIGRATIONS.md.
+# prod is Postgres; see MigrationParityTest.
 spring.jpa.hibernate.ddl-auto=validate
 spring.flyway.enabled=true
 # Set explicitly per profile below -- classpath:db/migration/postgresql for prod,
@@ -26,13 +26,13 @@ spring.flyway.enabled=true
 # JDBC URL, but inside this project's repackaged jar (Spring Boot 3.2+ nested-jar layout)
 # Flyway's classpath scan doesn't restrict to the resolved subdirectory -- it scans both
 # db/migration/sqlite and db/migration/postgresql and fails startup with "Found more than
-# one migration with version 1". Confirmed against prod on 2026-08-10; see docs/MIGRATIONS.md.
+# one migration with version 1". Confirmed against prod on 2026-08-10; see MigrationParityTest.
 # spring.flyway.locations=classpath:db/migration/postgresql
 
 # Allowed CORS origins
 frontend.baseurl=http://localhost:5173
 
-# MusallahBoard device agents. websocketUrl is returned by /api/agent/enroll and
+# MusallahBoard device agents. websocketUrl is returned by /api/agent/claim and /api/agent/enroll and
 # persisted verbatim on the device, so point it at the address agents can reach
 # from where they are deployed — not at whatever host happens to serve this app.
 musallahboard.agent.websocketUrl=ws://localhost:8080/api/agent/ws
