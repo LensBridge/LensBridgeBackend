@@ -1,6 +1,7 @@
 package com.ibrasoft.lensbridge.service;
 
 import com.ibrasoft.lensbridge.dto.board.request.CreateCalendarEventRequest;
+import com.ibrasoft.lensbridge.dto.board.request.CreateDeviceRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateBoardConfigRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateCalendarEventRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateDeviceRequest;
@@ -29,6 +30,7 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -339,6 +341,46 @@ public class BoardService {
     }
 
     // ================== Device Management Changes ====================
+
+    /**
+     * Creates a board before it has ever connected (contract C3): the device row, with no
+     * public key, and its config. Everything per-device (config, content packages, setup
+     * files) works for it at once.
+     */
+    @Transactional
+    public Device createDevice(CreateDeviceRequest request) {
+        Device device = deviceRepository.save(Device.builder()
+                .displayName(request.getDisplayName().trim())
+                .audience(request.getAudience())
+                .build());
+        DeviceConfig config = defaultConfig(device);
+        mergeLocation(config, request.getLocation());
+        boardConfigRepository.save(config);
+        device.setConfig(config);
+        log.info("Created board {} ({})", device.getId(), device.getDisplayName());
+        return device;
+    }
+
+    /**
+     * The config every new board starts with, whether created in the console or by a legacy
+     * enrollment token. Hard-coded to the one organization this backend serves today.
+     */
+    public static DeviceConfig defaultConfig(Device device) {
+        return DeviceConfig.builder()
+                .device(device)
+                .location(Location.builder()
+                        .city("Mississauga")
+                        .country("Canada")
+                        .latitude(43.589)
+                        .longitude(-79.6441)
+                        .timezone("America/Toronto")
+                        .method(CalculationMethod.ISNA)
+                        .build())
+                .darkModeAfterIsha(true)
+                .enableScrollingMessage(true)
+                .scrollingMessages(new ArrayList<>(List.of("Welcome to UTM MSA - Follow us @utmmsa for updates!")))
+                .build();
+    }
 
     public Device updateDevice(UUID deviceId, UpdateDeviceRequest request) {
         Device existing = deviceRepository.findById(deviceId)

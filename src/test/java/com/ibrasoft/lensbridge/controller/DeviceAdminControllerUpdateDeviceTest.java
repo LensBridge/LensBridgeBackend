@@ -14,6 +14,7 @@ import com.ibrasoft.lensbridge.service.agent.CommandDispatcher;
 import com.ibrasoft.lensbridge.service.agent.EnrollmentTokenService;
 import com.ibrasoft.lensbridge.service.board.offline.OfflineBundleService;
 import com.ibrasoft.lensbridge.service.UserService;
+import com.ibrasoft.lensbridge.service.board.offline.SetupFileService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -71,6 +72,8 @@ class DeviceAdminControllerUpdateDeviceTest {
     private ContentChangeNotifier contentChanges;
 
     /** WebConfig registers CurrentUserArgumentResolver, which needs this in the slice. */
+    @MockitoBean
+    private SetupFileService setupFileService;
     @MockitoBean
     private UserService userService;
 

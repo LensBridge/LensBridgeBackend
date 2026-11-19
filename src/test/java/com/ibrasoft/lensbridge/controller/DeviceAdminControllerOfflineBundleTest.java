@@ -8,6 +8,7 @@ import com.ibrasoft.lensbridge.repository.sql.DeviceCommandRepository;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.service.AdminAuditService;
 import com.ibrasoft.lensbridge.service.UserService;
+import com.ibrasoft.lensbridge.service.board.offline.SetupFileService;
 import com.ibrasoft.lensbridge.service.agent.ContentChangeNotifier;
 import com.ibrasoft.lensbridge.service.BoardService;
 import com.ibrasoft.lensbridge.service.agent.AgentSessionRegistry;
@@ -78,6 +79,8 @@ class DeviceAdminControllerOfflineBundleTest {
     private BoardService boardService;
     @MockitoBean
     private ContentChangeNotifier contentChangeNotifier;
+    @MockitoBean
+    private SetupFileService setupFileService;
     @MockitoBean
     private UserService userService;
 

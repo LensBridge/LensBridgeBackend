@@ -3,12 +3,14 @@ package com.ibrasoft.lensbridge.service;
 import com.ibrasoft.lensbridge.dto.board.request.CreateCalendarEventRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateBoardConfigRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateCalendarEventRequest;
+import com.ibrasoft.lensbridge.dto.board.request.CreateDeviceRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateDeviceRequest;
 import com.ibrasoft.lensbridge.dto.board.request.WeeklyContentRequest;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
 import com.ibrasoft.lensbridge.service.agent.ContentChangeNotifier;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.BoardEvent;
+import com.ibrasoft.lensbridge.model.board.CalculationMethod;
 import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.model.board.IslamicQuote;
 import com.ibrasoft.lensbridge.model.board.Location;
@@ -764,5 +766,48 @@ class BoardServiceTest {
                 .isInstanceOf(ApiResponseException.class);
 
         verify(deviceRepository, never()).save(any(Device.class));
+    }
+
+    // ==================== createDevice ====================
+
+    @Test
+    void createDeviceMakesABoardWithNoKeyAndItsConfig() {
+        UUID id = UUID.randomUUID();
+        when(deviceRepository.save(any(Device.class))).thenAnswer(inv -> {
+            Device d = inv.getArgument(0);
+            d.setId(id);
+            return d;
+        });
+        when(boardConfigRepository.save(any(DeviceConfig.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Device created = service.createDevice(CreateDeviceRequest.builder()
+                .displayName("  North Musallah ")
+                .audience(Audience.SISTERS)
+                .location(Location.builder().city("Toronto").latitude(43.65).longitude(-79.38).build())
+                .build());
+
+        assertThat(created.getId()).isEqualTo(id);
+        assertThat(created.getDisplayName()).isEqualTo("North Musallah");
+        assertThat(created.getPublicKey()).isNull();
+        assertThat(created.getEnrolledAt()).as("not enrolled until it claims").isNull();
+        Location location = created.getConfig().getLocation();
+        assertThat(location.getCity()).isEqualTo("Toronto");
+        assertThat(location.getLatitude()).isEqualTo(43.65);
+        // Left out of the request: the defaults.
+        assertThat(location.getTimezone()).isEqualTo("America/Toronto");
+        assertThat(location.getMethod()).isEqualTo(CalculationMethod.ISNA);
+        assertThat(created.getConfig().getDevice()).isSameAs(created);
+    }
+
+    @Test
+    void createDeviceRejectsAnUnusableLocation() {
+        when(deviceRepository.save(any(Device.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThatThrownBy(() -> service.createDevice(CreateDeviceRequest.builder()
+                .displayName("A").audience(Audience.BOTH)
+                .location(Location.builder().timezone("Mars/Olympus").build()).build()))
+                .isInstanceOfSatisfying(ApiResponseException.class,
+                        e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST));
+        verify(boardConfigRepository, never()).save(any());
     }
 }

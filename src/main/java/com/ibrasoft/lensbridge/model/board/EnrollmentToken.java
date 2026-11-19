@@ -50,8 +50,14 @@ public class EnrollmentToken {
     /** Set the moment the token is consumed; subsequent attempts fail. */
     private Instant consumedAt;
 
-    /** Device created from this token, if consumed. */
+    /** Device created (or bound) by this token, if consumed. */
     private UUID consumedByDeviceId;
+
+    /**
+     * The pre-created device this token enrolls: enrollment binds the key to that row instead
+     * of creating a new device. Null for a token that creates a new device.
+     */
+    private UUID deviceId;
 
     @PrePersist
     private void prePersist() {

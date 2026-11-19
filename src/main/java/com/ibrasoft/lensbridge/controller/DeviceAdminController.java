@@ -1,6 +1,7 @@
 package com.ibrasoft.lensbridge.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ibrasoft.lensbridge.dto.board.request.CreateDeviceRequest;
 import com.ibrasoft.lensbridge.dto.board.request.IssueCommandRequest;
 import com.ibrasoft.lensbridge.dto.board.request.IssueEnrollmentTokenRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateDeviceRequest;
@@ -25,6 +26,7 @@ import com.ibrasoft.lensbridge.exception.ApiResponseException;
 import com.ibrasoft.lensbridge.service.agent.EnrollmentTokenService.Issued;
 import com.ibrasoft.lensbridge.service.board.offline.OfflineBundle;
 import com.ibrasoft.lensbridge.service.board.offline.OfflineBundleService;
+import com.ibrasoft.lensbridge.service.board.offline.SetupFileService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.headers.Header;
@@ -74,8 +76,9 @@ public class DeviceAdminController {
     private final OfflineBundleService offlineBundleService;
     private final BoardService boardService;
     private final ContentChangeNotifier contentChanges;
+    private final SetupFileService setupFileService;
 
-    @Operation(operationId = "listDevices", summary = "List every enrolled board device")
+    @Operation(operationId = "listDevices", summary = "List every board, connected or not")
     @GetMapping
     @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_DEVICE_READ + "')")
     public ResponseEntity<List<DeviceSummary>> list() {
@@ -97,6 +100,71 @@ public class DeviceAdminController {
                 .map(d -> ResponseEntity.ok(DeviceSummary.of(d)))
                 .orElseThrow(() -> new ApiResponseException(HttpStatus.NOT_FOUND,
                         new MessageResponse("Device not found")));
+    }
+
+    @Operation(operationId = "createDevice",
+            summary = "Add a board",
+            description = "Creates the board before it is ever switched on, with no device key. Its config, "
+                    + "content packages and setup file work at once; it gets a key only if it later claims "
+                    + "online. Requires board:device:enroll.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Board created"),
+            @ApiResponse(responseCode = "400", description = "Missing name or audience, or an unusable location",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class)))
+    })
+    @PostMapping
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_DEVICE_ENROLL + "')")
+    public ResponseEntity<DeviceSummary> createDevice(@Valid @RequestBody CreateDeviceRequest request,
+                                                      HttpServletRequest httpRequest) {
+        Device created = boardService.createDevice(request);
+        // There is no CREATE_DEVICE action (the column has a check constraint); this is the
+        // closest, and the detail says what happened.
+        auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.UPDATE_BOARD_CONFIG,
+                "Device", created.getId(), httpRequest.getRemoteAddr(), "created board");
+        return ResponseEntity.status(HttpStatus.CREATED).body(DeviceSummary.of(created));
+    }
+
+    /**
+     * Same reasons as {@link #offlineBundle}: built first, written straight to the response.
+     * A GET that changes state (the sequence, and the claim secret when online) because it is
+     * a download link; downloading again simply issues a newer file.
+     */
+    @Operation(operationId = "downloadSetupFile",
+            summary = "Download a board's setup file",
+            description = "A signed .mbu provision package (provision.json: deviceId, displayName, sequence, "
+                    + "issuedAt and, with online=true, backendUrl and a claimSecret). Plugged into a fresh board "
+                    + "on a USB stick, it makes the board this one. Every download has a newer sequence; an "
+                    + "online one also replaces the claim secret, so earlier online files can no longer claim "
+                    + "the board. Requires board:device:enroll.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The setup file",
+                    headers = @Header(name = HttpHeaders.CONTENT_DISPOSITION,
+                            description = "attachment; filename=\"musallahboard-setup-<first 8 chars of deviceId>.mbu\"",
+                            schema = @Schema(type = "string")),
+                    content = @Content(mediaType = OfflineBundleService.MBU_CONTENT_TYPE,
+                            schema = @Schema(type = "string", format = "binary"))),
+            @ApiResponse(responseCode = "404", description = "No device with that id",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+            @ApiResponse(responseCode = "409", description = "Device is revoked",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+            @ApiResponse(responseCode = "503", description = "No content signing key, or (online) no backend URL, "
+                    + "is configured on the server",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class)))
+    })
+    @GetMapping("/{deviceId}/setup-file")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_DEVICE_ENROLL + "')")
+    public void setupFile(
+            @PathVariable UUID deviceId,
+            @Parameter(description = "Include the backend URL and a new claim secret, for a board that will "
+                    + "be online. Default: an offline-only board.")
+            @RequestParam(defaultValue = "false") boolean online,
+            HttpServletRequest httpRequest,
+            HttpServletResponse response) throws IOException {
+        OfflineBundle file = setupFileService.build(deviceId, online);
+        auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.ISSUE_ENROLLMENT_TOKEN,
+                "Device", deviceId, httpRequest.getRemoteAddr(),
+                online ? "setup file (online, claim secret rotated)" : "setup file (offline)");
+        writePackage(file, response);
     }
 
     @Operation(operationId = "updateDevice", summary = "Rename a board or change its audience")
@@ -278,7 +346,10 @@ public class DeviceAdminController {
                             defaultValue = "" + OfflineBundleService.DEFAULT_DAYS))
             @RequestParam(defaultValue = "" + OfflineBundleService.DEFAULT_DAYS) int days,
             HttpServletResponse response) throws IOException {
-        OfflineBundle bundle = offlineBundleService.build(deviceId, days);
+        writePackage(offlineBundleService.build(deviceId, days), response);
+    }
+
+    private static void writePackage(OfflineBundle bundle, HttpServletResponse response) throws IOException {
         response.setStatus(HttpStatus.OK.value());
         response.setContentType(OfflineBundleService.MBU_CONTENT_TYPE);
         response.setHeader(HttpHeaders.CONTENT_DISPOSITION,

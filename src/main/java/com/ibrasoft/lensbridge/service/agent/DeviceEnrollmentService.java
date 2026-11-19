@@ -1,12 +1,11 @@
 package com.ibrasoft.lensbridge.service.agent;
 
-import com.ibrasoft.lensbridge.model.board.CalculationMethod;
 import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.model.board.EnrollmentToken;
-import com.ibrasoft.lensbridge.model.board.Location;
 import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
 import com.ibrasoft.lensbridge.repository.sql.BoardConfigRepository;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
+import com.ibrasoft.lensbridge.service.BoardService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -14,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.Base64;
-import java.util.List;
 import java.util.Optional;
 
 /**
@@ -83,20 +81,7 @@ public class DeviceEnrollmentService {
         // The id only exists now that the device is persisted; same transaction as the consume.
         enrollmentTokenService.recordConsumer(token.getId(), saved.getId());
 
-        DeviceConfig defaultConfig = DeviceConfig.builder()
-                .device(saved)
-                .location(Location.builder()
-                        .city("Mississauga")
-                        .country("Canada")
-                        .latitude(43.589)
-                        .longitude(-79.6441)
-                        .timezone("America/Toronto")
-                        .method(CalculationMethod.ISNA)
-                        .build())
-                .darkModeAfterIsha(true)
-                .enableScrollingMessage(true)
-                .scrollingMessages(List.of("Welcome to UTM MSA - Follow us @utmmsa for updates!"))
-                .build();
+        DeviceConfig defaultConfig = BoardService.defaultConfig(saved);
         boardConfigRepository.save(defaultConfig);
 
         log.info("Enrolled device {} from token {} (issued by {})",

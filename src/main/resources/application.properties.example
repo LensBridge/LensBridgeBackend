@@ -36,6 +36,9 @@ frontend.baseurl=http://localhost:5173
 # persisted verbatim on the device, so point it at the address agents can reach
 # from where they are deployed — not at whatever host happens to serve this app.
 musallahboard.agent.websocketUrl=ws://localhost:8080/api/agent/ws
+# Where an online board reaches this server, written into online setup files (and the address it
+# claims at, POST /api/agent/claim). Empty: the origin of websocketUrl above (wss://h/... -> https://h).
+musallahboard.agent.backendUrl=
 # Optional extra input to the enrollment-token hash. Leave empty to disable.
 musallahboard.enrollment.tokenPepper=
 # Zone used for a board whose device config has no timezone, or an unparseable one.
