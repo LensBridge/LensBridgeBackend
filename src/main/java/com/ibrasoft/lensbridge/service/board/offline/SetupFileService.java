@@ -85,17 +85,16 @@ public class SetupFileService {
                          String backendUrl, String claimSecret) {}
 
     /**
+     * Issues the file: allocates the sequence and, online, rotates the secret, then signs.
+     * Called inside a larger transaction (a USB kit), it joins it, and nothing it stores is
+     * kept unless that transaction commits.
+     *
      * @param online include {@code backendUrl} and a newly rotated {@code claimSecret}
      * @throws ApiResponseException 404 unknown device, 409 revoked, 503 no content signing key,
      *                              or (online only) no backend URL configured
      */
     @Transactional
     public OfflineBundle build(UUID deviceId, boolean online) {
-        Device device = deviceRepository.findById(deviceId)
-                .orElseThrow(() -> new ApiResponseException(HttpStatus.NOT_FOUND, ErrorResponse.of("Device not found")));
-        if (device.getRevokedAt() != null) {
-            throw new ApiResponseException(HttpStatus.CONFLICT, ErrorResponse.of("Device is revoked"));
-        }
         signingService.requireConfigured();
         if (online && backendUrl == null) {
             throw new ApiResponseException(HttpStatus.SERVICE_UNAVAILABLE, ErrorResponse.of(
@@ -103,18 +102,26 @@ public class SetupFileService {
                             + "(set musallahboard.agent.backendUrl, or musallahboard.agent.websocketUrl)"));
         }
 
+        // The atomic update comes first (see advanceProvisionSequence): two downloads at once
+        // are serialized on the device's row, so each gets its own sequence and the secret
+        // left stored is that of the newest file.
         Instant now = clock.instant();
-        long previous = device.getProvisionSequence() == null ? 0 : device.getProvisionSequence();
-        long sequence = Math.max(now.toEpochMilli(), previous + 1);
-        device.setProvisionSequence(sequence);
+        if (deviceRepository.advanceProvisionSequence(deviceId, now.toEpochMilli()) == 0) {
+            boolean exists = deviceRepository.existsById(deviceId);
+            throw exists
+                    ? new ApiResponseException(HttpStatus.CONFLICT, ErrorResponse.of("Device is revoked"))
+                    : new ApiResponseException(HttpStatus.NOT_FOUND, ErrorResponse.of("Device not found"));
+        }
         String claimSecret = null;
         if (online) {
             byte[] secret = new byte[CLAIM_SECRET_BYTES];
             random.nextBytes(secret);
-            device.setClaimSecret(secret);
+            deviceRepository.replaceClaimSecret(deviceId, secret);
             claimSecret = Base64.getUrlEncoder().withoutPadding().encodeToString(secret);
         }
-        deviceRepository.save(device);
+        Device device = deviceRepository.findById(deviceId)
+                .orElseThrow(() -> new IllegalStateException("Device " + deviceId + " vanished while locked"));
+        long sequence = device.getProvisionSequence();
 
         String issuedAt = now.truncatedTo(ChronoUnit.SECONDS).toString();
         byte[] provision = packager.toJson(new ProvisionFile(PROVISION_FORMAT, deviceId.toString(),

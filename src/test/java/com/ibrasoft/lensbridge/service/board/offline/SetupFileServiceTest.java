@@ -32,6 +32,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -68,7 +70,19 @@ class SetupFileServiceTest {
         device = Device.builder().id(DEVICE_ID).displayName("North Musallah").audience(Audience.BOTH).build();
         device.setConfig(DeviceConfig.builder().location(Location.builder().timezone("America/Toronto").build()).build());
         when(deviceRepository.findById(DEVICE_ID)).thenReturn(Optional.of(device));
-        when(deviceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(deviceRepository.existsById(DEVICE_ID)).thenReturn(true);
+        // What the two conditional updates do in SQL (checked on a real database in
+        // SetupFileIssuanceTest), applied to the one device.
+        when(deviceRepository.advanceProvisionSequence(eq(DEVICE_ID), anyLong())).thenAnswer(inv -> {
+            if (device.getRevokedAt() != null) return 0;
+            long previous = device.getProvisionSequence() == null ? 0 : device.getProvisionSequence();
+            device.setProvisionSequence(Math.max(previous + 1, inv.<Long>getArgument(1)));
+            return 1;
+        });
+        when(deviceRepository.replaceClaimSecret(eq(DEVICE_ID), any())).thenAnswer(inv -> {
+            device.setClaimSecret(inv.getArgument(1));
+            return 1;
+        });
     }
 
     private SetupFileService service(Instant now, String backendUrl, SecureRandom random) {
@@ -200,7 +214,6 @@ class SetupFileServiceTest {
     @Test
     void unknownRevokedAndUnsignedAreRefusedBeforeAnythingIsStored() {
         UUID missing = UUID.randomUUID();
-        when(deviceRepository.findById(missing)).thenReturn(Optional.empty());
         assertStatus(() -> service().build(missing, false), HttpStatus.NOT_FOUND);
 
         device.setRevokedAt(NOW);
@@ -212,8 +225,9 @@ class SetupFileServiceTest {
         assertStatus(() -> unsigned.build(DEVICE_ID, true), HttpStatus.SERVICE_UNAVAILABLE);
 
         assertStatus(() -> service(NOW, null, new OnesRandom()).build(DEVICE_ID, true), HttpStatus.SERVICE_UNAVAILABLE);
-        verify(deviceRepository, never()).save(any());
+        verify(deviceRepository, never()).replaceClaimSecret(any(), any());
         assertThat(device.getClaimSecret()).isNull();
+        assertThat(device.getProvisionSequence()).isNull();
     }
 
     @Test

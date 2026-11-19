@@ -7,6 +7,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -15,6 +17,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.zip.CRC32;
 import java.util.zip.ZipEntry;
@@ -24,10 +27,10 @@ import java.util.zip.ZipOutputStream;
  * A USB kit (contract C4): one zip whose root holds a single {@code MusallahBoard/} folder,
  * ready to unzip onto a stick:
  * <pre>
- * MusallahBoard/setup-&lt;id8&gt;.mbu                    per board, only with includeSetup
  * MusallahBoard/content-&lt;id8&gt;.mbu                  per board
  * MusallahBoard/musallahboard-app-&lt;v&gt;.mbu           latest board app, when GitHub answers
  * MusallahBoard/musallahboard-agent-&lt;v&gt;-arm64.mbu   latest agent, when GitHub answers
+ * MusallahBoard/setup-&lt;id8&gt;.mbu                    per board, only with includeSetup
  * </pre>
  * Every board reads every file and keeps only what is its own and newer, so one stick serves
  * any number of boards. The zip is written to a temporary file first: memory stays bounded by
@@ -45,6 +48,7 @@ public class UsbKitService {
     private final SetupFileService setupFileService;
     private final ReleaseChannelCache releases;
     private final ContentSigningService signingService;
+    private final PlatformTransactionManager transactionManager;
 
     /**
      * A built kit on disk. The caller streams it and must {@link #close} it.
@@ -86,15 +90,10 @@ public class UsbKitService {
             ZipEntry folder = new ZipEntry(FOLDER);
             zip.putNextEntry(folder);
             zip.closeEntry();
+            // Everything slow or fallible first, outside any transaction and with nothing
+            // stored: content (posters are fetched) and the releases (GitHub).
             for (Device device : devices) {
-                String shortId = device.getId().toString().substring(0, 8);
-                // Content first: it is what can fail (posters), and a failure then leaves no
-                // setup file issued, with its rotated claim secret, for a kit nobody receives.
-                byte[] content = bytesOf(offlineBundleService.build(device.getId(), days));
-                if (includeSetup) {
-                    put(zip, "setup-" + shortId + ".mbu", bytesOf(setupFileService.build(device.getId(), online)));
-                }
-                put(zip, "content-" + shortId + ".mbu", content);
+                put(zip, "content-" + shortId(device) + ".mbu", bytesOf(offlineBundleService.build(device.getId(), days)));
             }
             for (ReleaseChannelCache.Kind kind : ReleaseChannelCache.Kind.values()) {
                 ReleaseChannelCache.Lookup lookup = releases.latest(kind);
@@ -103,6 +102,26 @@ public class UsbKitService {
                 } else {
                     omitted.add(kind.label + ": " + lookup.problem());
                 }
+            }
+            if (includeSetup) {
+                // Then every board's setup file in one transaction that commits only once the
+                // zip is complete: a failure anywhere (a board revoked meanwhile, a full disk)
+                // rolls back every sequence and claim secret, so the files boards already
+                // have keep working. Boards take setup files before content from one stick,
+                // so their place at the end of the zip does not matter. In id order, so two
+                // kits at once lock the same rows in the same order (no deadlock on Postgres).
+                List<Device> byId = devices.stream().sorted(Comparator.comparing(Device::getId)).toList();
+                new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                    try {
+                        for (Device device : byId) {
+                            put(zip, "setup-" + shortId(device) + ".mbu",
+                                    bytesOf(setupFileService.build(device.getId(), online)));
+                        }
+                        zip.close();
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
+                });
             }
         } catch (IOException e) {
             deleteQuietly(file);
@@ -129,6 +148,10 @@ public class UsbKitService {
         zip.putNextEntry(entry);
         zip.write(bytes);
         zip.closeEntry();
+    }
+
+    private static String shortId(Device device) {
+        return device.getId().toString().substring(0, 8);
     }
 
     private static byte[] bytesOf(OfflineBundle bundle) throws IOException {

@@ -25,4 +25,32 @@ public interface DeviceRepository extends JpaRepository<Device, UUID> {
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("update Device d set d.publicKey = :key where d.id = :id and d.publicKey is null")
     int bindPublicKeyIfUnset(@Param("id") UUID id, @Param("key") byte[] key);
+
+    /**
+     * Gives a device that is not revoked its next setup-file sequence: one more than the last,
+     * or {@code now} (epoch milliseconds) when that is greater. 1 when it did, 0 for an
+     * unknown or revoked device.
+     * <p>
+     * One UPDATE, not a read and a save, so it takes the row's write lock (the database's on
+     * SQLite) before it reads the old value: a second issuer waits for the first to commit
+     * and then counts from its sequence, never from the same one. Make it the transaction's
+     * first statement: a SQLite transaction that has already read cannot wait for the lock
+     * and fails at once instead. Read the sequence back afterwards ({@code findById}; the
+     * persistence context is cleared).
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update Device d set d.provisionSequence = case"
+            + " when coalesce(d.provisionSequence, 0) + 1 > :now then coalesce(d.provisionSequence, 0) + 1"
+            + " else :now end"
+            + " where d.id = :id and d.revokedAt is null")
+    int advanceProvisionSequence(@Param("id") UUID id, @Param("now") long now);
+
+    /**
+     * Replaces a device's claim secret. Call it after {@link #advanceProvisionSequence} in the
+     * same transaction, which already holds the row's lock, so the stored secret is always the
+     * one of the highest sequence issued.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update Device d set d.claimSecret = :secret where d.id = :id")
+    int replaceClaimSecret(@Param("id") UUID id, @Param("secret") byte[] secret);
 }
