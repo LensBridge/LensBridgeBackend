@@ -6,16 +6,13 @@ import com.ibrasoft.lensbridge.dto.board.request.CreatePromotableSocialMediaRequ
 import com.ibrasoft.lensbridge.dto.board.request.UpdatePromotableSocialMediaRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateBoardConfigRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateCalendarEventRequest;
-import com.ibrasoft.lensbridge.dto.board.request.UpdateDeviceRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdatePosterRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateTickerRequest;
 import com.ibrasoft.lensbridge.dto.board.request.WeeklyContentRequest;
-import com.ibrasoft.lensbridge.dto.board.response.DeviceSummary;
 import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
 import com.ibrasoft.lensbridge.model.audit.AuditAction;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.BoardEvent;
-import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
 import com.ibrasoft.lensbridge.model.board.Poster;
 import com.ibrasoft.lensbridge.model.board.PromotableSocialMedia;
@@ -439,21 +436,6 @@ public class BoardAdminController {
                 "Musallah Board", null, request.getRemoteAddr());
 
         return ResponseEntity.ok(new MessageResponse("Sync requested from every connected board"));
-    }
-
-    @PatchMapping("/devices/{deviceId}")
-    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_CONFIG_WRITE + "')")
-    public ResponseEntity<DeviceSummary> updateDevice(
-            @PathVariable UUID deviceId,
-            @Valid @RequestBody UpdateDeviceRequest updateRequest,
-            HttpServletRequest request) {
-
-        log.info("Admin updating device: {}", deviceId);
-        Device updated = boardService.updateDevice(deviceId, updateRequest);
-        contentChanges.deviceChanged(deviceId, "device");
-        auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.UPDATE_BOARD_CONFIG, "Device", deviceId, request.getRemoteAddr());
-        
-        return ResponseEntity.ok(DeviceSummary.of(updated));
     }
 
     private String getCurrentUserEmail() {

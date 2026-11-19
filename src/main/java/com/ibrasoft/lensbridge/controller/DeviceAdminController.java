@@ -3,6 +3,7 @@ package com.ibrasoft.lensbridge.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ibrasoft.lensbridge.dto.board.request.IssueCommandRequest;
 import com.ibrasoft.lensbridge.dto.board.request.IssueEnrollmentTokenRequest;
+import com.ibrasoft.lensbridge.dto.board.request.UpdateDeviceRequest;
 import com.ibrasoft.lensbridge.dto.board.response.CommandIssuedResponse;
 import com.ibrasoft.lensbridge.dto.board.response.CommandView;
 import com.ibrasoft.lensbridge.dto.board.response.DeviceSummary;
@@ -15,8 +16,10 @@ import com.ibrasoft.lensbridge.model.board.commands.CommandKind;
 import com.ibrasoft.lensbridge.repository.sql.DeviceCommandRepository;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.service.AdminAuditService;
+import com.ibrasoft.lensbridge.service.BoardService;
 import com.ibrasoft.lensbridge.service.agent.AgentSessionRegistry;
 import com.ibrasoft.lensbridge.service.agent.CommandDispatcher;
+import com.ibrasoft.lensbridge.service.agent.ContentChangeNotifier;
 import com.ibrasoft.lensbridge.service.agent.EnrollmentTokenService;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
 import com.ibrasoft.lensbridge.service.agent.EnrollmentTokenService.Issued;
@@ -69,6 +72,8 @@ public class DeviceAdminController {
     private final AgentSessionRegistry sessionRegistry;
     private final AdminAuditService auditService;
     private final OfflineBundleService offlineBundleService;
+    private final BoardService boardService;
+    private final ContentChangeNotifier contentChanges;
 
     @Operation(operationId = "listDevices", summary = "List every enrolled board device")
     @GetMapping
@@ -92,6 +97,27 @@ public class DeviceAdminController {
                 .map(d -> ResponseEntity.ok(DeviceSummary.of(d)))
                 .orElseThrow(() -> new ApiResponseException(HttpStatus.NOT_FOUND,
                         new MessageResponse("Device not found")));
+    }
+
+    @Operation(operationId = "updateDevice", summary = "Rename a board or change its audience")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Device updated"),
+            @ApiResponse(responseCode = "400", description = "Blank or over-long displayName",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+            @ApiResponse(responseCode = "404", description = "No device with that id",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class)))
+    })
+    @PatchMapping("/{deviceId}")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_CONFIG_WRITE + "')")
+    public ResponseEntity<DeviceSummary> updateDevice(@PathVariable UUID deviceId,
+                                                      @Valid @RequestBody UpdateDeviceRequest request,
+                                                      HttpServletRequest httpRequest) {
+        Device updated = boardService.updateDevice(deviceId, request);
+        // The audience decides which posters, events and socials the board shows.
+        contentChanges.deviceChanged(deviceId, "device");
+        auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.UPDATE_BOARD_CONFIG,
+                "Device", deviceId, httpRequest.getRemoteAddr());
+        return ResponseEntity.ok(DeviceSummary.of(updated));
     }
 
     @Operation(operationId = "issueEnrollmentToken",

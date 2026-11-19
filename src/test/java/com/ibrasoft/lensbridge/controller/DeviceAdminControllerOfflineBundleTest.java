@@ -8,6 +8,8 @@ import com.ibrasoft.lensbridge.repository.sql.DeviceCommandRepository;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.service.AdminAuditService;
 import com.ibrasoft.lensbridge.service.UserService;
+import com.ibrasoft.lensbridge.service.agent.ContentChangeNotifier;
+import com.ibrasoft.lensbridge.service.BoardService;
 import com.ibrasoft.lensbridge.service.agent.AgentSessionRegistry;
 import com.ibrasoft.lensbridge.service.agent.CommandDispatcher;
 import com.ibrasoft.lensbridge.service.agent.EnrollmentTokenService;
@@ -72,6 +74,10 @@ class DeviceAdminControllerOfflineBundleTest {
     private AdminAuditService auditService;
 
     /** Needed by WebConfig's CurrentUserArgumentResolver; see BoardAdminControllerPermissionTest. */
+    @MockitoBean
+    private BoardService boardService;
+    @MockitoBean
+    private ContentChangeNotifier contentChangeNotifier;
     @MockitoBean
     private UserService userService;
 

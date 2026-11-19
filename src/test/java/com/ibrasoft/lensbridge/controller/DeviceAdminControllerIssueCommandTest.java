@@ -10,6 +10,7 @@ import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.security.CommandAuthorizer;
 import com.ibrasoft.lensbridge.service.AdminAuditService;
 import com.ibrasoft.lensbridge.service.UserService;
+import com.ibrasoft.lensbridge.service.BoardService;
 import com.ibrasoft.lensbridge.service.agent.AgentSessionRegistry;
 import com.ibrasoft.lensbridge.service.agent.CommandDispatcher;
 import com.ibrasoft.lensbridge.service.agent.EnrollmentTokenService;
@@ -80,6 +81,8 @@ class DeviceAdminControllerIssueCommandTest {
     private AdminAuditService auditService;
     @MockitoBean
     private ContentChangeNotifier contentChanges;
+    @MockitoBean
+    private BoardService boardService;
     @MockitoBean
     private UserService userService;
 

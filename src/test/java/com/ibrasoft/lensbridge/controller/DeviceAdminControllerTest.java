@@ -5,6 +5,8 @@ import com.ibrasoft.lensbridge.model.audit.AuditAction;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.service.AdminAuditService;
+import com.ibrasoft.lensbridge.service.BoardService;
+import com.ibrasoft.lensbridge.service.agent.ContentChangeNotifier;
 import com.ibrasoft.lensbridge.repository.sql.DeviceCommandRepository;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.service.agent.AgentSession;
@@ -55,7 +57,9 @@ class DeviceAdminControllerTest {
                 new ObjectMapper(),
                 registry,
                 auditService,
-                mock(OfflineBundleService.class));
+                mock(OfflineBundleService.class),
+                mock(BoardService.class),
+                mock(ContentChangeNotifier.class));
 
         UUID deviceId = UUID.randomUUID();
         Device device = Device.builder()
@@ -102,7 +106,9 @@ class DeviceAdminControllerTest {
                 new ObjectMapper(),
                 new AgentSessionRegistry(mock(DeviceEventPublisher.class)),
                 auditService,
-                mock(OfflineBundleService.class));
+                mock(OfflineBundleService.class),
+                mock(BoardService.class),
+                mock(ContentChangeNotifier.class));
 
         UUID deviceId = UUID.randomUUID();
         Instant revokedAt = Instant.now().minusSeconds(3600);
