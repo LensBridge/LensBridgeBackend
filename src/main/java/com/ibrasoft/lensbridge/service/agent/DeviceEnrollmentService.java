@@ -10,17 +10,24 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.socket.CloseStatus;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
- * Orchestrates the agent enrollment flow:
+ * Orchestrates the agent enrollment flow (the maintainer's {@code musallahboard-agent enroll
+ * --token}; boards set up by a setup file claim instead, see {@link DeviceClaimService}):
  * <ol>
  *   <li>Validate and decode the device-supplied Ed25519 public key.</li>
  *   <li>Atomically consume the one-time enrollment token.</li>
- *   <li>Persist a Device row carrying the public key and metadata reported by the agent.</li>
+ *   <li>A token issued for a board created in the console binds the key to that device,
+ *       replacing any key it had (the admin asked for this board to be re-keyed, for example
+ *       after an SD card swap) and closing the old key's live session. Any other token
+ *       creates a new device carrying the key.</li>
  * </ol>
  */
 @Service
@@ -36,6 +43,7 @@ public class DeviceEnrollmentService {
     private final EnrollmentTokenService enrollmentTokenService;
     private final DeviceRepository deviceRepository;
     private final BoardConfigRepository boardConfigRepository;
+    private final AgentSessionRegistry sessionRegistry;
 
     public sealed interface Outcome {
         record Ok(Device device) implements Outcome {}
@@ -65,6 +73,9 @@ public class DeviceEnrollmentService {
             return new Outcome.InvalidToken();
         }
         EnrollmentToken token = consumed.get();
+        if (token.getDeviceId() != null) {
+            return bindExisting(token, publicKey, hardwareModel, agentVersion, remoteIp);
+        }
 
         Device device = Device.builder()
                 .displayName(displayNameFor(token, hostname))
@@ -86,6 +97,33 @@ public class DeviceEnrollmentService {
 
         log.info("Enrolled device {} from token {} (issued by {})",
                 saved.getId(), token.getId(), token.getCreatedBy());
+        return new Outcome.Ok(saved);
+    }
+
+    private Outcome bindExisting(EnrollmentToken token, byte[] publicKey, String hardwareModel,
+                                 String agentVersion, String remoteIp) {
+        Optional<Device> found = deviceRepository.findById(token.getDeviceId());
+        if (found.isEmpty() || found.get().getRevokedAt() != null) {
+            log.warn("Enrollment token {} is for device {}, which is {}", token.getId(), token.getDeviceId(),
+                    found.isEmpty() ? "gone" : "revoked");
+            return new Outcome.InvalidToken();
+        }
+        Device device = found.get();
+        boolean rekeyed = device.getPublicKey() != null && !Arrays.equals(device.getPublicKey(), publicKey);
+        device.setPublicKey(publicKey);
+        device.setHardwareModel(hardwareModel);
+        device.setAgentVersion(agentVersion);
+        device.setLastSeenIp(remoteIp);
+        if (device.getEnrolledAt() == null) device.setEnrolledAt(Instant.now());
+        Device saved = deviceRepository.save(device);
+        enrollmentTokenService.recordConsumer(token.getId(), saved.getId());
+        if (rekeyed) {
+            // The old key must not keep a live session; it can no longer authenticate.
+            UUID id = saved.getId();
+            AfterCommit.run(() -> sessionRegistry.closeIfPresent(id, CloseStatus.POLICY_VIOLATION.withReason("rekeyed")));
+        }
+        log.info("Enrolled device {} from token {} (issued by {}){}", saved.getId(), token.getId(),
+                token.getCreatedBy(), rekeyed ? ", replacing its previous key" : "");
         return new Outcome.Ok(saved);
     }
 

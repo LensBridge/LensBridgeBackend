@@ -189,7 +189,9 @@ public class DeviceAdminController {
     }
 
     @Operation(operationId = "issueEnrollmentToken",
-            summary = "Mint a one-time token a new device can exchange for an identity")
+            summary = "Mint a one-time token that enrolls a new device over SSH (legacy)",
+            description = "The token creates a new device when used. To enroll a board already added in the "
+                    + "console, use POST /api/admin/board/devices/{deviceId}/enrollment-tokens.")
     @ApiResponse(responseCode = "201", description = "Token issued; the plaintext is returned exactly once")
     @PostMapping("/enrollment-tokens")
     @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_DEVICE_ENROLL + "')")
@@ -216,6 +218,43 @@ public class DeviceAdminController {
                         .expiresAt(issued.token().getExpiresAt())
                         .build()
         );
+    }
+
+    @Operation(operationId = "issueDeviceEnrollmentToken",
+            summary = "Mint a one-time token that enrolls this board over SSH (maintainers)",
+            description = "For musallahboard-agent enroll --token on the board. The token binds the board's key to "
+                    + "this device, replacing any key it had (for example after an SD card swap). Boards set up "
+                    + "with an online setup file claim by themselves and need no token.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Token issued; the plaintext is returned exactly once"),
+            @ApiResponse(responseCode = "404", description = "No device with that id",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+            @ApiResponse(responseCode = "409", description = "Device is revoked",
+                    content = @Content(schema = @Schema(implementation = MessageResponse.class)))
+    })
+    @PostMapping("/{deviceId}/enrollment-tokens")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_DEVICE_ENROLL + "')")
+    public ResponseEntity<IssueEnrollmentTokenResponse> issueDeviceEnrollmentToken(
+            @PathVariable UUID deviceId,
+            @Parameter(description = "Lifetime of the token in minutes (1-1440, default 30)")
+            @RequestParam(required = false) Integer expiresInMinutes,
+            HttpServletRequest httpRequest) {
+        Device device = deviceRepository.findById(deviceId)
+                .orElseThrow(() -> new ApiResponseException(HttpStatus.NOT_FOUND, new MessageResponse("Device not found")));
+        if (device.getRevokedAt() != null) {
+            throw new ApiResponseException(HttpStatus.CONFLICT, new MessageResponse("Device is revoked"));
+        }
+        String adminEmail = getCurrentUserEmail();
+        Issued issued = enrollmentTokenService.issueFor(device, expiresInMinutes, adminEmail);
+        log.info("Admin {} issued enrollment token {} for device {}", adminEmail, issued.token().getId(), deviceId);
+        auditService.logAuditEvent(adminEmail, AuditAction.ISSUE_ENROLLMENT_TOKEN,
+                "Device", deviceId, httpRequest.getRemoteAddr(), "token " + issued.token().getId());
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(IssueEnrollmentTokenResponse.builder()
+                .tokenId(issued.token().getId())
+                .token(issued.plaintext())
+                .expiresAt(issued.token().getExpiresAt())
+                .build());
     }
 
     @Operation(operationId = "revokeDevice",

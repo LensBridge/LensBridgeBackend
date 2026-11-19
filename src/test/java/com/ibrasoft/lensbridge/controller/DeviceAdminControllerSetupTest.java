@@ -5,6 +5,7 @@ import com.ibrasoft.lensbridge.model.audit.AuditAction;
 import com.ibrasoft.lensbridge.model.auth.Permission;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.Device;
+import com.ibrasoft.lensbridge.model.board.EnrollmentToken;
 import com.ibrasoft.lensbridge.repository.sql.DeviceCommandRepository;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.service.AdminAuditService;
@@ -27,7 +28,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -144,5 +147,36 @@ class DeviceAdminControllerSetupTest {
                         .with(TestAuthorities.asHolderOf(Permission.BOARD_DEVICE_READ)))
                 .andExpect(status().isForbidden());
         verifyNoInteractions(setupFileService);
+    }
+
+    @Test
+    void aTokenForThisBoardIsIssuedForItsRow() throws Exception {
+        Device device = Device.builder().id(DEVICE_ID).displayName("North Musallah").audience(Audience.BOTH).build();
+        when(deviceRepository.findById(DEVICE_ID)).thenReturn(Optional.of(device));
+        EnrollmentToken token = EnrollmentToken.builder().id(UUID.randomUUID()).deviceId(DEVICE_ID)
+                .expiresAt(Instant.parse("2026-11-19T12:30:00Z")).build();
+        when(enrollmentTokenService.issueFor(eq(device), eq(60), anyString()))
+                .thenReturn(new EnrollmentTokenService.Issued(token, "plain-token"));
+
+        mockMvc.perform(post(DEVICES + "/" + DEVICE_ID + "/enrollment-tokens").param("expiresInMinutes", "60")
+                        .with(TestAuthorities.asHolderOf(Permission.BOARD_DEVICE_ENROLL)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.token").value("plain-token"))
+                .andExpect(jsonPath("$.tokenId").value(token.getId().toString()));
+    }
+
+    @Test
+    void noTokenForAnUnknownOrRevokedBoard() throws Exception {
+        when(deviceRepository.findById(DEVICE_ID)).thenReturn(Optional.empty());
+        mockMvc.perform(post(DEVICES + "/" + DEVICE_ID + "/enrollment-tokens")
+                        .with(TestAuthorities.asHolderOf(Permission.BOARD_DEVICE_ENROLL)))
+                .andExpect(status().isNotFound());
+
+        when(deviceRepository.findById(DEVICE_ID)).thenReturn(Optional.of(Device.builder().id(DEVICE_ID)
+                .displayName("A").audience(Audience.BOTH).revokedAt(Instant.now()).build()));
+        mockMvc.perform(post(DEVICES + "/" + DEVICE_ID + "/enrollment-tokens")
+                        .with(TestAuthorities.asHolderOf(Permission.BOARD_DEVICE_ENROLL)))
+                .andExpect(status().isConflict());
+        verifyNoInteractions(enrollmentTokenService);
     }
 }
