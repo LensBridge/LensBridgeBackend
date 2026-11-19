@@ -66,8 +66,8 @@ public class WebSecurityConfig {
     configuration.setAllowedOrigins(Arrays.asList(frontendBaseUrl));
     configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
     configuration.setAllowedHeaders(Arrays.asList("*"));
-    // So the admin frontend can read the offline bundle's filename from a fetch() response.
-    configuration.setExposedHeaders(Arrays.asList("Content-Disposition"));
+    // So the admin frontend can read a download's filename, and what a USB kit lacks, from fetch().
+    configuration.setExposedHeaders(Arrays.asList("Content-Disposition", "X-Usb-Kit-Omitted"));
     configuration.setAllowCredentials(true);
     
     UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

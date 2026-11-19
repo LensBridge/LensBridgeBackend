@@ -66,6 +66,11 @@ lensbridge.websocket.container-customizer.enabled=true
 # POST /api/agent/content-bundle and the admin offline-bundle download answer 503. Keep it out of
 # this file in production and set the MUSALLAHBOARD_CONTENT_SIGNING_KEY environment variable.
 musallahboard.content-signing.private-key=${MUSALLAHBOARD_CONTENT_SIGNING_KEY:}
+# Release channels the USB kit takes the latest board app and arm64 agent from (the agent's own
+# defaults). Fetched on demand, checked at most every 30 minutes and cached in memory; a kit made
+# while GitHub is unreachable goes without them. Set one empty to leave that package out of kits.
+musallahboard.release.app-channel-url=https://github.com/LensBridge/MusallahBoard/releases/latest/download/app-channel.json
+musallahboard.release.agent-channel-url=https://github.com/LensBridge/agent/releases/latest/download/agent-channel-arm64.json
 # During a key rotation: comma-separated base64 raw public keys of retired content keys, still
 # published by GET /api/agent/signing-keys so boards keep trusting what they already hold.
 musallahboard.content-signing.previous-public-keys=
