@@ -525,6 +525,86 @@ class CommandDispatcherTest {
         assertEquals(30, resp.expiresAt().getEpochSecond() - resp.issuedAt().getEpochSecond());
     }
 
+    // ── limits and payloads ───────────────────────────────────────────────
+
+    /** The finding: a reboot with a year-long TTL would fire whenever the board reconnects. */
+    @Test
+    void issue_rejectsARebootThatWouldWaitForAYear() {
+        UUID deviceId = registerDevice();
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class, () -> dispatcher.issue(deviceId,
+                "admin", new IssueCommandRequest("system.reboot", null, null, 365 * 24 * 3600)));
+
+        assertEquals(400, ex.getStatusCode().value());
+        assertEquals("ttlSeconds for system.reboot must be from 1 to 600", ex.getReason());
+        assertTrue(db.rows().isEmpty());
+    }
+
+    @Test
+    void issue_appliesEachKindsOwnTtlLimit() {
+        UUID deviceId = registerDevice();
+
+        assertThrows(ResponseStatusException.class, () -> dispatcher.issue(deviceId, "admin",
+                new IssueCommandRequest("kiosk.restart", null, null, 601)));
+        CommandIssuedResponse reboot = dispatcher.issue(deviceId, "admin",
+                new IssueCommandRequest("system.reboot", null, null, 600));
+        CommandIssuedResponse reload = dispatcher.issue(deviceId, "admin",
+                new IssueCommandRequest("chrome.reload", null, null, 3600));
+
+        assertEquals(600, reboot.expiresAt().getEpochSecond() - reboot.issuedAt().getEpochSecond());
+        assertEquals(3600, reload.expiresAt().getEpochSecond() - reload.issuedAt().getEpochSecond());
+    }
+
+    @Test
+    void issue_rejectsADeadlineOverTheCap() {
+        UUID deviceId = registerDevice();
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class, () -> dispatcher.issue(deviceId,
+                "admin", new IssueCommandRequest("update.install_now", null, IssueCommandRequest.MAX_DEADLINE_MS + 1, null)));
+
+        assertEquals(400, ex.getStatusCode().value());
+        CommandIssuedResponse ok = dispatcher.issue(deviceId, "admin",
+                new IssueCommandRequest("update.install_now", null, 600_000, null));
+        assertEquals(600_000, db.row(ok.commandId()).getDeadlineMs());
+    }
+
+    @Test
+    void issue_rejectsAPayloadTheKindDoesNotTake() {
+        UUID deviceId = registerDevice();
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class, () -> dispatcher.issue(deviceId,
+                "admin", new IssueCommandRequest("system.reboot", mapper.createObjectNode().put("delay", 1), null, null)));
+
+        assertEquals(400, ex.getStatusCode().value());
+        assertEquals("system.reboot takes no payload", ex.getReason());
+        assertTrue(db.rows().isEmpty());
+    }
+
+    @Test
+    void issue_rejectsLogsTailOutsideTheAgentsBounds() {
+        UUID deviceId = registerDevice();
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class, () -> dispatcher.issue(deviceId,
+                "admin", new IssueCommandRequest("logs.tail", mapper.createObjectNode().put("lines", 999_999_999), null, null)));
+
+        assertEquals(400, ex.getStatusCode().value());
+        assertEquals("logs.tail lines must be a whole number from 1 to 500", ex.getReason());
+    }
+
+    /** What is stored and sent is rebuilt from the checked values, not the client's JSON. */
+    @Test
+    void issue_storesTheCheckedPayload() throws Exception {
+        UUID deviceId = registerDevice();
+
+        CommandIssuedResponse tail = dispatcher.issue(deviceId, "admin",
+                new IssueCommandRequest("logs.tail", mapper.readTree("{ \"lines\" : 250 }"), null, null));
+        CommandIssuedResponse reload = dispatcher.issue(deviceId, "admin",
+                new IssueCommandRequest("chrome.reload", mapper.createObjectNode(), null, null));
+
+        assertEquals("{\"lines\":250}", db.row(tail.commandId()).getPayloadJson());
+        assertEquals("null", db.row(reload.commandId()).getPayloadJson());
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────
 
     private UUID registerDevice() {

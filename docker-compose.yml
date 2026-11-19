@@ -47,8 +47,12 @@ services:
       MUSALLAHBOARD_AGENT_WS_URL: ${MUSALLAHBOARD_AGENT_WS_URL}
       MUSALLAHBOARD_CONTENT_SIGNING_KEY: ${MUSALLAHBOARD_CONTENT_SIGNING_KEY:-}
       OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY}
+    # Loopback only by default, so the app is reached through the reverse proxy and never
+    # directly: it trusts X-Forwarded-For from private and loopback peers (see
+    # server.forward-headers-strategy in application.properties.example). Set
+    # LENSBRIDGE_BIND_ADDRESS (e.g. 0.0.0.0) only for a deployment that needs the port elsewhere.
     ports:
-      - "8085:8085"
+      - "${LENSBRIDGE_BIND_ADDRESS:-127.0.0.1}:8085:8085"
     networks:
       - lensbridge-net
     healthcheck:

@@ -13,6 +13,7 @@ import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.model.board.DeviceCommand;
 import com.ibrasoft.lensbridge.model.board.DeviceCommandStatus;
 import com.ibrasoft.lensbridge.model.board.commands.CommandKind;
+import com.ibrasoft.lensbridge.model.board.commands.InvalidCommandException;
 import com.ibrasoft.lensbridge.repository.sql.DeviceCommandRepository;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.service.agent.events.DeviceEventPublisher;
@@ -62,7 +63,8 @@ public class CommandDispatcher {
     /**
      * How long an undelivered command stays deliverable. Long enough to survive a kiosk
      * restart or a brief WiFi drop, short enough that nothing surprising fires after an
-     * outage. Overridable per command via {@code ttlSeconds}.
+     * outage. Overridable per command via {@code ttlSeconds}, up to the kind's
+     * {@link CommandKind#getMaxTtl()}; it must not exceed the shortest of those.
      */
     private static final Duration DEFAULT_TTL = Duration.ofMinutes(5);
 
@@ -81,16 +83,38 @@ public class CommandDispatcher {
     private final ObjectMapper objectMapper;
     private final DeviceEventPublisher events;
 
+    /**
+     * Validates and queues a command. The kind, its payload, the deadline and the time-to-live
+     * are all checked before anything is looked up or stored: each failure is a 400 naming
+     * the field.
+     */
     public CommandIssuedResponse issue(UUID deviceId, String issuedBy, IssueCommandRequest request) {
         CommandKind kind = CommandKind.from(request.kind()).orElseThrow(() ->
                 new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown command kind: " + request.kind()));
+        JsonNode payload;
+        try {
+            payload = kind.validatePayload(request.payload());
+        } catch (InvalidCommandException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+        }
+        int deadline = request.deadlineMs() == null ? DEFAULT_DEADLINE_MS : request.deadlineMs();
+        // Also enforced on the request DTO; checked again for callers that skip bean validation.
+        if (deadline <= 0 || deadline > IssueCommandRequest.MAX_DEADLINE_MS) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "deadlineMs must be from 1 to " + IssueCommandRequest.MAX_DEADLINE_MS);
+        }
+        Duration ttl = request.ttlSeconds() == null ? DEFAULT_TTL : Duration.ofSeconds(request.ttlSeconds());
+        if (ttl.isNegative() || ttl.isZero() || ttl.compareTo(kind.getMaxTtl()) > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ttlSeconds for " + kind.getWireName()
+                    + " must be from 1 to " + kind.getMaxTtl().toSeconds());
+        }
+
         Device device = deviceRepository.findById(deviceId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Device not found"));
         if (device.getRevokedAt() != null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Device is revoked");
         }
 
-        JsonNode payload = request.payload() == null ? NullNode.getInstance() : request.payload();
         String payloadJson;
         try {
             payloadJson = objectMapper.writeValueAsString(payload);
@@ -98,13 +122,11 @@ public class CommandDispatcher {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid payload");
         }
 
-        int deadline = request.deadlineMs() == null ? DEFAULT_DEADLINE_MS : request.deadlineMs();
-        Duration ttl = request.ttlSeconds() == null ? DEFAULT_TTL : Duration.ofSeconds(request.ttlSeconds());
         Instant issuedAt = Instant.now();
 
         DeviceCommand cmd = commandRepository.save(DeviceCommand.builder()
                 .deviceId(deviceId)
-                .kind(request.kind())
+                .kind(kind.getWireName())
                 .payloadJson(payloadJson)
                 .issuedBy(issuedBy)
                 .deadlineMs(deadline)

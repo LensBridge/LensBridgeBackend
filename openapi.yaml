@@ -614,7 +614,12 @@ paths:
     post:
       description: "Returns as soon as the command is queued; delivery and execution\
         \ are reported asynchronously over the agent websocket. The permission required\
-        \ depends on the command kind: board:command:benign, :disruptive, or :inspect."
+        \ depends on the command kind: board:command:benign, :disruptive, or :inspect.\
+        \ ttlSeconds is capped per kind (10 minutes for kiosk.restart, system.reboot\
+        \ and update.install_now; 15 for chrome.screenshot and logs.tail; an hour\
+        \ for chrome.reload and config.refresh), deadlineMs at 15 minutes. Only logs.tail\
+        \ takes a payload, {\"lines\": 1..500}; for the others it must be absent,\
+        \ null or {}."
       operationId: issueDeviceCommand
       parameters:
       - in: path
@@ -636,6 +641,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/CommandIssuedResponse"
           description: Command accepted and queued for delivery
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: "Unknown kind, a payload the kind does not take, or a deadline\
+            \ or time-to-live over its limit"
         "403":
           content:
             application/json:
@@ -733,8 +745,8 @@ paths:
       - device-admin-controller
   /api/admin/board/devices/{deviceId}/revoke:
     post:
-      description: "Closes any live agent session. Idempotent: re-revoking an already\
-        \ revoked device is a no-op."
+      description: "Closes any live agent session and refresh stream. Idempotent:\
+        \ re-revoking an already revoked device is a no-op."
       operationId: revokeDevice
       parameters:
       - in: path
@@ -3906,6 +3918,7 @@ components:
         deadlineMs:
           type: integer
           format: int32
+          maximum: 900000
           minimum: 0
         kind:
           type: string
@@ -3916,6 +3929,7 @@ components:
         ttlSeconds:
           type: integer
           format: int32
+          maximum: 3600
           minimum: 0
       required:
       - kind

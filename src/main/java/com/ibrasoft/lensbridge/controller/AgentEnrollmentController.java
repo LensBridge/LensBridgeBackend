@@ -57,9 +57,9 @@ public class AgentEnrollmentController {
     @PostMapping("/enroll")
     public ResponseEntity<AgentEnrollResponse> enroll(@Valid @RequestBody AgentEnrollRequest request,
                                     HttpServletRequest httpRequest) {
-        // Not X-Forwarded-For: any client can send that header. With server.forward-headers-strategy
-        // set, the container has already resolved it from the trusted proxy and getRemoteAddr()
-        // returns that address (or the socket peer when there is no proxy).
+        // Not X-Forwarded-For: any client can send that header. With
+        // server.forward-headers-strategy=native, Tomcat has already resolved it, from trusted
+        // proxies only, and getRemoteAddr() returns that address (or the socket peer otherwise).
         String remoteIp = httpRequest.getRemoteAddr();
 
         Outcome outcome = enrollmentService.enroll(

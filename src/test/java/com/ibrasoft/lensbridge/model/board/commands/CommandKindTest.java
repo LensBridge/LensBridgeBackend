@@ -74,4 +74,30 @@ class CommandKindTest {
         assertThat(screenshot.get().getRequiredPermission())
                 .isEqualTo(Permission.BOARD_COMMAND_INSPECT);
     }
+
+    // ==================== Time-to-live ====================
+
+    /** A disruptive command that fires long after it was asked for is a bug, not a feature. */
+    @Test
+    void disruptiveKindsWaitAtMostTenMinutes() {
+        for (CommandKind kind : CommandKind.values()) {
+            if (kind.getRisk() == CommandRisk.DISRUPTIVE) {
+                assertThat(kind.getMaxTtl()).as(kind.getWireName()).isLessThanOrEqualTo(java.time.Duration.ofMinutes(10));
+            }
+        }
+    }
+
+    @Test
+    void noKindWaitsLongerThanTheRequestLimitAllows() {
+        long longest = java.util.Arrays.stream(CommandKind.values())
+                .mapToLong(k -> k.getMaxTtl().toSeconds()).max().orElseThrow();
+        assertThat(longest).isEqualTo(com.ibrasoft.lensbridge.dto.board.request.IssueCommandRequest.MAX_TTL_SECONDS);
+    }
+
+    /** The default TTL (5 minutes) applies when the console sends none; every kind must allow it. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(CommandKind.class)
+    void everyKindAllowsTheDefaultTtl(CommandKind kind) {
+        assertThat(kind.getMaxTtl()).isGreaterThanOrEqualTo(java.time.Duration.ofMinutes(5));
+    }
 }
