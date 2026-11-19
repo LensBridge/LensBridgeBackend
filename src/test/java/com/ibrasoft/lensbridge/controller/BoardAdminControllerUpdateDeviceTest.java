@@ -1,7 +1,7 @@
 package com.ibrasoft.lensbridge.controller;
 
 import com.ibrasoft.lensbridge.dto.board.request.UpdateDeviceRequest;
-import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
+import com.ibrasoft.lensbridge.service.agent.ContentChangeNotifier;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.Device;
@@ -56,7 +56,7 @@ class BoardAdminControllerUpdateDeviceTest {
     @MockitoBean
     private AdminAuditService auditService;
     @MockitoBean
-    private BoardStreamHandler boardStreamHandler;
+    private ContentChangeNotifier contentChanges;
 
     /** WebConfig registers CurrentUserArgumentResolver, which needs this in the slice. */
     @MockitoBean

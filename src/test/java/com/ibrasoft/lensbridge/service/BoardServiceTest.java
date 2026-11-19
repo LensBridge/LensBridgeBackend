@@ -6,7 +6,7 @@ import com.ibrasoft.lensbridge.dto.board.request.UpdateCalendarEventRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateDeviceRequest;
 import com.ibrasoft.lensbridge.dto.board.request.WeeklyContentRequest;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
-import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
+import com.ibrasoft.lensbridge.service.agent.ContentChangeNotifier;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.BoardEvent;
 import com.ibrasoft.lensbridge.model.board.Device;
@@ -53,7 +53,7 @@ class BoardServiceTest {
     @Mock
     private WeeklyContentRepository weeklyContentRepository;
     @Mock
-    private BoardStreamHandler boardStream;
+    private ContentChangeNotifier contentChanges;
 
     @InjectMocks
     private BoardService service;
@@ -299,7 +299,7 @@ class BoardServiceTest {
         assertThat(created.getAudience()).isEqualTo(Audience.BOTH);
         assertThat(created.getStartTime()).isEqualTo(start);
         assertThat(created.getEndTime()).isEqualTo(start.plusSeconds(3600));
-        verify(boardStream).contentChanged("events");
+        verify(contentChanges).contentChanged("events");
     }
 
     /** allDay is optional in the contract; null must not reach the NOT NULL column. */
@@ -632,35 +632,13 @@ class BoardServiceTest {
     }
 
     @Test
-    void saveWeeklyContentNotifiesImmediatelyWhenThereIsNoTransaction() {
+    void saveWeeklyContentTellsTheBoards() {
         when(weeklyContentRepository.findByYearAndWeekNumber(2026, 20)).thenReturn(Optional.empty());
         when(weeklyContentRepository.save(any(WeeklyContent.class))).thenAnswer(inv -> inv.getArgument(0));
 
         service.saveWeeklyContent(2026, 20, WeeklyContentRequest.builder().build());
 
-        verify(boardStream).contentChanged("weekly-content");
-    }
-
-    /** Notifying before the commit let a board refetch and read the old content. */
-    @Test
-    void saveWeeklyContentNotifiesOnlyAfterTheTransactionCommits() {
-        when(weeklyContentRepository.findByYearAndWeekNumber(2026, 20)).thenReturn(Optional.empty());
-        when(weeklyContentRepository.save(any(WeeklyContent.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
-        try {
-            service.saveWeeklyContent(2026, 20, WeeklyContentRequest.builder().build());
-
-            verify(boardStream, never()).contentChanged(any());
-
-            for (var sync : org.springframework.transaction.support.TransactionSynchronizationManager
-                    .getSynchronizations()) {
-                sync.afterCommit();
-            }
-            verify(boardStream).contentChanged("weekly-content");
-        } finally {
-            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
-        }
+        verify(contentChanges).contentChanged("weekly-content");
     }
 
     // ==================== slide durations ====================

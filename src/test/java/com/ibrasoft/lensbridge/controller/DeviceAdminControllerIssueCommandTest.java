@@ -1,6 +1,6 @@
 package com.ibrasoft.lensbridge.controller;
 
-import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
+import com.ibrasoft.lensbridge.service.agent.ContentChangeNotifier;
 import com.ibrasoft.lensbridge.model.auth.Permission;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.Device;
@@ -79,7 +79,7 @@ class DeviceAdminControllerIssueCommandTest {
     @MockitoBean
     private AdminAuditService auditService;
     @MockitoBean
-    private BoardStreamHandler boardStream;
+    private ContentChangeNotifier contentChanges;
     @MockitoBean
     private UserService userService;
 

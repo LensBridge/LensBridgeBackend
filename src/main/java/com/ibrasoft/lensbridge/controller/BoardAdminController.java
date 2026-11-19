@@ -12,7 +12,6 @@ import com.ibrasoft.lensbridge.dto.board.request.UpdateTickerRequest;
 import com.ibrasoft.lensbridge.dto.board.request.WeeklyContentRequest;
 import com.ibrasoft.lensbridge.dto.board.response.DeviceSummary;
 import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
-import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
 import com.ibrasoft.lensbridge.model.audit.AuditAction;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.BoardEvent;
@@ -26,6 +25,7 @@ import com.ibrasoft.lensbridge.service.AdminAuditService;
 import com.ibrasoft.lensbridge.service.BoardService;
 import com.ibrasoft.lensbridge.service.PosterService;
 import com.ibrasoft.lensbridge.service.PromotableSocialMediaService;
+import com.ibrasoft.lensbridge.service.agent.ContentChangeNotifier;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -63,7 +63,7 @@ public class BoardAdminController {
     private final PromotableSocialMediaService socialMediaService;
     private final BoardService boardService;
     private final AdminAuditService auditService;
-    private final BoardStreamHandler boardStream;
+    private final ContentChangeNotifier contentChanges;
 
     // ==================== Board Config Endpoints ====================
 
@@ -425,15 +425,20 @@ public class BoardAdminController {
         return ResponseEntity.ok(new MessageResponse("Calendar event deleted successfully"));
     }
 
+    /**
+     * Asks every connected board to sync its content now ({@code content_changed} on the agent
+     * WebSocket). A manual escape hatch: every content edit already does this by itself.
+     */
     @PostMapping("/refresh")
     @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_REFRESH + "')")
+    @Operation(operationId = "refreshBoards", summary = "Ask every connected board to sync its content now")
     public ResponseEntity<MessageResponse> refreshSignboard(HttpServletRequest request) {
-        boardStream.refreshAll();
+        contentChanges.contentChanged("manual refresh");
 
         auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.REFRESH_BOARDS,
                 "Musallah Board", null, request.getRemoteAddr());
 
-        return ResponseEntity.ok(new MessageResponse("Refresh sent to all MusallahBoard instances"));
+        return ResponseEntity.ok(new MessageResponse("Sync requested from every connected board"));
     }
 
     @PatchMapping("/devices/{deviceId}")
@@ -445,7 +450,7 @@ public class BoardAdminController {
 
         log.info("Admin updating device: {}", deviceId);
         Device updated = boardService.updateDevice(deviceId, updateRequest);
-        boardStream.configChanged(deviceId);
+        contentChanges.deviceChanged(deviceId, "device");
         auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.UPDATE_BOARD_CONFIG, "Device", deviceId, request.getRemoteAddr());
         
         return ResponseEntity.ok(DeviceSummary.of(updated));

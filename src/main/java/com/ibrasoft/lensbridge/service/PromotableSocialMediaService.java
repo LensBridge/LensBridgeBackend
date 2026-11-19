@@ -4,7 +4,7 @@ import com.ibrasoft.lensbridge.dto.board.request.CreatePromotableSocialMediaRequ
 import com.ibrasoft.lensbridge.dto.board.request.UpdatePromotableSocialMediaRequest;
 import com.ibrasoft.lensbridge.dto.upload.response.ErrorResponse;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
-import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
+import com.ibrasoft.lensbridge.service.agent.ContentChangeNotifier;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.PromotableSocialMedia;
 import com.ibrasoft.lensbridge.model.board.SocialType;
@@ -29,7 +29,7 @@ import java.util.UUID;
 public class PromotableSocialMediaService {
 
     private final PromotableSocialMediaRepository repository;
-    private final BoardStreamHandler boardStream;
+    private final ContentChangeNotifier contentChanges;
 
     /** Every promotable social, ordered by name. */
     public List<PromotableSocialMedia> getAll() {
@@ -74,7 +74,7 @@ public class PromotableSocialMediaService {
         social = repository.save(social);
         log.info("Created promotable social media: id={}, type={}, name={}",
                 social.getId(), social.getType(), social.getName());
-        boardStream.contentChanged("socials");
+        contentChanges.contentChanged("socials");
 
         return social;
     }
@@ -117,7 +117,7 @@ public class PromotableSocialMediaService {
 
         social = repository.save(social);
         log.info("Updated promotable social media: id={}", id);
-        boardStream.contentChanged("socials");
+        contentChanges.contentChanged("socials");
 
         return social;
     }
@@ -127,7 +127,7 @@ public class PromotableSocialMediaService {
 
         repository.delete(social);
         log.info("Deleted promotable social media: id={}", id);
-        boardStream.contentChanged("socials");
+        contentChanges.contentChanged("socials");
     }
 
     // ==================== Helper Methods ====================

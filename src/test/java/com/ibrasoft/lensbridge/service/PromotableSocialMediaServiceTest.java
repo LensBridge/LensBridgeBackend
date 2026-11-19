@@ -3,7 +3,7 @@ package com.ibrasoft.lensbridge.service;
 import com.ibrasoft.lensbridge.dto.board.request.CreatePromotableSocialMediaRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdatePromotableSocialMediaRequest;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
-import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
+import com.ibrasoft.lensbridge.service.agent.ContentChangeNotifier;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.PromotableSocialMedia;
 import com.ibrasoft.lensbridge.model.board.SocialType;
@@ -33,7 +33,7 @@ class PromotableSocialMediaServiceTest {
     private PromotableSocialMediaRepository repository;
 
     @Mock
-    private BoardStreamHandler boardStream;
+    private ContentChangeNotifier contentChanges;
 
     @InjectMocks
     private PromotableSocialMediaService service;
@@ -117,7 +117,7 @@ class PromotableSocialMediaServiceTest {
         assertThat(created.getDuration()).isEqualTo(13);
         assertThat(created.getAudience()).isEqualTo(Audience.BOTH);
         assertThat(created.getHandle()).isEqualTo("@utmmsa");
-        verify(boardStream).contentChanged("socials");
+        verify(contentChanges).contentChanged("socials");
     }
 
     @Test
@@ -176,7 +176,7 @@ class PromotableSocialMediaServiceTest {
         assertThat(updated.getDuration()).isEqualTo(13);                   // unchanged
         assertThat(updated.getAudience()).isEqualTo(Audience.BOTH);        // unchanged
         assertThat(updated.getHandle()).isEqualTo("@utmmsa");              // unchanged
-        verify(boardStream).contentChanged("socials");
+        verify(contentChanges).contentChanged("socials");
     }
 
     @Test
@@ -302,7 +302,7 @@ class PromotableSocialMediaServiceTest {
         service.delete(existing.getId());
 
         verify(repository).delete(existing);
-        verify(boardStream).contentChanged("socials");
+        verify(contentChanges).contentChanged("socials");
     }
 
     @Test

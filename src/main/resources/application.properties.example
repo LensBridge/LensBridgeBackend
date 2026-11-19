@@ -31,7 +31,6 @@ spring.flyway.enabled=true
 
 # Allowed CORS origins
 frontend.baseurl=http://localhost:5173
-musallahboard.baseurl=http://localhost:3000
 
 # MusallahBoard device agents. websocketUrl is returned by /api/agent/enroll and
 # persisted verbatim on the device, so point it at the address agents can reach

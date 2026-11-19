@@ -1,6 +1,6 @@
 package com.ibrasoft.lensbridge.controller;
 
-import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
+import com.ibrasoft.lensbridge.service.agent.ContentChangeNotifier;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.service.AdminAuditService;
 import com.ibrasoft.lensbridge.service.BoardService;
@@ -51,7 +51,7 @@ class BoardAdminControllerPermissionTest {
     @MockitoBean
     private AdminAuditService auditService;
     @MockitoBean
-    private BoardStreamHandler boardStreamHandler;
+    private ContentChangeNotifier contentChanges;
 
     /**
      * Not used by this controller. WebConfig registers CurrentUserArgumentResolver, which

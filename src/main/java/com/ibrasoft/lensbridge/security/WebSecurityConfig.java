@@ -37,9 +37,6 @@ public class WebSecurityConfig {
   @Value("${frontend.baseurl}")
   private String frontendBaseUrl;
 
-  @Value("${musallahboard.baseurl}")
-  private String musallahBoardBaseUrl;
-
   @Bean
   public AuthTokenFilter authenticationJwtTokenFilter() {
     return new AuthTokenFilter();
@@ -66,7 +63,7 @@ public class WebSecurityConfig {
   @Bean
   public CorsConfigurationSource corsConfigurationSource() {
     CorsConfiguration configuration = new CorsConfiguration();
-    configuration.setAllowedOrigins(Arrays.asList(frontendBaseUrl, musallahBoardBaseUrl));
+    configuration.setAllowedOrigins(Arrays.asList(frontendBaseUrl));
     configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
     configuration.setAllowedHeaders(Arrays.asList("*"));
     // So the admin frontend can read the offline bundle's filename from a fetch() response.
@@ -88,7 +85,6 @@ public class WebSecurityConfig {
             .requestMatchers("/api/gallery/**").permitAll()
             .requestMatchers("/api/auth/**").permitAll()
             .requestMatchers("/api/events/**").permitAll()
-            .requestMatchers("/api/refresh-musallahboard").permitAll()
             .requestMatchers("/api/agent/enroll").permitAll()
             .requestMatchers("/api/agent/ws").permitAll()
             // Public keys, and device-signed requests authenticated in the controller.

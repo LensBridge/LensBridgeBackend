@@ -49,6 +49,11 @@ public class AgentSessionRegistry {
         connections.remove(session);
     }
 
+    /** A snapshot of the authenticated sessions, one per connected device. */
+    public List<AgentSession> authenticated() {
+        return List.copyOf(byDevice.values());
+    }
+
     /** A snapshot of every open connection, for the liveness sweep. */
     public List<AgentSession> connections() {
         return List.copyOf(connections);

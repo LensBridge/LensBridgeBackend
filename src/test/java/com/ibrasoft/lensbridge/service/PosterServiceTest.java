@@ -3,7 +3,7 @@ package com.ibrasoft.lensbridge.service;
 import com.ibrasoft.lensbridge.dto.board.request.CreatePosterRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdatePosterRequest;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
-import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
+import com.ibrasoft.lensbridge.service.agent.ContentChangeNotifier;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.Poster;
 import com.ibrasoft.lensbridge.repository.sql.PosterRepository;
@@ -42,7 +42,7 @@ class PosterServiceTest {
     private R2StorageService r2StorageService;
 
     @Mock
-    private BoardStreamHandler boardStream;
+    private ContentChangeNotifier contentChanges;
 
     @InjectMocks
     private PosterService service;
