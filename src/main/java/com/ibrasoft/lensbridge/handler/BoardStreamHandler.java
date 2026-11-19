@@ -14,7 +14,6 @@ import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
-import java.net.URI;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -23,22 +22,14 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Push channel for board agents: tells a board its content or config changed, so the agent
- * syncs content ten seconds later instead of waiting for its 30-minute schedule (agent
- * {@code docs/architecture.md}, section 9.1). A missed push only costs that wait.
+ * Push channel for kiosk pages: tells a board its content or config changed so it can
+ * refetch without waiting out its ten-minute poll.
  * <p>
- * Every board on this channel is an enrolled, unrevoked device; there is no anonymous or
- * pre-enrollment state here. Who the device is comes from the upgrade request:
- * <ul>
- *   <li><b>Signed</b>: {@link BoardStreamHandshakeInterceptor} verified the device's
- *       {@code X-MB-*} signature and recorded the device it proved.</li>
- *   <li><b>Unsigned</b>, from an agent that predates signing, and only while
- *       {@code musallahboard.board-stream.require-signature} is false: the device named by
- *       {@code ?deviceId=<uuid>}. Anyone who knows the id can make that claim, so an unsigned
- *       connection never displaces a signed one for the same device.</li>
- * </ul>
- * Revoking a device closes its connection here ({@link #disconnect(UUID)}), as it does the
- * agent's own socket.
+ * Every board on this channel is an enrolled device. A connection must name a known,
+ * unrevoked {@code ?deviceId=<uuid>} or it is closed on the spot — there is no anonymous
+ * or pre-enrollment state here. A board that has not been enrolled has no business on the
+ * stream: it has no payload to refetch and nothing can be addressed to it.
+ * <p>
  */
 @Component
 @RequiredArgsConstructor
@@ -50,8 +41,6 @@ public class BoardStreamHandler extends TextWebSocketHandler {
     static final CloseStatus CLOSE_UNKNOWN_DEVICE = new CloseStatus(4002, "unknown_device");
     static final CloseStatus CLOSE_REVOKED = new CloseStatus(4003, "device_revoked");
     static final CloseStatus CLOSE_SUPERSEDED = CloseStatus.NORMAL.withReason("superseded");
-    /** An unsigned connection for a device that already holds a signed one. */
-    static final CloseStatus CLOSE_SIGNED_SESSION_ACTIVE = new CloseStatus(4004, "signed_session_active");
 
     /**
      * A push that has been stuck this long means the board has stopped reading; the decorator
@@ -70,10 +59,9 @@ public class BoardStreamHandler extends TextWebSocketHandler {
     private final DeviceRepository deviceRepository;
 
     /**
-     * Live boards keyed by device. One session per device: a reconnecting agent can open its
-     * replacement before the server notices the old socket is gone, so the newcomer wins
-     * and the stale one is closed rather than left to accumulate, except that an unsigned
-     * newcomer never wins over a signed session.
+     * Live boards keyed by device. One session per device: a reloading kiosk can briefly
+     * open its replacement before the old socket finishes closing, so the newcomer wins
+     * and the stale one is closed rather than left to accumulate.
      * <p>
      * Sessions are stored wrapped in a {@link ConcurrentWebSocketSessionDecorator}. Pushes
      * come from whichever admin request thread changed the content, and the container allows
@@ -81,17 +69,11 @@ public class BoardStreamHandler extends TextWebSocketHandler {
      * failure was being swallowed, so a board silently missed its refresh. The decorator
      * serialises the writes.
      */
-    private final Map<UUID, Board> sessions = new ConcurrentHashMap<>();
-
-    /** A registered connection, and whether its upgrade carried a verified device signature. */
-    private record Board(ConcurrentWebSocketSessionDecorator session, boolean signed) {
-    }
+    private final Map<UUID, ConcurrentWebSocketSessionDecorator> sessions = new ConcurrentHashMap<>();
 
     @Override
     public void afterConnectionEstablished(@NonNull WebSocketSession session) {
-        UUID signedDevice = (UUID) session.getAttributes().get(BoardStreamHandshakeInterceptor.SIGNED_DEVICE_ATTR);
-        boolean signed = signedDevice != null;
-        UUID deviceId = signed ? signedDevice : parseDeviceId(session.getUri());
+        UUID deviceId = parseDeviceId(session);
         if (deviceId == null) {
             close(session, CLOSE_NO_DEVICE);
             return;
@@ -109,41 +91,16 @@ public class BoardStreamHandler extends TextWebSocketHandler {
             return;
         }
 
+        session.getAttributes().put(DEVICE_ATTR, deviceId);
         ConcurrentWebSocketSessionDecorator safe =
                 new ConcurrentWebSocketSessionDecorator(session, SEND_TIME_LIMIT_MS, SEND_BUFFER_LIMIT_BYTES);
-        Board incoming = new Board(safe, signed);
-        Board[] displaced = {null};
-        Board current = sessions.compute(deviceId, (id, existing) -> {
-            if (!signed && existing != null && existing.signed() && existing.session().isOpen()) {
-                return existing;
-            }
-            displaced[0] = existing;
-            return incoming;
-        });
-        if (current != incoming) {
-            log.warn("Board stream refused unsigned session={} for device {}: it holds signed session {}",
-                    session.getId(), deviceId, current.session().getId());
-            close(session, CLOSE_SIGNED_SESSION_ACTIVE);
-            return;
-        }
-        session.getAttributes().put(DEVICE_ATTR, deviceId);
-        if (displaced[0] != null) {
+        ConcurrentWebSocketSessionDecorator previous = sessions.put(deviceId, safe);
+        if (previous != null) {
             log.info("Board stream device {} superseded session {} with {}",
-                    deviceId, displaced[0].session().getId(), session.getId());
-            close(displaced[0].session(), CLOSE_SUPERSEDED);
+                    deviceId, previous.getId(), session.getId());
+            close(previous, CLOSE_SUPERSEDED);
         }
-        log.info("Board stream connected: session={} device={} signed={}", session.getId(), deviceId, signed);
-    }
-
-    /**
-     * Closes the device's connection, if it has one, for a revoke. Its reconnect is refused:
-     * a revoked device fails both the signature check and the enrollment check.
-     */
-    public void disconnect(UUID deviceId) {
-        Board board = sessions.remove(deviceId);
-        if (board == null) return;
-        log.info("Board stream closing session={} device={}: device revoked", board.session().getId(), deviceId);
-        close(board.session(), CLOSE_REVOKED);
+        log.info("Board stream connected: session={} device={}", session.getId(), deviceId);
     }
 
     @Override
@@ -153,7 +110,7 @@ public class BoardStreamHandler extends TextWebSocketHandler {
 
         // Only remove the entry if it still wraps this very session: a superseded session
         // closing later must not evict the replacement that has already taken its place.
-        sessions.computeIfPresent(deviceId, (id, current) -> current.session().getDelegate() == session ? null : current);
+        sessions.computeIfPresent(deviceId, (id, current) -> current.getDelegate() == session ? null : current);
         log.info("Board stream disconnected: session={} device={} status={}",
                 session.getId(), deviceId, status);
     }
@@ -185,30 +142,29 @@ public class BoardStreamHandler extends TextWebSocketHandler {
         if (json == null) return;
 
         if (target != null) {
-            Board board = sessions.get(target);
-            if (board == null) {
-                log.debug("Board stream reason={} device={} not connected — it will pick the change up on its next sync",
+            ConcurrentWebSocketSessionDecorator session = sessions.get(target);
+            if (session == null) {
+                log.debug("Board stream reason={} device={} not connected — it will pick the change up on its next poll",
                         reason, target);
                 return;
             }
-            if (send(target, board, json)) {
+            if (send(target, session, json)) {
                 log.debug("Board stream push reason={} device={}", reason, target);
             }
             return;
         }
 
         int sent = 0;
-        for (Map.Entry<UUID, Board> entry : sessions.entrySet()) {
+        for (Map.Entry<UUID, ConcurrentWebSocketSessionDecorator> entry : sessions.entrySet()) {
             if (send(entry.getKey(), entry.getValue(), json)) sent++;
         }
         log.debug("Board stream broadcast reason={} boards={}", reason, sent);
     }
 
     /** @return true when the frame was written; drops the session if it has gone away. */
-    private boolean send(UUID deviceId, Board board, String json) {
-        ConcurrentWebSocketSessionDecorator session = board.session();
+    private boolean send(UUID deviceId, ConcurrentWebSocketSessionDecorator session, String json) {
         if (!session.isOpen()) {
-            sessions.remove(deviceId, board);
+            sessions.remove(deviceId, session);
             return false;
         }
         try {
@@ -237,9 +193,8 @@ public class BoardStreamHandler extends TextWebSocketHandler {
         }
     }
 
-    /** The {@code deviceId} query parameter, or null when it is missing or not a UUID. */
-    static UUID parseDeviceId(URI uri) {
-        String query = uri == null ? null : uri.getQuery();
+    private static UUID parseDeviceId(WebSocketSession session) {
+        String query = session.getUri() == null ? null : session.getUri().getQuery();
         if (query == null) return null;
         for (String param : query.split("&")) {
             if (!param.startsWith("deviceId=")) continue;
@@ -247,7 +202,7 @@ public class BoardStreamHandler extends TextWebSocketHandler {
             try {
                 return UUID.fromString(raw);
             } catch (IllegalArgumentException e) {
-                log.warn("Board stream upgrade sent a malformed deviceId");
+                log.warn("Board stream session={} sent a malformed deviceId: {}", session.getId(), raw);
                 return null;
             }
         }

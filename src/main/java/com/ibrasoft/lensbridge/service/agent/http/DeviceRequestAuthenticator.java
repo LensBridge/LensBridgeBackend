@@ -47,11 +47,7 @@ import java.util.UUID;
  * {@code permitAll} in {@code WebSecurityConfig}; this is their authentication.
  * <p>
  * Replays inside the five-minute window are accepted. That is by design: the endpoints this
- * guards are idempotent reads, so a replay only fetches the same content again. The query
- * string is not signed either, so nothing in it may matter to an authenticated endpoint. The
- * board refresh stream is the exception on both counts and checks them itself
- * ({@code BoardStreamHandshakeInterceptor}): a replayed upgrade would displace the board, and
- * its {@code ?deviceId=} must agree with the signed device.
+ * guards are idempotent reads, so a replay only fetches the same content again.
  */
 @Component
 @Slf4j
@@ -75,8 +71,7 @@ public class DeviceRequestAuthenticator {
         this(deviceRepository, verifier, Clock.systemUTC());
     }
 
-    /** With a fixed clock, for tests that check signatures made at a known time. */
-    public DeviceRequestAuthenticator(DeviceRepository deviceRepository, Ed25519Verifier verifier, Clock clock) {
+    DeviceRequestAuthenticator(DeviceRepository deviceRepository, Ed25519Verifier verifier, Clock clock) {
         this.deviceRepository = deviceRepository;
         this.verifier = verifier;
         this.clock = clock;

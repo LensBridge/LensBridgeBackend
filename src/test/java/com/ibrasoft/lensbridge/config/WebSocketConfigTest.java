@@ -2,37 +2,17 @@ package com.ibrasoft.lensbridge.config;
 
 import com.ibrasoft.lensbridge.handler.AgentWebSocketHandler;
 import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
-import com.ibrasoft.lensbridge.handler.BoardStreamHandshakeInterceptor;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.web.servlet.handler.SimpleUrlHandlerMapping;
-import org.springframework.web.socket.config.annotation.ServletWebSocketHandlerRegistry;
 import org.springframework.web.socket.server.standard.ServletServerContainerFactoryBean;
-import org.springframework.web.socket.server.support.WebSocketHttpRequestHandler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 class WebSocketConfigTest {
 
-    private final BoardStreamHandshakeInterceptor boardStreamInterceptor = mock(BoardStreamHandshakeInterceptor.class);
     private final WebSocketConfig config =
-            new WebSocketConfig(mock(BoardStreamHandler.class), boardStreamInterceptor,
-                    mock(AgentWebSocketHandler.class));
-
-    /** Without the interceptor the refresh stream would accept anyone who knows a device id. */
-    @Test
-    void boardStreamUpgradeGoesThroughTheSignatureInterceptor() {
-        config.frontendBaseUrl = "https://admin.example";
-        config.musallahBoardBaseUrl = "https://board.example";
-        ServletWebSocketHandlerRegistry registry = new ServletWebSocketHandlerRegistry();
-        config.registerWebSocketHandlers(registry);
-
-        SimpleUrlHandlerMapping mapping = (SimpleUrlHandlerMapping) registry.getHandlerMapping();
-        WebSocketHttpRequestHandler stream =
-                (WebSocketHttpRequestHandler) mapping.getUrlMap().get("/api/refresh-musallahboard");
-        assertThat(stream.getHandshakeInterceptors()).contains(boardStreamInterceptor);
-    }
+            new WebSocketConfig(mock(BoardStreamHandler.class), mock(AgentWebSocketHandler.class));
 
     /**
      * Regression: the bean that lifts Tomcat's 8 KB text buffer was gated on a property no

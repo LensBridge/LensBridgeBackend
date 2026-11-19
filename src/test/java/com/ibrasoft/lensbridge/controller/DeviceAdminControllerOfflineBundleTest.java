@@ -6,7 +6,6 @@ import com.ibrasoft.lensbridge.model.auth.Permission;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.repository.sql.DeviceCommandRepository;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
-import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
 import com.ibrasoft.lensbridge.service.AdminAuditService;
 import com.ibrasoft.lensbridge.service.UserService;
 import com.ibrasoft.lensbridge.service.agent.AgentSessionRegistry;
@@ -71,8 +70,6 @@ class DeviceAdminControllerOfflineBundleTest {
     private AgentSessionRegistry sessionRegistry;
     @MockitoBean
     private AdminAuditService auditService;
-    @MockitoBean
-    private BoardStreamHandler boardStream;
 
     /** Needed by WebConfig's CurrentUserArgumentResolver; see BoardAdminControllerPermissionTest. */
     @MockitoBean

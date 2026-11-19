@@ -8,7 +8,6 @@ import com.ibrasoft.lensbridge.dto.board.response.CommandView;
 import com.ibrasoft.lensbridge.dto.board.response.DeviceSummary;
 import com.ibrasoft.lensbridge.dto.board.response.IssueEnrollmentTokenResponse;
 import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
-import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
 import com.ibrasoft.lensbridge.model.audit.AuditAction;
 import com.ibrasoft.lensbridge.model.auth.Permission;
 import com.ibrasoft.lensbridge.model.board.Device;
@@ -70,7 +69,6 @@ public class DeviceAdminController {
     private final AgentSessionRegistry sessionRegistry;
     private final AdminAuditService auditService;
     private final OfflineBundleService offlineBundleService;
-    private final BoardStreamHandler boardStream;
 
     @Operation(operationId = "listDevices", summary = "List every enrolled board device")
     @GetMapping
@@ -128,7 +126,7 @@ public class DeviceAdminController {
 
     @Operation(operationId = "revokeDevice",
             summary = "Revoke a device's enrollment",
-            description = "Closes any live agent session and refresh stream. Idempotent: re-revoking an already revoked device is a no-op.")
+            description = "Closes any live agent session. Idempotent: re-revoking an already revoked device is a no-op.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Device revoked"),
             @ApiResponse(responseCode = "404", description = "No device with that id",
@@ -148,7 +146,6 @@ public class DeviceAdminController {
             d.setRevokedAt(Instant.now());
             deviceRepository.save(d);
             sessionRegistry.closeIfPresent(deviceId, CloseStatus.POLICY_VIOLATION.withReason("device_revoked"));
-            boardStream.disconnect(deviceId);
             log.warn("Device {} revoked by {}", deviceId, getCurrentUserEmail());
 
             auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.REVOKE_DEVICE,
