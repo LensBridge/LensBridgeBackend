@@ -1,6 +1,7 @@
 package com.ibrasoft.lensbridge.service.agent;
 
 import com.ibrasoft.lensbridge.model.board.Audience;
+import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.model.board.EnrollmentToken;
 import com.ibrasoft.lensbridge.repository.sql.EnrollmentTokenRepository;
 import lombok.RequiredArgsConstructor;
@@ -46,6 +47,16 @@ public class EnrollmentTokenService {
 
     @Transactional
     public Issued issue(String displayName, Audience audience, Integer ttlMinutes, String createdBy) {
+        return issue(displayName, audience, null, ttlMinutes, createdBy);
+    }
+
+    /** A token that enrolls (binds a key to) an existing device instead of creating one. */
+    @Transactional
+    public Issued issueFor(Device device, Integer ttlMinutes, String createdBy) {
+        return issue(device.getDisplayName(), device.getAudience(), device.getId(), ttlMinutes, createdBy);
+    }
+
+    private Issued issue(String displayName, Audience audience, UUID deviceId, Integer ttlMinutes, String createdBy) {
         int ttl = clampTtl(ttlMinutes);
         String plaintext = generatePlaintext();
 
@@ -53,6 +64,7 @@ public class EnrollmentTokenService {
                 .tokenHash(hash(plaintext))
                 .displayName(displayName)
                 .audience(audience)
+                .deviceId(deviceId)
                 .createdBy(createdBy)
                 .createdAt(Instant.now())
                 .expiresAt(Instant.now().plus(Duration.ofMinutes(ttl)))

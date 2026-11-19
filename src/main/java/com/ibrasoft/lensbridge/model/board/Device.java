@@ -40,6 +40,10 @@ public class Device {
     @Column(nullable = false)
     private String displayName;
 
+    /**
+     * When a board first bound its device key (online claim or token enrollment). Null for a
+     * board created in the console that has never connected: an offline board stays that way.
+     */
     private Instant enrolledAt;
     private Instant lastHeartbeat;
 
@@ -54,7 +58,10 @@ public class Device {
     @Column(nullable = false)
     private Audience audience;
 
-    /** Ed25519 public key (32 bytes). Set during enrollment; null before. */
+    /**
+     * Ed25519 public key (32 bytes). Set when the board claims or enrolls; null before, and
+     * forever for an offline board. Device-authenticated endpoints refuse a device without one.
+     */
     @ToString.Exclude
     @Column(name = "public_key", length = 32)
     private byte[] publicKey;
@@ -72,9 +79,20 @@ public class Device {
     /** When set, all auth attempts are rejected and any live session is closed. */
     private Instant revokedAt;
 
+    /**
+     * Secret of the online claim (32 bytes): a board proves it holds it with an HMAC to bind
+     * its key. A credential: never logged, never returned except inside an online setup file.
+     * Null until the first online setup file, which (like every later one) replaces it.
+     */
+    @ToString.Exclude
+    @Column(name = "claim_secret", length = 32)
+    private byte[] claimSecret;
+
+    /** Sequence of the last setup file issued for this device; null before the first. */
+    private Long provisionSequence;
+
     @PrePersist
     private void prePersist() {
-        if (enrolledAt == null) enrolledAt = Instant.now();
         if (organizationId == null) organizationId = "utmmsa";
     }
 

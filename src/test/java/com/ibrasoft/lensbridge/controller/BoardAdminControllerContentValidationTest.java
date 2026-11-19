@@ -2,7 +2,7 @@ package com.ibrasoft.lensbridge.controller;
 
 import com.ibrasoft.lensbridge.dto.upload.response.ErrorResponse;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
-import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
+import com.ibrasoft.lensbridge.service.agent.ContentChangeNotifier;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.model.board.BoardEvent;
 import com.ibrasoft.lensbridge.model.board.PromotableSocialMedia;
@@ -58,7 +58,7 @@ class BoardAdminControllerContentValidationTest {
     @MockitoBean
     private AdminAuditService auditService;
     @MockitoBean
-    private BoardStreamHandler boardStreamHandler;
+    private ContentChangeNotifier contentChanges;
     @MockitoBean
     private UserService userService;
 

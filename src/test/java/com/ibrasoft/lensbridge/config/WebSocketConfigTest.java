@@ -1,7 +1,6 @@
 package com.ibrasoft.lensbridge.config;
 
 import com.ibrasoft.lensbridge.handler.AgentWebSocketHandler;
-import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.socket.server.standard.ServletServerContainerFactoryBean;
@@ -12,7 +11,7 @@ import static org.mockito.Mockito.mock;
 class WebSocketConfigTest {
 
     private final WebSocketConfig config =
-            new WebSocketConfig(mock(BoardStreamHandler.class), mock(AgentWebSocketHandler.class));
+            new WebSocketConfig(mock(AgentWebSocketHandler.class));
 
     /**
      * Regression: the bean that lifts Tomcat's 8 KB text buffer was gated on a property no

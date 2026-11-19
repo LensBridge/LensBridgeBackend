@@ -1,15 +1,20 @@
 package com.ibrasoft.lensbridge.controller;
 
 import com.ibrasoft.lensbridge.dto.board.request.UpdateDeviceRequest;
-import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
+import com.ibrasoft.lensbridge.service.agent.ContentChangeNotifier;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.service.AdminAuditService;
 import com.ibrasoft.lensbridge.service.BoardService;
-import com.ibrasoft.lensbridge.service.PosterService;
-import com.ibrasoft.lensbridge.service.PromotableSocialMediaService;
+import com.ibrasoft.lensbridge.repository.sql.DeviceCommandRepository;
+import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
+import com.ibrasoft.lensbridge.service.agent.AgentSessionRegistry;
+import com.ibrasoft.lensbridge.service.agent.CommandDispatcher;
+import com.ibrasoft.lensbridge.service.agent.EnrollmentTokenService;
+import com.ibrasoft.lensbridge.service.board.offline.OfflineBundleService;
 import com.ibrasoft.lensbridge.service.UserService;
+import com.ibrasoft.lensbridge.service.board.offline.SetupFileService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -38,9 +43,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * about emptiness. The board then showed as unnamed in every admin listing. These tests
  * pin both halves — the constraints, and the {@code @Valid} that runs them.
  */
-@WebMvcTest(controllers = BoardAdminController.class)
+@WebMvcTest(controllers = DeviceAdminController.class)
 @Import(MethodSecurityTestConfig.class)
-class BoardAdminControllerUpdateDeviceTest {
+class DeviceAdminControllerUpdateDeviceTest {
 
     private static final String URL = "/api/admin/board/devices/";
 
@@ -50,15 +55,25 @@ class BoardAdminControllerUpdateDeviceTest {
     @MockitoBean
     private BoardService boardService;
     @MockitoBean
-    private PosterService posterService;
+    private DeviceRepository deviceRepository;
     @MockitoBean
-    private PromotableSocialMediaService socialMediaService;
+    private DeviceCommandRepository commandRepository;
+    @MockitoBean
+    private CommandDispatcher commandDispatcher;
+    @MockitoBean
+    private AgentSessionRegistry sessionRegistry;
+    @MockitoBean
+    private OfflineBundleService offlineBundleService;
+    @MockitoBean
+    private EnrollmentTokenService enrollmentTokenService;
     @MockitoBean
     private AdminAuditService auditService;
     @MockitoBean
-    private BoardStreamHandler boardStreamHandler;
+    private ContentChangeNotifier contentChanges;
 
     /** WebConfig registers CurrentUserArgumentResolver, which needs this in the slice. */
+    @MockitoBean
+    private SetupFileService setupFileService;
     @MockitoBean
     private UserService userService;
 
@@ -121,5 +136,6 @@ class BoardAdminControllerUpdateDeviceTest {
         patchBody("{\"displayName\":\"Musallah A\"}", 200);
 
         verify(boardService).updateDevice(eq(DEVICE_ID), any());
+        verify(contentChanges).deviceChanged(DEVICE_ID, "device");
     }
 }

@@ -46,4 +46,25 @@ class DeviceRepositoryTest {
         assertThat(reloaded.getRevokedAt()).isNotNull();
         assertThat(reloaded.getLastHeartbeat()).isNotNull();
     }
+
+    /** A board created in the console: no key, no enrollment time; the claim columns from V5 round-trip. */
+    @Test
+    void aPreCreatedDeviceHasNoKeyAndKeepsItsClaimSecret() {
+        byte[] secret = new byte[32];
+        java.util.Arrays.fill(secret, (byte) 7);
+        Device saved = repository.saveAndFlush(Device.builder()
+                .displayName("North Musallah")
+                .audience(Audience.BOTH)
+                .claimSecret(secret)
+                .provisionSequence(1795089600250L)
+                .build());
+        em.clear();
+
+        Device reloaded = repository.findById(saved.getId()).orElseThrow();
+        assertThat(reloaded.getPublicKey()).isNull();
+        assertThat(reloaded.getEnrolledAt()).isNull();
+        assertThat(reloaded.getClaimSecret()).isEqualTo(secret);
+        assertThat(reloaded.getProvisionSequence()).isEqualTo(1795089600250L);
+        assertThat(reloaded.toString()).doesNotContain("claimSecret");
+    }
 }

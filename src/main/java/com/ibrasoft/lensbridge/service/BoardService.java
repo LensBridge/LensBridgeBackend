@@ -1,6 +1,7 @@
 package com.ibrasoft.lensbridge.service;
 
 import com.ibrasoft.lensbridge.dto.board.request.CreateCalendarEventRequest;
+import com.ibrasoft.lensbridge.dto.board.request.CreateDeviceRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateBoardConfigRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateCalendarEventRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdateDeviceRequest;
@@ -8,7 +9,7 @@ import com.ibrasoft.lensbridge.dto.board.request.UpdateTickerRequest;
 import com.ibrasoft.lensbridge.dto.board.request.WeeklyContentRequest;
 import com.ibrasoft.lensbridge.dto.upload.response.ErrorResponse;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
-import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
+import com.ibrasoft.lensbridge.service.agent.ContentChangeNotifier;
 import com.ibrasoft.lensbridge.model.board.*;
 import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
 import com.ibrasoft.lensbridge.repository.sql.BoardConfigRepository;
@@ -21,8 +22,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.DateTimeException;
 import java.time.Instant;
@@ -31,6 +30,7 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -44,7 +44,7 @@ public class BoardService {
     private final DeviceRepository deviceRepository;
     private final BoardEventRepository boardEventRepository;
     private final WeeklyContentRepository weeklyContentRepository;
-    private final BoardStreamHandler boardStream;
+    private final ContentChangeNotifier contentChanges;
 
     // ==================== Board Config ====================
 
@@ -76,7 +76,7 @@ public class BoardService {
         }
         DeviceConfig saved = boardConfigRepository.save(deviceConfig);
         log.info("Saved board config for device: {}", deviceId);
-        boardStream.configChanged(deviceId);
+        contentChanges.deviceChanged(deviceId, "config");
         return saved;
     }
 
@@ -90,7 +90,7 @@ public class BoardService {
         Patch.apply(request.getNextPrayerDurationSeconds(), existing::setNextPrayerDurationSeconds);
         DeviceConfig saved = boardConfigRepository.save(existing);
         log.info("Updated board config for device: {}", deviceId);
-        boardStream.configChanged(deviceId);
+        contentChanges.deviceChanged(deviceId, "config");
         return saved;
     }
 
@@ -170,7 +170,7 @@ public class BoardService {
         Patch.apply(request.getScrollingMessages(), existing::setScrollingMessages);
         DeviceConfig saved = boardConfigRepository.save(existing);
         log.info("Updated ticker for device: {}", deviceId);
-        boardStream.configChanged(deviceId);
+        contentChanges.deviceChanged(deviceId, "config");
         return saved;
     }
 
@@ -241,7 +241,7 @@ public class BoardService {
 
         WeeklyContent saved = weeklyContentRepository.save(content);
         log.info("Saved weekly content for week {} of {}", weekNumber, year);
-        contentChangedAfterCommit("weekly-content");
+        contentChanges.contentChanged("weekly-content");
         return saved;
     }
 
@@ -255,25 +255,6 @@ public class BoardService {
         }
     }
 
-    /**
-     * Tells the boards to refetch once the surrounding transaction has committed. Notifying
-     * inside it lets a board refetch before the commit and read the old content, then stay on
-     * it until the next change. With no transaction active the save has already committed, so
-     * it notifies immediately, as every other mutator here does.
-     */
-    private void contentChangedAfterCommit(String what) {
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    boardStream.contentChanged(what);
-                }
-            });
-        } else {
-            boardStream.contentChanged(what);
-        }
-    }
-
     /** @return the id of the deleted row, so callers can record what was destroyed. */
     public UUID deleteWeeklyContent(int year, int weekNumber) {
         WeeklyContent content = weeklyContentRepository.findByYearAndWeekNumber(year, weekNumber)
@@ -283,7 +264,7 @@ public class BoardService {
         UUID deletedId = content.getId();
         weeklyContentRepository.delete(content);
         log.info("Deleted weekly content for week {} of {}", weekNumber, year);
-        boardStream.contentChanged("weekly-content");
+        contentChanges.contentChanged("weekly-content");
         return deletedId;
     }
 
@@ -325,7 +306,7 @@ public class BoardService {
                 .build();
         BoardEvent saved = boardEventRepository.save(boardEvent);
         log.info("Created event: id={}, name={}", saved.getId(), saved.getName());
-        boardStream.contentChanged("events");
+        contentChanges.contentChanged("events");
         return saved;
     }
 
@@ -342,7 +323,7 @@ public class BoardService {
         validateEventTimes(existing.getStartTime(), existing.getEndTime());
         BoardEvent saved = boardEventRepository.save(existing);
         log.info("Updated event: id={}", eventId);
-        boardStream.contentChanged("events");
+        contentChanges.contentChanged("events");
         return saved;
     }
 
@@ -356,10 +337,50 @@ public class BoardService {
         BoardEvent boardEvent = getEventById(eventId);
         boardEventRepository.delete(boardEvent);
         log.info("Deleted event: id={}", eventId);
-        boardStream.contentChanged("events");
+        contentChanges.contentChanged("events");
     }
 
     // ================== Device Management Changes ====================
+
+    /**
+     * Creates a board before it has ever connected (contract C3): the device row, with no
+     * public key, and its config. Everything per-device (config, content packages, setup
+     * files) works for it at once.
+     */
+    @Transactional
+    public Device createDevice(CreateDeviceRequest request) {
+        Device device = deviceRepository.save(Device.builder()
+                .displayName(request.getDisplayName().trim())
+                .audience(request.getAudience())
+                .build());
+        DeviceConfig config = defaultConfig(device);
+        mergeLocation(config, request.getLocation());
+        boardConfigRepository.save(config);
+        device.setConfig(config);
+        log.info("Created board {} ({})", device.getId(), device.getDisplayName());
+        return device;
+    }
+
+    /**
+     * The config every new board starts with, whether created in the console or by a legacy
+     * enrollment token. Hard-coded to the one organization this backend serves today.
+     */
+    public static DeviceConfig defaultConfig(Device device) {
+        return DeviceConfig.builder()
+                .device(device)
+                .location(Location.builder()
+                        .city("Mississauga")
+                        .country("Canada")
+                        .latitude(43.589)
+                        .longitude(-79.6441)
+                        .timezone("America/Toronto")
+                        .method(CalculationMethod.ISNA)
+                        .build())
+                .darkModeAfterIsha(true)
+                .enableScrollingMessage(true)
+                .scrollingMessages(new ArrayList<>(List.of("Welcome to UTM MSA - Follow us @utmmsa for updates!")))
+                .build();
+    }
 
     public Device updateDevice(UUID deviceId, UpdateDeviceRequest request) {
         Device existing = deviceRepository.findById(deviceId)

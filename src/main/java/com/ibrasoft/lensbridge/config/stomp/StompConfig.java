@@ -32,9 +32,6 @@ public class StompConfig implements WebSocketMessageBrokerConfigurer {
     @Value("${frontend.baseurl}")
     private String frontendBaseUrl;
 
-    @Value("${musallahboard.baseurl}")
-    private String musallahBoardBaseUrl;
-
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
         registry.enableSimpleBroker("/topic");
@@ -44,7 +41,7 @@ public class StompConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/api/dashboard/ws")
-                .setAllowedOrigins(frontendBaseUrl, musallahBoardBaseUrl);
+                .setAllowedOrigins(frontendBaseUrl);
     }
 
     @Override

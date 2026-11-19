@@ -1,6 +1,5 @@
 package com.ibrasoft.lensbridge.config;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -9,7 +8,6 @@ import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
 
 import com.ibrasoft.lensbridge.handler.AgentWebSocketHandler;
-import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
 import org.springframework.web.socket.config.annotation.WebSocketTransportRegistration;
 import org.springframework.web.socket.server.standard.ServletServerContainerFactoryBean;
 
@@ -17,28 +15,15 @@ import org.springframework.web.socket.server.standard.ServletServerContainerFact
 @EnableWebSocket
 public class WebSocketConfig implements WebSocketConfigurer {
 
-    private final BoardStreamHandler boardStreamHandler;
     private final AgentWebSocketHandler agentWebSocketHandler;
 
-    @Value("${frontend.baseurl}")
-    String frontendBaseUrl;
-
-    @Value("${musallahboard.baseurl}")
-    String musallahBoardBaseUrl;
-
-    public WebSocketConfig(BoardStreamHandler boardStreamHandler,
-                           AgentWebSocketHandler agentWebSocketHandler) {
-        this.boardStreamHandler = boardStreamHandler;
+    public WebSocketConfig(AgentWebSocketHandler agentWebSocketHandler) {
         this.agentWebSocketHandler = agentWebSocketHandler;
     }
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-        // Path is the deployed kiosk's; boards scope themselves with ?deviceId=<uuid>.
-        registry.addHandler(boardStreamHandler, "/api/refresh-musallahboard")
-                .setAllowedOrigins(frontendBaseUrl, musallahBoardBaseUrl);
-
-        // Agents authenticate per-frame inside the channel; the WS upgrade itself is open.
+        // The only socket a board opens. Agents authenticate per-frame inside the channel; the WS upgrade itself is open.
         registry.addHandler(agentWebSocketHandler, "/api/agent/ws")
                 .setAllowedOrigins("*");
     }

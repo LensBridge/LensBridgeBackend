@@ -10,7 +10,8 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Admin-facing summary of a Device. Excludes the public key bytes (operators don't need them).
+ * Admin-facing summary of a Device. Excludes the public key bytes (operators don't need them)
+ * and the claim secret (a credential).
  */
 @Data
 @Builder
@@ -19,6 +20,7 @@ public class DeviceSummary {
     private UUID id;
     private String displayName;
     private Audience audience;
+    /** When the board first connected (claim or enrollment); null for a board that never has. */
     private Instant enrolledAt;
     private Instant lastHeartbeat;
     private Instant revokedAt;
