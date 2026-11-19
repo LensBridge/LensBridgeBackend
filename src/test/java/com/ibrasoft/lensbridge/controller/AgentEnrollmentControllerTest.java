@@ -5,6 +5,7 @@ import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.service.OpenWeatherService;
 import com.ibrasoft.lensbridge.service.UserService;
+import com.ibrasoft.lensbridge.service.agent.DeviceClaimService;
 import com.ibrasoft.lensbridge.service.agent.DeviceEnrollmentService;
 import com.ibrasoft.lensbridge.service.agent.handshake.Ed25519Verifier;
 import com.ibrasoft.lensbridge.service.agent.http.AuthenticatedDeviceArgumentResolver;
@@ -54,6 +55,8 @@ class AgentEnrollmentControllerTest {
 
     @MockitoBean
     private DeviceEnrollmentService enrollmentService;
+    @MockitoBean
+    private DeviceClaimService claimService;
     @MockitoBean
     private ContentSigningService signingService;
     // The device-auth interceptor and WebConfig's argument resolver need these in the slice.

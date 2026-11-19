@@ -86,6 +86,7 @@ public class WebSecurityConfig {
             .requestMatchers("/api/auth/**").permitAll()
             .requestMatchers("/api/events/**").permitAll()
             .requestMatchers("/api/agent/enroll").permitAll()
+            .requestMatchers("/api/agent/claim").permitAll()
             .requestMatchers("/api/agent/ws").permitAll()
             // Public keys, and device-signed requests authenticated in the controller.
             .requestMatchers("/api/agent/signing-keys").permitAll()

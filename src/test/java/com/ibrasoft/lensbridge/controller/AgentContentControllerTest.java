@@ -9,6 +9,7 @@ import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.service.OpenWeatherService;
 import com.ibrasoft.lensbridge.service.UserService;
+import com.ibrasoft.lensbridge.service.agent.DeviceClaimService;
 import com.ibrasoft.lensbridge.service.agent.DeviceEnrollmentService;
 import com.ibrasoft.lensbridge.service.agent.Ed25519TestUtil;
 import com.ibrasoft.lensbridge.service.agent.handshake.Ed25519Verifier;
@@ -96,6 +97,8 @@ class AgentContentControllerTest {
     private DeviceRepository deviceRepository;
     @MockitoBean
     private DeviceEnrollmentService enrollmentService;
+    @MockitoBean
+    private DeviceClaimService claimService;
     @MockitoBean
     private OpenWeatherService openWeatherService;
     /** Needed by WebConfig's CurrentUserArgumentResolver; see BoardAdminControllerPermissionTest. */
