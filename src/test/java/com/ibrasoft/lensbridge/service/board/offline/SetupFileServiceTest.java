@@ -231,6 +231,28 @@ class SetupFileServiceTest {
     }
 
     @Test
+    void anOnlineFileForAPlainHttpBackendSaysInsecureDev() throws Exception {
+        SetupFileService dev = service(NOW, "http://10.0.0.2:8080", new OnesRandom());
+        JsonNode p = provisionJson(AgentPackageRules.verify(AgentPackageRules.bytesOf(dev.build(DEVICE_ID, true)), contentKey));
+        assertThat(p.fieldNames()).toIterable().containsExactly(
+                "format", "deviceId", "displayName", "sequence", "issuedAt", "backendUrl", "claimSecret", "insecureDev");
+        assertThat(p.get("backendUrl").asText()).isEqualTo("http://10.0.0.2:8080");
+        assertThat(p.get("insecureDev").asBoolean()).isTrue();
+
+        // Offline, or an https backend: never.
+        assertThat(provisionJson(AgentPackageRules.verify(AgentPackageRules.bytesOf(dev.build(DEVICE_ID, false)), contentKey))
+                .has("insecureDev")).isFalse();
+        assertThat(provisionJson(AgentPackageRules.verify(AgentPackageRules.bytesOf(service().build(DEVICE_ID, true)), contentKey))
+                .has("insecureDev")).isFalse();
+    }
+
+    @Test
+    void filesAreOnlineByDefaultWhenThereIsABackendUrl() {
+        assertThat(service().onlineByDefault()).isTrue();
+        assertThat(service(NOW, null, new OnesRandom()).onlineByDefault()).isFalse();
+    }
+
+    @Test
     void anOfflineFileNeedsNoBackendUrl() throws Exception {
         AgentPackageRules.verify(AgentPackageRules.bytesOf(service(NOW, null, new OnesRandom()).build(DEVICE_ID, false)),
                 contentKey);

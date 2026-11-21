@@ -114,7 +114,7 @@ class DeviceAdminControllerSetupTest {
     }
 
     @Test
-    void theSetupFileIsOfflineByDefault() throws Exception {
+    void theSetupFileIsOfflineByDefaultWithoutABackendUrl() throws Exception {
         when(setupFileService.build(DEVICE_ID, false)).thenReturn(new OfflineBundle("musallahboard-setup-3f2a1b4c.mbu",
                 List.of(new OfflineBundle.Entry("mbu.json", "{}".getBytes(StandardCharsets.UTF_8), false))));
 
@@ -138,6 +138,35 @@ class DeviceAdminControllerSetupTest {
                         .with(TestAuthorities.asHolderOf(Permission.BOARD_DEVICE_ENROLL)))
                 .andExpect(status().isOk());
         verify(setupFileService).build(DEVICE_ID, true);
+    }
+
+    @Test
+    void theSetupFileIsOnlineByDefaultWithABackendUrl() throws Exception {
+        when(setupFileService.onlineByDefault()).thenReturn(true);
+        when(setupFileService.build(eq(DEVICE_ID), anyBoolean())).thenReturn(new OfflineBundle("musallahboard-setup-3f2a1b4c.mbu",
+                List.of(new OfflineBundle.Entry("mbu.json", "{}".getBytes(StandardCharsets.UTF_8), false))));
+
+        mockMvc.perform(get(DEVICES + "/" + DEVICE_ID + "/setup-file")
+                        .with(TestAuthorities.asHolderOf(Permission.BOARD_DEVICE_ENROLL)))
+                .andExpect(status().isOk());
+        verify(setupFileService).build(DEVICE_ID, true);
+
+        // Asking for an offline one still gets one.
+        mockMvc.perform(get(DEVICES + "/" + DEVICE_ID + "/setup-file").param("online", "false")
+                        .with(TestAuthorities.asHolderOf(Permission.BOARD_DEVICE_ENROLL)))
+                .andExpect(status().isOk());
+        verify(setupFileService).build(DEVICE_ID, false);
+    }
+
+    @Test
+    void setupDefaultsSayWhetherFilesAreOnline() throws Exception {
+        when(setupFileService.onlineByDefault()).thenReturn(true);
+        mockMvc.perform(get(DEVICES + "/setup-defaults")
+                        .with(TestAuthorities.asHolderOf(Permission.BOARD_DEVICE_READ)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.onlineSetup").value(true));
+        mockMvc.perform(get(DEVICES + "/setup-defaults"))
+                .andExpect(status().is4xxClientError());
     }
 
     /** It can carry a claim secret: reading devices is not enough. */

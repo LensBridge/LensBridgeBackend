@@ -8,6 +8,7 @@ import com.ibrasoft.lensbridge.dto.board.request.UpdateDeviceRequest;
 import com.ibrasoft.lensbridge.dto.board.response.CommandIssuedResponse;
 import com.ibrasoft.lensbridge.dto.board.response.CommandView;
 import com.ibrasoft.lensbridge.dto.board.response.DeviceSummary;
+import com.ibrasoft.lensbridge.dto.board.response.SetupDefaultsResponse;
 import com.ibrasoft.lensbridge.dto.board.response.IssueEnrollmentTokenResponse;
 import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
 import com.ibrasoft.lensbridge.model.audit.AuditAction;
@@ -156,15 +157,27 @@ public class DeviceAdminController {
     public void setupFile(
             @PathVariable UUID deviceId,
             @Parameter(description = "Include the backend URL and a new claim secret, for a board that will "
-                    + "be online. Default: an offline-only board.")
-            @RequestParam(defaultValue = "false") boolean online,
+                    + "be online. Default: online whenever the server has a backend URL for boards "
+                    + "(getSetupDefaults), else offline-only.")
+            @RequestParam(name = "online", required = false) Boolean onlineParam,
             HttpServletRequest httpRequest,
             HttpServletResponse response) throws IOException {
+        boolean online = onlineParam != null ? onlineParam : setupFileService.onlineByDefault();
         OfflineBundle file = setupFileService.build(deviceId, online);
         auditService.logAuditEvent(getCurrentUserEmail(), AuditAction.ISSUE_ENROLLMENT_TOKEN,
                 "Device", deviceId, httpRequest.getRemoteAddr(),
                 online ? "setup file (online, claim secret rotated)" : "setup file (offline)");
         writePackage(file, response);
+    }
+
+    @Operation(operationId = "getSetupDefaults", summary = "How setup files are made when the console does not say",
+            description = "onlineSetup: whether setup files and USB kits are online ones by default, which is "
+                    + "whenever the server has a backend URL for boards. The console starts its Online setup "
+                    + "box from it.")
+    @GetMapping("/setup-defaults")
+    @PreAuthorize("hasAuthority('" + Permission.Authority.BOARD_DEVICE_READ + "')")
+    public ResponseEntity<SetupDefaultsResponse> setupDefaults() {
+        return ResponseEntity.ok(new SetupDefaultsResponse(setupFileService.onlineByDefault()));
     }
 
     @Operation(operationId = "updateDevice", summary = "Rename a board or change its audience")

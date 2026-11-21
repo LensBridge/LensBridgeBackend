@@ -31,7 +31,13 @@ import java.util.UUID;
  *  "backendUrl":"https://…", "claimSecret":"&lt;base64url, no padding, 32 bytes&gt;"}
  * </pre>
  * {@code backendUrl} and {@code claimSecret} are present only in an online setup file. An
- * offline board never talks to this server, so its file carries neither.
+ * offline board never talks to this server, so its file carries neither. When this server's
+ * backend URL is plain {@code http://} (a development server), an online file also carries
+ * {@code "insecureDev": true}, which a board needs to talk to it without TLS; a production
+ * server's URL is {@code https://} and its files never carry it.
+ * <p>
+ * Online is the default whenever a backend URL is configured ({@link #onlineByDefault()}): an
+ * online file costs a board that never gets a network nothing.
  * <p>
  * It is signed with the content key by the same {@link MbuPackager} as content packages; the
  * board verifies it against the same pinned content keys. Like content, it can only say who
@@ -74,15 +80,30 @@ public class SetupFileService {
         this.signingService = signingService;
         this.packager = new MbuPackager(objectMapper, signingService);
         this.backendUrl = backendUrl;
+        if (insecureBackend()) {
+            log.warn("Backend URL for boards is plain http ({}): online setup files tell boards to talk to it "
+                    + "without TLS. Development only.", backendUrl);
+        }
         this.clock = clock;
         this.random = random;
     }
 
     /** {@code provision.json}. Optional fields are left out, not written as null. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    @JsonPropertyOrder({"format", "deviceId", "displayName", "sequence", "issuedAt", "backendUrl", "claimSecret"})
+    @JsonPropertyOrder({"format", "deviceId", "displayName", "sequence", "issuedAt", "backendUrl", "claimSecret",
+            "insecureDev"})
     record ProvisionFile(int format, String deviceId, String displayName, long sequence, String issuedAt,
-                         String backendUrl, String claimSecret) {}
+                         String backendUrl, String claimSecret, Boolean insecureDev) {}
+
+    /** Whether setup files are online ones when the caller does not say: whenever a backend URL is configured. */
+    public boolean onlineByDefault() {
+        return backendUrl != null;
+    }
+
+    /** Whether this server's backend URL is plain http, so online boards need insecureDev to reach it. */
+    boolean insecureBackend() {
+        return backendUrl != null && backendUrl.regionMatches(true, 0, "http://", 0, 7);
+    }
 
     /**
      * Issues the file: allocates the sequence and, online, rotates the secret, then signs.
@@ -125,14 +146,16 @@ public class SetupFileService {
 
         String issuedAt = now.truncatedTo(ChronoUnit.SECONDS).toString();
         byte[] provision = packager.toJson(new ProvisionFile(PROVISION_FORMAT, deviceId.toString(),
-                device.getDisplayName(), sequence, issuedAt, online ? backendUrl : null, claimSecret));
+                device.getDisplayName(), sequence, issuedAt, online ? backendUrl : null, claimSecret,
+                online && insecureBackend() ? Boolean.TRUE : null));
         MbuManifest manifest = new MbuManifest("mbu", OfflineBundleService.FORMAT_VERSION, "provision",
                 issuedAt, sequence, deviceId.toString(), null,
                 List.of(MbuPackager.fileEntry(PROVISION_ENTRY, provision)), null);
 
         // Never the secret itself.
         log.info("Built setup file {} for device {} ({})", sequence, deviceId,
-                online ? "online, claim secret rotated" : "offline");
+                !online ? "offline" : insecureBackend() ? "online over plain http, claim secret rotated"
+                        : "online, claim secret rotated");
         return packager.pack("musallahboard-setup-" + deviceId.toString().substring(0, 8) + ".mbu", manifest,
                 List.of(new OfflineBundle.Entry(PROVISION_ENTRY, provision, false)));
     }

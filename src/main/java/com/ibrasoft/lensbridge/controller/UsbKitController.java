@@ -8,6 +8,7 @@ import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.service.AdminAuditService;
 import com.ibrasoft.lensbridge.service.board.offline.OfflineBundleService;
+import com.ibrasoft.lensbridge.service.board.offline.SetupFileService;
 import com.ibrasoft.lensbridge.service.board.offline.UsbKitService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -60,6 +61,7 @@ public class UsbKitController {
     private final UsbKitService usbKitService;
     private final DeviceRepository deviceRepository;
     private final AdminAuditService auditService;
+    private final SetupFileService setupFileService;
 
     @Operation(operationId = "downloadUsbKit", summary = "Download a USB kit for one board",
             description = "A zip holding one folder, MusallahBoard/, with content-<id8>.mbu, setup-<id8>.mbu "
@@ -96,12 +98,13 @@ public class UsbKitController {
                           @RequestParam(defaultValue = "" + OfflineBundleService.DEFAULT_DAYS) int days,
                           @Parameter(description = "Include the board's setup file")
                           @RequestParam(defaultValue = "false") boolean includeSetup,
-                          @Parameter(description = "Make the setup file an online one (backend URL and a new claim secret)")
-                          @RequestParam(defaultValue = "false") boolean online,
+                          @Parameter(description = "Make the setup file an online one (backend URL and a new claim secret). Default: online whenever the server has a backend URL for boards")
+                          @RequestParam(name = "online", required = false) Boolean onlineParam,
                           HttpServletRequest request, HttpServletResponse response) throws IOException {
         Device device = deviceRepository.findById(deviceId)
                 .orElseThrow(() -> new ApiResponseException(HttpStatus.NOT_FOUND, new MessageResponse("Device not found")));
         String filename = "musallahboard-usb-kit-" + deviceId.toString().substring(0, 8) + "-" + today() + ".zip";
+        boolean online = onlineParam != null ? onlineParam : setupFileService.onlineByDefault();
         send(usbKitService.build(List.of(device), filename, days, includeSetup, online), includeSetup, online,
                 deviceId, request, response);
     }
@@ -135,11 +138,12 @@ public class UsbKitController {
                              @RequestParam(defaultValue = "" + OfflineBundleService.DEFAULT_DAYS) int days,
                              @Parameter(description = "Include every board's setup file")
                              @RequestParam(defaultValue = "false") boolean includeSetup,
-                             @Parameter(description = "Make the setup files online ones (backend URL and new claim secrets)")
-                             @RequestParam(defaultValue = "false") boolean online,
+                             @Parameter(description = "Make the setup files online ones (backend URL and new claim secrets). Default: online whenever the server has a backend URL for boards")
+                             @RequestParam(name = "online", required = false) Boolean onlineParam,
                              HttpServletRequest request, HttpServletResponse response) throws IOException {
         List<Device> boards = deviceRepository.findByRevokedAtIsNullOrderByDisplayNameAsc();
         String filename = "musallahboard-usb-kit-all-" + today() + ".zip";
+        boolean online = onlineParam != null ? onlineParam : setupFileService.onlineByDefault();
         send(usbKitService.build(boards, filename, days, includeSetup, online), includeSetup, online,
                 null, request, response);
     }

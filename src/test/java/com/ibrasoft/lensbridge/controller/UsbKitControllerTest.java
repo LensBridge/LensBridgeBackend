@@ -6,6 +6,7 @@ import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.service.AdminAuditService;
 import com.ibrasoft.lensbridge.service.UserService;
+import com.ibrasoft.lensbridge.service.board.offline.SetupFileService;
 import com.ibrasoft.lensbridge.service.board.offline.UsbKitService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,6 +46,7 @@ class UsbKitControllerTest {
     @MockitoBean private UsbKitService usbKitService;
     @MockitoBean private DeviceRepository deviceRepository;
     @MockitoBean private AdminAuditService auditService;
+    @MockitoBean private SetupFileService setupFileService;
     @MockitoBean private UserService userService;
 
     private UsbKitService.Kit kit(String filename, List<String> omitted) throws Exception {

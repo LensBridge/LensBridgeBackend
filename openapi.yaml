@@ -556,6 +556,28 @@ paths:
       summary: Mint a one-time token that enrolls a new device over SSH (legacy)
       tags:
       - device-admin-controller
+  /api/admin/board/devices/setup-defaults:
+    get:
+      description: "onlineSetup: whether setup files and USB kits are online ones\
+        \ by default, which is whenever the server has a backend URL for boards. The\
+        \ console starts its Online setup box from it."
+      operationId: getSetupDefaults
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SetupDefaultsResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      summary: How setup files are made when the console does not say
+      tags:
+      - device-admin-controller
   /api/admin/board/devices/{deviceId}:
     get:
       operationId: getDevice
@@ -891,13 +913,13 @@ paths:
           type: string
           format: uuid
       - description: "Include the backend URL and a new claim secret, for a board\
-          \ that will be online. Default: an offline-only board."
+          \ that will be online. Default: online whenever the server has a backend\
+          \ URL for boards (getSetupDefaults), else offline-only."
         in: query
         name: online
         required: false
         schema:
           type: boolean
-          default: false
       responses:
         "200":
           content:
@@ -974,14 +996,13 @@ paths:
         schema:
           type: boolean
           default: false
-      - description: Make the setup file an online one (backend URL and a new claim
-          secret)
+      - description: "Make the setup file an online one (backend URL and a new claim\
+          \ secret). Default: online whenever the server has a backend URL for boards"
         in: query
         name: online
         required: false
         schema:
           type: boolean
-          default: false
       responses:
         "200":
           content:
@@ -1578,13 +1599,13 @@ paths:
         schema:
           type: boolean
           default: false
-      - description: Make the setup files online ones (backend URL and new claim secrets)
+      - description: "Make the setup files online ones (backend URL and new claim\
+          \ secrets). Default: online whenever the server has a backend URL for boards"
         in: query
         name: online
         required: false
         schema:
           type: boolean
-          default: false
       responses:
         "200":
           content:
@@ -4903,6 +4924,13 @@ components:
           type: array
           items:
             type: string
+    SetupDefaultsResponse:
+      type: object
+      properties:
+        onlineSetup:
+          type: boolean
+      required:
+      - onlineSetup
     SigningKeyView:
       type: object
       properties:
