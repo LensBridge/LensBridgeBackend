@@ -1,6 +1,5 @@
 package com.ibrasoft.lensbridge.config;
 
-import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -31,66 +30,48 @@ public class R2Config {
     @Value("${cloudflare.r2.endpoint}")
     private String endpoint;
 
-    private S3Client s3Client;
-    private S3Presigner s3Presigner;
-
+    // Spring infers close() as the destroy method of both beans, so no manual shutdown hook.
     @Bean
     public S3Client s3Client() {
-        if (s3Client == null) {
-            AwsBasicCredentials credentials = AwsBasicCredentials.create(accessKeyId, secretAccessKey);
-            String normalizedEndpoint = normalizeEndpoint(endpoint);
-            S3Configuration s3Config = S3Configuration.builder()
-                    .pathStyleAccessEnabled(true) // Cloudflare R2 requires path-style access
-                    .build();
-            
-            s3Client = S3Client.builder()
-                    .endpointOverride(URI.create(normalizedEndpoint))
-                    .credentialsProvider(StaticCredentialsProvider.create(credentials))
-                    .serviceConfiguration(s3Config)
-                    .region(Region.US_EAST_1)
-                    .build();
-            
-            log.info("S3Client initialized for R2 endpoint: {}", normalizedEndpoint);
-        }
-        return s3Client;
+        AwsBasicCredentials credentials = AwsBasicCredentials.create(accessKeyId, secretAccessKey);
+        String normalizedEndpoint = normalizeEndpoint(endpoint);
+        S3Configuration s3Config = S3Configuration.builder()
+                .pathStyleAccessEnabled(true) // Cloudflare R2 requires path-style access
+                .build();
+
+        S3Client client = S3Client.builder()
+                .endpointOverride(URI.create(normalizedEndpoint))
+                .credentialsProvider(StaticCredentialsProvider.create(credentials))
+                .serviceConfiguration(s3Config)
+                .region(Region.US_EAST_1)
+                .build();
+
+        log.info("S3Client initialized for R2 endpoint: {}", normalizedEndpoint);
+        return client;
     }
 
     @Bean
     public S3Presigner s3Presigner() {
-        if (s3Presigner == null) {
-            AwsBasicCredentials credentials = AwsBasicCredentials.create(accessKeyId, secretAccessKey);
-            String normalizedEndpoint = normalizeEndpoint(endpoint);
-            S3Configuration s3Config = S3Configuration.builder()
-                    .pathStyleAccessEnabled(true)
-                    .build();
-            
-            s3Presigner = S3Presigner.builder()
-                    .endpointOverride(URI.create(normalizedEndpoint))
-                    .credentialsProvider(StaticCredentialsProvider.create(credentials))
-                    .serviceConfiguration(s3Config)
-                    .region(Region.US_EAST_1)
-                    .build();
-            
-            log.info("S3Presigner initialized for R2 endpoint: {}", normalizedEndpoint);
-        }
-        return s3Presigner;
+        AwsBasicCredentials credentials = AwsBasicCredentials.create(accessKeyId, secretAccessKey);
+        String normalizedEndpoint = normalizeEndpoint(endpoint);
+        S3Configuration s3Config = S3Configuration.builder()
+                .pathStyleAccessEnabled(true)
+                .build();
+
+        S3Presigner presigner = S3Presigner.builder()
+                .endpointOverride(URI.create(normalizedEndpoint))
+                .credentialsProvider(StaticCredentialsProvider.create(credentials))
+                .serviceConfiguration(s3Config)
+                .region(Region.US_EAST_1)
+                .build();
+
+        log.info("S3Presigner initialized for R2 endpoint: {}", normalizedEndpoint);
+        return presigner;
     }
 
     private String normalizeEndpoint(String ep) {
         if (ep == null) return null;
         String trimmed = ep.trim();
         return trimmed.endsWith("/") ? trimmed.substring(0, trimmed.length() - 1) : trimmed;
-    }
-
-    @PreDestroy
-    public void cleanup() {
-        if (s3Client != null) {
-            s3Client.close();
-            log.info("S3Client closed");
-        }
-        if (s3Presigner != null) {
-            s3Presigner.close();
-            log.info("S3Presigner closed");
-        }
     }
 }

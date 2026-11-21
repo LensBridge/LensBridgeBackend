@@ -1,8 +1,10 @@
 package com.ibrasoft.lensbridge.service;
 
 import com.ibrasoft.lensbridge.dto.upload.response.AdminUploadDto;
+import com.ibrasoft.lensbridge.dto.upload.response.ErrorResponse;
 import com.ibrasoft.lensbridge.dto.upload.response.UploadDto;
 import com.ibrasoft.lensbridge.dto.auth.response.UserStatsResponse;
+import com.ibrasoft.lensbridge.exception.ApiResponseException;
 import com.ibrasoft.lensbridge.exception.FileProcessingException;
 import com.ibrasoft.lensbridge.model.auth.User;
 import com.ibrasoft.lensbridge.model.upload.MediaEvent;
@@ -15,6 +17,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -41,14 +46,22 @@ public class UploadService {
 
     // ── Entity creation ───────────────────────────────────────────────────────
 
+    /**
+     * Records a verified upload. If that fails for any reason the object is deleted again: the
+     * client is told the upload failed, so nothing would ever reference it.
+     *
+     * @throws ApiResponseException 404 when the user or event does not exist
+     */
     public Upload createUpload(String objectKey, String fileName,
             UUID eventId, String description, String instagramHandle,
             boolean anon, UUID uploadedBy) {
         try {
             User user = userService.findById(uploadedBy)
-                    .orElseThrow(() -> new IllegalArgumentException("User not found"));
+                    .orElseThrow(() -> new ApiResponseException(HttpStatus.NOT_FOUND,
+                            ErrorResponse.of("User not found"), "User not found"));
             MediaEvent mediaEvent = eventsService.getEventById(eventId)
-                    .orElseThrow(() -> new IllegalArgumentException("Event not found"));
+                    .orElseThrow(() -> new ApiResponseException(HttpStatus.NOT_FOUND,
+                            ErrorResponse.of("Event not found"), "Event not found"));
 
             Upload upload = new Upload();
             upload.setFileName(fileName);
@@ -67,9 +80,26 @@ public class UploadService {
             uploadRepository.save(upload);
             log.info("Created upload record: {} for object: {}", upload.getUuid(), objectKey);
             return upload;
+        } catch (ApiResponseException e) {
+            discardObject(objectKey);
+            throw e;
         } catch (Exception e) {
             log.error("Failed to create upload record for object: {}", objectKey, e);
+            discardObject(objectKey);
             throw new FileProcessingException("Failed to create upload record");
+        }
+    }
+
+    /** Whether an upload (deleted or not) already points at this object key. */
+    public boolean isObjectKeyInUse(String objectKey) {
+        return uploadRepository.existsByFileUrl(objectKey);
+    }
+
+    private void discardObject(String objectKey) {
+        try {
+            r2StorageService.deleteObject(objectKey);
+        } catch (Exception e) {
+            log.warn("Could not delete orphaned object {}: {}", objectKey, e.getMessage());
         }
     }
 
@@ -105,17 +135,38 @@ public class UploadService {
 
     // ── Deletion ──────────────────────────────────────────────────────────────
 
+    /** Moderator deletion; the acting user is taken from the security context. */
     public void deleteUpload(UUID id) {
-        Optional<Upload> uploadOpt = uploadRepository.findById(id);
-        uploadOpt.ifPresent(upload -> {
-            deleteFromStorage(upload);
-            upload.setDeletedAt(Instant.now());
-            uploadRepository.save(upload);
-        });
-        if (uploadOpt.isEmpty()) {
+        deleteUpload(id, currentUserId().orElse(null));
+    }
+
+    /**
+     * Deleting an upload that is already deleted is a no-op, so the original deletedAt and
+     * deletedBy survive a repeated request.
+     */
+    void deleteUpload(UUID id, UUID deletedById) {
+        Upload upload = uploadRepository.findById(id).orElseThrow(() -> {
             log.warn("Attempted to delete non-existent upload: {}", id);
-            throw new IllegalArgumentException("Upload not found");
+            return new IllegalArgumentException("Upload not found");
+        });
+        if (upload.getDeletedAt() != null) {
+            log.info("Upload {} was already deleted", id);
+            return;
         }
+        deleteFromStorage(upload);
+        upload.setDeletedAt(Instant.now());
+        if (deletedById != null) {
+            userService.findById(deletedById).ifPresent(upload::setDeletedBy);
+        }
+        uploadRepository.save(upload);
+    }
+
+    private Optional<UUID> currentUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return Optional.empty();
+        }
+        return userService.findByEmail(authentication.getName()).map(User::getId);
     }
 
     public void deleteUserUpload(UUID uploadId, UUID userId) {
@@ -148,34 +199,34 @@ public class UploadService {
 
     // ── Queries ───────────────────────────────────────────────────────────────
 
-    public Optional<Upload> getUploadById(UUID id) {
-        return uploadRepository.findById(id);
+    /**
+     * One upload for its owner or a moderator. Anyone else, and anyone asking after a deleted
+     * upload, gets an empty result: the caller answers 404 so existence is not revealed.
+     */
+    public Optional<UploadDto> getUploadByIdAsDto(UUID id, UUID requesterId, boolean moderator) {
+        Upload upload = uploadRepository.findByUuidAndDeletedAtIsNull(id);
+        if (upload == null || !(moderator || isOwner(upload, requesterId))) {
+            return Optional.empty();
+        }
+        return Optional.of(toUploadDto(upload));
     }
 
-    public Optional<UploadDto> getUploadByIdAsDto(UUID id) {
-        return uploadRepository.findById(id).map(this::toUploadDto);
-    }
-
-    public Page<Upload> getAllUploads(Pageable pageable) {
-        return uploadRepository.findByDeletedAtIsNull(pageable);
-    }
-
-    public Page<Upload> getUploadsByEvent(UUID eventId, Pageable pageable) {
+    /** Moderators see every upload for the event; everyone else only their own. */
+    public Page<UploadDto> getUploadsByEventAsDto(UUID eventId, UUID requesterId, boolean moderator, Pageable pageable) {
         MediaEvent mediaEvent = eventsService.getEventById(eventId)
                 .orElseThrow(() -> new IllegalArgumentException("Event not found"));
-        return uploadRepository.findByMediaEventAndDeletedAtIsNull(mediaEvent, pageable);
-    }
-
-    public Page<UploadDto> getUploadsByEventAsDto(UUID eventId, Pageable pageable) {
-        MediaEvent mediaEvent = eventsService.getEventById(eventId)
-                .orElseThrow(() -> new IllegalArgumentException("Event not found"));
-        return uploadRepository.findByMediaEventAndDeletedAtIsNull(mediaEvent, pageable).map(this::toUploadDto);
-    }
-
-    public Page<Upload> getUploadsByUploadedBy(UUID userId, Pageable pageable) {
-        User user = userService.findById(userId)
+        if (moderator) {
+            return uploadRepository.findByMediaEventAndDeletedAtIsNull(mediaEvent, pageable)
+                    .map(this::toUploadDto);
+        }
+        User requester = userService.findById(requesterId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
-        return uploadRepository.findByUploadedByAndDeletedAtIsNull(user, pageable);
+        return uploadRepository.findByMediaEventAndUploadedByAndDeletedAtIsNull(mediaEvent, requester, pageable)
+                .map(this::toUploadDto);
+    }
+
+    private static boolean isOwner(Upload upload, UUID userId) {
+        return upload.getUploadedBy() != null && upload.getUploadedBy().getId().equals(userId);
     }
 
     public Page<AdminUploadDto> getAllUploadsForAdmin(Pageable pageable) {
@@ -221,6 +272,10 @@ public class UploadService {
                 .orElseThrow(() -> new IllegalArgumentException("Upload not found: " + id));
     }
 
+    /**
+     * Only ever built for the upload's owner or a moderator (see the callers), so the uploader
+     * id is not hidden for anonymous uploads: neither audience learns anything new from it.
+     */
     private UploadDto toUploadDto(Upload upload) {
         return new UploadDto(
                 upload.getUuid(),
@@ -255,13 +310,10 @@ public class UploadService {
         dto.setContentType(upload.getContentType());
 
         try {
-            String key = r2StorageService.extractObjectKey(upload.getFileUrl());
-            dto.setSecureUrl(r2StorageService.getSecureUrl(key, upload.isApproved(), true));
-            String thumbKey = upload.getThumbnailUrl();
-            String thumbUrl = (thumbKey != null && !thumbKey.isBlank())
-                    ? r2StorageService.getSecureThumbnailUrl(thumbKey, upload.isApproved(), true)
-                    : dto.getSecureUrl();
-            dto.setThumbnailUrl(thumbUrl);
+            dto.setSecureUrl(r2StorageService.getSecureUrlForStoredFile(
+                    upload.getFileUrl(), upload.isApproved(), true));
+            dto.setThumbnailUrl(r2StorageService.getSecureThumbnailUrlOrOriginal(
+                    upload.getFileUrl(), upload.getThumbnailUrl(), upload.isApproved(), true));
         } catch (Exception e) {
             log.error("Failed to generate secure URLs for upload {}: {}", upload.getUuid(), e.getMessage());
             dto.setSecureUrl(null);

@@ -11,6 +11,10 @@ import java.util.UUID;
 public class IslamicQuote {
     public enum Kind { VERSE, HADITH }
 
+    /** Longest arabic, transliteration or translation text. Roomy enough for a full hadith. */
+    public static final int QUOTE_TEXT_MAX = 4000;
+    public static final int REFERENCE_MAX = 1000;
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
@@ -22,9 +26,15 @@ public class IslamicQuote {
 
     @Enumerated(EnumType.STRING)
     private Kind kind;
+
+    // Lengths match V4__widen_board_text_columns and the @Size on WeeklyContentRequest.QuoteEntry.
+    @Column(length = QUOTE_TEXT_MAX)
     private String arabic;
+    @Column(length = QUOTE_TEXT_MAX)
     private String transliteration;
+    @Column(length = QUOTE_TEXT_MAX)
     private String translation;
+    @Column(length = REFERENCE_MAX)
     private String reference;
 
     /**

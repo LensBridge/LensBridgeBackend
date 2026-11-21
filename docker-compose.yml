@@ -34,7 +34,6 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
-      ONBOARDING_SECRET: ${ONBOARDING_SECRET}
       CLOUDFLARE_R2_ACCESS_KEY_ID: ${CLOUDFLARE_R2_ACCESS_KEY_ID}
       CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${CLOUDFLARE_R2_SECRET_ACCESS_KEY}
       CLOUDFLARE_R2_BUCKET_NAME: ${CLOUDFLARE_R2_BUCKET_NAME}
@@ -42,16 +41,19 @@ services:
       MAIL_USERNAME: ${MAIL_USERNAME}
       MAIL_PASSWORD: ${MAIL_PASSWORD}
       FRONTEND_BASEURL: ${FRONTEND_BASEURL}
-      MUSALLAHBOARD_BASEURL: ${MUSALLAHBOARD_BASEURL}
       SPRINGDOC_API_DOCS_ENABLED: ${SPRINGDOC_API_DOCS_ENABLED:-false}
       MUSALLAHBOARD_ENROLLMENT_TOKEN_PEPPER: ${MUSALLAHBOARD_ENROLLMENT_TOKEN_PEPPER}
       MUSALLAHBOARD_AGENT_WS_URL: ${MUSALLAHBOARD_AGENT_WS_URL}
       MUSALLAHBOARD_CONTENT_SIGNING_KEY: ${MUSALLAHBOARD_CONTENT_SIGNING_KEY:-}
       OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY}
-    volumes:
-      - thumbnails:/app/thumbnails
+      # false closes new media submissions (uploads stay readable and moderatable).
+      LENSBRIDGE_MEDIA_SUBMISSIONS_ENABLED: ${LENSBRIDGE_MEDIA_SUBMISSIONS_ENABLED:-true}
+    # Loopback only by default, so the app is reached through the reverse proxy and never
+    # directly: it trusts X-Forwarded-For from private and loopback peers (see
+    # server.forward-headers-strategy in application.properties.example). Set
+    # LENSBRIDGE_BIND_ADDRESS (e.g. 0.0.0.0) only for a deployment that needs the port elsewhere.
     ports:
-      - "8085:8085"
+      - "${LENSBRIDGE_BIND_ADDRESS:-127.0.0.1}:8085:8085"
     networks:
       - lensbridge-net
     healthcheck:
@@ -67,4 +69,3 @@ networks:
 
 volumes:
   postgres-data:
-  thumbnails:

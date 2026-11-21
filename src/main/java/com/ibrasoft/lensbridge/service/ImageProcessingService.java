@@ -10,8 +10,14 @@ import net.coobird.thumbnailator.Thumbnails;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import javax.imageio.ImageIO;
+import javax.imageio.ImageReader;
+import javax.imageio.stream.ImageInputStream;
+import javax.imageio.stream.MemoryCacheImageInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.util.Iterator;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
@@ -31,6 +37,13 @@ public class ImageProcessingService {
             log.info("Generating thumbnail for upload {} (key: {})", upload.getUuid(), objectKey);
 
             byte[] originalBytes = r2StorageService.getObjectBytes(objectKey);
+
+            long pixels = readPixelCount(originalBytes);
+            if (pixels > properties.getMaxSourcePixels()) {
+                log.warn("Skipping thumbnail for upload {}: {} pixels exceeds the {} pixel cap",
+                        upload.getUuid(), pixels, properties.getMaxSourcePixels());
+                return CompletableFuture.completedFuture(null);
+            }
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             Thumbnails.of(new ByteArrayInputStream(originalBytes))
@@ -61,6 +74,28 @@ public class ImageProcessingService {
         } catch (Exception e) {
             log.error("Failed to generate thumbnail for upload {}: {}", upload.getUuid(), e.getMessage(), e);
             return CompletableFuture.failedFuture(e);
+        }
+    }
+
+    /**
+     * Pixel count from the image header alone, so a decompression bomb is rejected before any
+     * pixel buffer is allocated. -1 when no reader recognises the format (HEIC, say); that
+     * case is left to the thumbnailer exactly as before. The in-memory stream avoids the temp
+     * file ImageIO's default stream cache would create.
+     */
+    private long readPixelCount(byte[] bytes) throws IOException {
+        try (ImageInputStream input = new MemoryCacheImageInputStream(new ByteArrayInputStream(bytes))) {
+            Iterator<ImageReader> readers = ImageIO.getImageReaders(input);
+            if (!readers.hasNext()) {
+                return -1;
+            }
+            ImageReader reader = readers.next();
+            try {
+                reader.setInput(input, true, true);
+                return (long) reader.getWidth(0) * reader.getHeight(0);
+            } finally {
+                reader.dispose();
+            }
         }
     }
 

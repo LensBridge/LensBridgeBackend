@@ -1,5 +1,7 @@
 package com.ibrasoft.lensbridge.dto.board.request;
 
+import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
+import jakarta.validation.constraints.Size;
 import lombok.*;
 
 import java.util.List;
@@ -21,5 +23,6 @@ public class UpdateTickerRequest {
 
     private Boolean enableScrollingMessage;
 
-    private List<String> scrollingMessages;
+    private List<@Size(max = DeviceConfig.MESSAGE_MAX,
+            message = "Each scrolling message must be at most 4000 characters") String> scrollingMessages;
 }

@@ -2,13 +2,14 @@ package com.ibrasoft.lensbridge.config;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import com.ibrasoft.lensbridge.model.auth.Role;
+import com.ibrasoft.lensbridge.security.ClientAddress;
 
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
 import io.github.bucket4j.ConsumptionProbe;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -35,8 +36,13 @@ public class RateLimitingFilter extends OncePerRequestFilter {
     @Value("${ratelimit.duration.minutes:1}")
     private int durationMinutes;
 
-    @Value("${ratelimit.exemptRoles:ROOT,ADMIN}")
-    private List<Role> exemptRoles;
+    /**
+     * Read under the same kebab-case key application.properties.example documents
+     * (@Value does not relax-bind, so the spelling must match exactly). Entries may be written
+     * with or without the ROLE_ prefix.
+     */
+    @Value("${ratelimit.exempt-roles:ROOT,ADMIN}")
+    private List<String> exemptRoles;
 
     private final Cache<String, Bucket> bucketCache = Caffeine.newBuilder()
             .expireAfterAccess(10, TimeUnit.MINUTES)
@@ -53,7 +59,7 @@ public class RateLimitingFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
             return;
         }
-        String ip = getClientIp(request);
+        String ip = ClientAddress.of(request);
         Bucket bucket = bucketCache.get(ip, k -> newBucket());
         ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
 
@@ -63,6 +69,11 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         } else {
             log.warn("Rate limit exceeded for IP: {}", ip);
             response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
+            // Declared explicitly: the body contains a non-ASCII dash, which the servlet
+            // default charset (ISO-8859-1) would mangle.
+            response.setContentType("text/plain;charset=UTF-8");
+            long retryAfterSeconds = Math.max(1, TimeUnit.NANOSECONDS.toSeconds(probe.getNanosToWaitForRefill()) + 1);
+            response.setHeader(HttpHeaders.RETRY_AFTER, String.valueOf(retryAfterSeconds));
             response.getWriter().write("Too many requests – please try again later.");
         }
     }
@@ -72,14 +83,6 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         return Bucket.builder()
                 .addLimit(limit)
                 .build();
-    }
-
-    private String getClientIp(HttpServletRequest request) {
-        String xfHeader = request.getHeader("X-Forwarded-For");
-        if (xfHeader != null && !xfHeader.isEmpty()) {
-            return xfHeader.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
     }
 
     private boolean isUserExemptFromRateLimit() {
@@ -92,6 +95,11 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         return authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .anyMatch(authority -> exemptRoles.stream()
-                        .anyMatch(role -> role.getAuthority().equals(authority)));
+                        .anyMatch(role -> toAuthority(role).equals(authority)));
+    }
+
+    private static String toAuthority(String configured) {
+        String name = configured.trim();
+        return name.startsWith("ROLE_") ? name : "ROLE_" + name;
     }
 }

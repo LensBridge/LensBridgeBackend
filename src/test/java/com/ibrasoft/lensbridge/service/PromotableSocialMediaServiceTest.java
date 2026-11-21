@@ -3,7 +3,7 @@ package com.ibrasoft.lensbridge.service;
 import com.ibrasoft.lensbridge.dto.board.request.CreatePromotableSocialMediaRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdatePromotableSocialMediaRequest;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
-import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
+import com.ibrasoft.lensbridge.service.agent.ContentChangeNotifier;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.PromotableSocialMedia;
 import com.ibrasoft.lensbridge.model.board.SocialType;
@@ -33,7 +33,7 @@ class PromotableSocialMediaServiceTest {
     private PromotableSocialMediaRepository repository;
 
     @Mock
-    private BoardStreamHandler boardStream;
+    private ContentChangeNotifier contentChanges;
 
     @InjectMocks
     private PromotableSocialMediaService service;
@@ -103,14 +103,6 @@ class PromotableSocialMediaServiceTest {
         assertThat(service.getForAudience(Audience.SISTERS)).isEqualTo(expected);
     }
 
-    @Test
-    void getByTypeDelegatesToRepository() {
-        List<PromotableSocialMedia> expected = List.of(social("a"));
-        when(repository.findByTypeOrderByNameAsc(SocialType.WHATSAPP)).thenReturn(expected);
-
-        assertThat(service.getByType(SocialType.WHATSAPP)).isEqualTo(expected);
-    }
-
     // ==================== create ====================
 
     @Test
@@ -125,7 +117,7 @@ class PromotableSocialMediaServiceTest {
         assertThat(created.getDuration()).isEqualTo(13);
         assertThat(created.getAudience()).isEqualTo(Audience.BOTH);
         assertThat(created.getHandle()).isEqualTo("@utmmsa");
-        verify(boardStream).contentChanged("socials");
+        verify(contentChanges).contentChanged("socials");
     }
 
     @Test
@@ -184,7 +176,7 @@ class PromotableSocialMediaServiceTest {
         assertThat(updated.getDuration()).isEqualTo(13);                   // unchanged
         assertThat(updated.getAudience()).isEqualTo(Audience.BOTH);        // unchanged
         assertThat(updated.getHandle()).isEqualTo("@utmmsa");              // unchanged
-        verify(boardStream).contentChanged("socials");
+        verify(contentChanges).contentChanged("socials");
     }
 
     @Test
@@ -213,6 +205,84 @@ class PromotableSocialMediaServiceTest {
     }
 
     @Test
+    void updateRejectsAUrlThatAnotherEntryAlreadyPromotes() {
+        PromotableSocialMedia existing = social("Old");
+        when(repository.findById(existing.getId())).thenReturn(Optional.of(existing));
+        when(repository.existsByTypeAndUrl(SocialType.INSTAGRAM, "https://instagram.com/other"))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.update(existing.getId(),
+                UpdatePromotableSocialMediaRequest.builder().url(" https://instagram.com/other ").build()))
+                .isInstanceOf(ApiResponseException.class)
+                .satisfies(e -> assertThat(((ApiResponseException) e).getStatus())
+                        .isEqualTo(HttpStatus.CONFLICT));
+        verify(repository, never()).save(any());
+        assertThat(existing.getUrl()).isEqualTo("https://instagram.com/utmmsa"); // untouched
+    }
+
+    @Test
+    void updateRejectsATypeChangeThatCollidesWithAnExistingEntry() {
+        PromotableSocialMedia existing = social("Old");
+        when(repository.findById(existing.getId())).thenReturn(Optional.of(existing));
+        when(repository.existsByTypeAndUrl(SocialType.OTHER, "https://instagram.com/utmmsa"))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.update(existing.getId(),
+                UpdatePromotableSocialMediaRequest.builder().type(SocialType.OTHER).build()))
+                .isInstanceOf(ApiResponseException.class)
+                .satisfies(e -> assertThat(((ApiResponseException) e).getStatus())
+                        .isEqualTo(HttpStatus.CONFLICT));
+        verify(repository, never()).save(any());
+    }
+
+    /** Re-sending an entry's own type and url must not collide with itself. */
+    @Test
+    void updateDoesNotCheckForDuplicatesWhenTypeAndUrlAreUnchanged() {
+        PromotableSocialMedia existing = social("Old");
+        when(repository.findById(existing.getId())).thenReturn(Optional.of(existing));
+        when(repository.save(any(PromotableSocialMedia.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.update(existing.getId(), UpdatePromotableSocialMediaRequest.builder()
+                .type(SocialType.INSTAGRAM).url("https://instagram.com/utmmsa").name("Renamed").build());
+
+        verify(repository, never()).existsByTypeAndUrl(any(), any());
+        assertThat(existing.getName()).isEqualTo("Renamed");
+    }
+
+    @Test
+    void updateAcceptsAChangedUrlWhenNothingElseHasIt() {
+        PromotableSocialMedia existing = social("Old");
+        when(repository.findById(existing.getId())).thenReturn(Optional.of(existing));
+        when(repository.existsByTypeAndUrl(SocialType.INSTAGRAM, "https://instagram.com/new")).thenReturn(false);
+        when(repository.save(any(PromotableSocialMedia.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        PromotableSocialMedia updated = service.update(existing.getId(),
+                UpdatePromotableSocialMediaRequest.builder().url("https://instagram.com/new").build());
+
+        assertThat(updated.getUrl()).isEqualTo("https://instagram.com/new");
+    }
+
+    @Test
+    void updateRejectsBlankValuesForFieldsCreateRequires() {
+        for (UpdatePromotableSocialMediaRequest blank : List.of(
+                UpdatePromotableSocialMediaRequest.builder().name("  ").build(),
+                UpdatePromotableSocialMediaRequest.builder().headerText("").build(),
+                UpdatePromotableSocialMediaRequest.builder().heroText(" \t").build(),
+                UpdatePromotableSocialMediaRequest.builder().footerText("").build())) {
+            PromotableSocialMedia existing = social("Old");
+            when(repository.findById(existing.getId())).thenReturn(Optional.of(existing));
+
+            assertThatThrownBy(() -> service.update(existing.getId(), blank))
+                    .isInstanceOf(ApiResponseException.class)
+                    .satisfies(e -> assertThat(((ApiResponseException) e).getStatus())
+                            .isEqualTo(HttpStatus.BAD_REQUEST));
+            assertThat(existing.getName()).isEqualTo("Old");
+            assertThat(existing.getHeaderText()).isEqualTo("follow along");
+        }
+        verify(repository, never()).save(any());
+    }
+
+    @Test
     void updateThrowsWhenNotFound() {
         UUID id = UUID.randomUUID();
         when(repository.findById(id)).thenReturn(Optional.empty());
@@ -232,7 +302,7 @@ class PromotableSocialMediaServiceTest {
         service.delete(existing.getId());
 
         verify(repository).delete(existing);
-        verify(boardStream).contentChanged("socials");
+        verify(contentChanges).contentChanged("socials");
     }
 
     @Test

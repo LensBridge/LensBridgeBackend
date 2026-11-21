@@ -9,12 +9,13 @@ import com.ibrasoft.lensbridge.model.auth.Role;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Service;
 import org.springframework.util.unit.DataSize;
 
-import java.util.Comparator;
-import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -23,20 +24,23 @@ public class UploadLimitsService {
     private final UploadProperties uploadProperties;
     private final UploadService uploadService;
 
+    /**
+     * The role whose upload limits apply: ROOT, then ADMIN, otherwise USER.
+     * <p>
+     * Deliberately not "highest enum ordinal": the board roles sit after ADMIN in {@link Role}
+     * but have no upload limits of their own, so an admin who is also a board editor would
+     * otherwise be throttled like a plain user.
+     */
     public Role getHighestRole(Authentication authentication) {
         if (authentication == null || authentication.getAuthorities() == null) {
             return Role.USER;
         }
-        return authentication.getAuthorities().stream()
-                .map(a -> {
-                    String name = a.getAuthority();
-                    if (name.startsWith("ROLE_")) name = name.substring(5);
-                    try { return Role.valueOf(name); }
-                    catch (IllegalArgumentException e) { return null; }
-                })
-                .filter(Objects::nonNull)
-                .max(Comparator.comparingInt(Enum::ordinal))
-                .orElse(Role.USER);
+        Set<String> authorities = authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .collect(Collectors.toSet());
+        if (authorities.contains(Role.ROOT.getAuthority())) return Role.ROOT;
+        if (authorities.contains(Role.ADMIN.getAuthority())) return Role.ADMIN;
+        return Role.USER;
     }
 
     public void validateUpload(UUID userId, Role role, long fileSize, String contentType) {
@@ -52,7 +56,7 @@ public class UploadLimitsService {
         int dailyLimit = uploadProperties.getDailyLimitForRole(role.name().toLowerCase());
         if (uploadService.hasReachedDailyLimit(userId, dailyLimit)) {
             long count = uploadService.countUploadsToday(userId);
-            throw new DailyLimitExceededException(dailyLimit, count);
+            throw new DailyLimitExceededException(dailyLimit, count, role.name().toLowerCase());
         }
     }
 

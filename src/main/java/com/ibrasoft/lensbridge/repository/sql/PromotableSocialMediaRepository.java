@@ -24,7 +24,5 @@ public interface PromotableSocialMediaRepository extends JpaRepository<Promotabl
     @Query("SELECT s FROM PromotableSocialMedia s WHERE (s.audience = :aud OR s.audience = com.ibrasoft.lensbridge.model.board.Audience.BOTH) ORDER BY s.name ASC")
     List<PromotableSocialMedia> findByAudienceOrBoth(@Param("aud") Audience audience);
 
-    List<PromotableSocialMedia> findByTypeOrderByNameAsc(SocialType type);
-
     boolean existsByTypeAndUrl(SocialType type, String url);
 }

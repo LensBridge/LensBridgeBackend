@@ -32,6 +32,8 @@ class DeviceEnrollmentServiceTest {
     private DeviceRepository deviceRepository;
     @Mock
     private BoardConfigRepository boardConfigRepository;
+    @Mock
+    private AgentSessionRegistry sessionRegistry;
 
     @InjectMocks
     private DeviceEnrollmentService service;
@@ -79,7 +81,7 @@ class DeviceEnrollmentServiceTest {
 
     @Test
     void enrollRejectsInvalidToken() {
-        when(enrollmentTokenService.consume(eq("tok"), any(UUID.class))).thenReturn(Optional.empty());
+        when(enrollmentTokenService.consume("tok")).thenReturn(Optional.empty());
 
         var outcome = service.enroll("tok", validKeyB64, "host", "model", "v1", "1.2.3.4");
 
@@ -90,7 +92,7 @@ class DeviceEnrollmentServiceTest {
 
     @Test
     void enrollHappyPathPersistsDeviceWithDecodedKeyAndMetadata() {
-        when(enrollmentTokenService.consume(anyString(), any(UUID.class))).thenReturn(Optional.of(token()));
+        when(enrollmentTokenService.consume(anyString())).thenReturn(Optional.of(token()));
 
         var outcome = service.enroll("tok", validKeyB64, "kiosk-7", "RPi4", "agent-2.0", "10.0.0.5");
 
@@ -109,7 +111,7 @@ class DeviceEnrollmentServiceTest {
 
     @Test
     void enrollUsesTokenDisplayNameWhenHostnameBlank() {
-        when(enrollmentTokenService.consume(anyString(), any(UUID.class))).thenReturn(Optional.of(token()));
+        when(enrollmentTokenService.consume(anyString())).thenReturn(Optional.of(token()));
 
         service.enroll("tok", validKeyB64, "   ", "model", "v1", "ip");
 
@@ -118,19 +120,93 @@ class DeviceEnrollmentServiceTest {
         assertThat(captor.getValue().getDisplayName()).isEqualTo("Brothers Display");
     }
 
+    /** devices.display_name is varchar(255): a long token name plus hostname must not 500 on Postgres. */
     @Test
-    void enrollWritesBackConsumedDeviceIdAndDefaultConfig() {
+    void enrollClipsTheDisplayNameToTheColumnWidth() {
         EnrollmentToken tok = token();
-        when(enrollmentTokenService.consume(anyString(), any(UUID.class))).thenReturn(Optional.of(tok));
+        tok.setDisplayName("N".repeat(250));
+        when(enrollmentTokenService.consume(anyString())).thenReturn(Optional.of(tok));
+
+        service.enroll("tok", validKeyB64, "kiosk-with-a-long-name", "model", "v1", "ip");
+
+        ArgumentCaptor<Device> captor = ArgumentCaptor.forClass(Device.class);
+        verify(deviceRepository).save(captor.capture());
+        assertThat(captor.getValue().getDisplayName()).hasSize(255);
+    }
+
+    @Test
+    void enrollRecordsTheRealDeviceIdOnTheTokenAndWritesDefaultConfig() {
+        EnrollmentToken tok = token();
+        when(enrollmentTokenService.consume(anyString())).thenReturn(Optional.of(tok));
 
         var outcome = service.enroll("tok", validKeyB64, "host", "model", "v1", "ip");
 
         Device saved = ((DeviceEnrollmentService.Outcome.Ok) outcome).device();
-        assertThat(tok.getConsumedByDeviceId()).isEqualTo(saved.getId());
+        verify(enrollmentTokenService).recordConsumer(tok.getId(), saved.getId());
 
         ArgumentCaptor<DeviceConfig> cfg = ArgumentCaptor.forClass(DeviceConfig.class);
         verify(boardConfigRepository).save(cfg.capture());
         assertThat(cfg.getValue().getDevice()).isSameAs(saved);
         assertThat(cfg.getValue().getLocation().getCity()).isEqualTo("Mississauga");
+    }
+
+    // ==================== tokens issued for a board created in the console ====================
+
+    private Device preCreated(byte[] key) {
+        Device d = Device.builder().id(UUID.randomUUID()).displayName("North Musallah")
+                .audience(Audience.SISTERS).publicKey(key).build();
+        when(deviceRepository.findById(d.getId())).thenReturn(Optional.of(d));
+        return d;
+    }
+
+    @Test
+    void aTokenForAPreCreatedBoardBindsTheKeyToThatRow() {
+        Device existing = preCreated(null);
+        EnrollmentToken t = token();
+        t.setDeviceId(existing.getId());
+        when(enrollmentTokenService.consume("tok")).thenReturn(Optional.of(t));
+        byte[] key = new byte[32];
+        key[0] = 9;
+
+        var outcome = service.enroll("tok", Base64.getEncoder().encodeToString(key), "host", "RPi4", "0.5.0", "1.2.3.4");
+
+        assertThat(outcome).isInstanceOf(DeviceEnrollmentService.Outcome.Ok.class);
+        Device bound = ((DeviceEnrollmentService.Outcome.Ok) outcome).device();
+        assertThat(bound.getId()).isEqualTo(existing.getId());
+        assertThat(bound.getPublicKey()).isEqualTo(key);
+        assertThat(bound.getDisplayName()).as("the console's name is kept").isEqualTo("North Musallah");
+        assertThat(bound.getEnrolledAt()).isNotNull();
+        verify(enrollmentTokenService).recordConsumer(t.getId(), existing.getId());
+        verifyNoInteractions(boardConfigRepository);
+        verify(sessionRegistry, never()).closeIfPresent(any(), any());
+    }
+
+    /** The maintainer re-keys a board (new SD card): the old key's session is closed. */
+    @Test
+    void aTokenForABoardWithAKeyReplacesItAndClosesTheOldSession() {
+        Device existing = preCreated(new byte[32]);
+        EnrollmentToken t = token();
+        t.setDeviceId(existing.getId());
+        when(enrollmentTokenService.consume("tok")).thenReturn(Optional.of(t));
+        byte[] key = new byte[32];
+        key[0] = 9;
+
+        service.enroll("tok", Base64.getEncoder().encodeToString(key), "host", "RPi4", "0.5.0", "1.2.3.4");
+
+        assertThat(existing.getPublicKey()).isEqualTo(key);
+        verify(sessionRegistry).closeIfPresent(eq(existing.getId()), any());
+    }
+
+    @Test
+    void aTokenForARevokedBoardIsInvalid() {
+        Device existing = preCreated(null);
+        existing.setRevokedAt(java.time.Instant.now());
+        EnrollmentToken t = token();
+        t.setDeviceId(existing.getId());
+        when(enrollmentTokenService.consume("tok")).thenReturn(Optional.of(t));
+
+        assertThat(service.enroll("tok", validKeyB64, "host", "RPi4", "0.5.0", "1.2.3.4"))
+                .isInstanceOf(DeviceEnrollmentService.Outcome.InvalidToken.class);
+        assertThat(existing.getPublicKey()).isNull();
     }
 }

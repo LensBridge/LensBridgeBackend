@@ -21,6 +21,8 @@ public class AgentEnrollResponse {
      * that establishes its identity. Always present; empty when the server has no content
      * key configured.
      */
-    @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(requiredMode = Schema.RequiredMode.REQUIRED,
+            description = "Public content signing keys the agent pins at enrollment. Always present; "
+                    + "empty when the server has no content key configured.")
     private List<SigningKeyView> contentSigningKeys;
 }

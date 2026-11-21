@@ -8,7 +8,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -19,11 +18,16 @@ import java.util.Set;
 /**
  * Drives commands to a terminal state when the agent never will.
  * <p>
- * Two failure modes are covered. A command can sit PENDING because the device never came
- * back — that becomes {@link DeviceCommandStatus#EXPIRED}. Or the agent can take delivery
- * and then die mid-execution, leaving the row DELIVERED/ACKED/RUNNING forever — that
- * becomes {@link DeviceCommandStatus#TIMEOUT}. Without this, both statuses were declared
- * but never assigned, and the admin UI showed commands as permanently in flight.
+ * Two cases are covered. A command still PENDING past its {@code expiresAt} becomes
+ * {@link DeviceCommandStatus#EXPIRED} (the device never came back). A command the agent took
+ * (DELIVERED, ACKED or RUNNING) but never reported a result for, within its own deadline plus
+ * a grace period, becomes {@link DeviceCommandStatus#TIMEOUT} (the agent died mid-execution).
+ * <p>
+ * The reaper runs concurrently with agent frames, so it never reads a row and writes it back.
+ * Each transition is a conditional update that only applies if the command is still in the
+ * state the reaper saw, and the event is published only when that update won. A result that
+ * arrives in the same instant therefore either lands first (and the reaper does nothing) or
+ * is ignored by the dispatcher; the two can no longer overwrite each other.
  */
 @Service
 @RequiredArgsConstructor
@@ -44,7 +48,6 @@ public class DeviceCommandReaper {
     private final DeviceEventPublisher events;
 
     @Scheduled(fixedDelayString = "${musallahboard.command.reaperIntervalMs:60000}")
-    @Transactional
     public void reap() {
         Instant now = Instant.now();
         expireUndelivered(now);
@@ -71,10 +74,15 @@ public class DeviceCommandReaper {
             if (!deadline.isBefore(now)) continue;
 
             DeviceCommandStatus stuckAt = cmd.getStatus();
+            String message = "No result from agent within " + cmd.getDeadlineMs() + "ms of delivery";
+            // Conditional on still being in flight: if the result landed since we listed it,
+            // this changes no row and the command keeps the agent's outcome.
+            if (commandRepository.finish(cmd.getId(), DeviceCommandStatus.TIMEOUT, now, null, message, IN_FLIGHT) != 1) {
+                continue;
+            }
             cmd.setStatus(DeviceCommandStatus.TIMEOUT);
             cmd.setFinishedAt(now);
-            cmd.setErrorMessage("No result from agent within " + cmd.getDeadlineMs() + "ms of delivery");
-            commandRepository.save(cmd);
+            cmd.setErrorMessage(message);
             events.commandTerminated(cmd);
             log.warn("Command {} ({}) for device {} timed out while {}",
                     cmd.getId(), cmd.getKind(), cmd.getDeviceId(), stuckAt);

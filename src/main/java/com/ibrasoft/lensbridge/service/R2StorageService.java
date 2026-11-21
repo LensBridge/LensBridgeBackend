@@ -18,7 +18,6 @@ import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignReques
 
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.ResponseInputStream;
-import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 
 import java.io.IOException;
@@ -367,11 +366,29 @@ public class R2StorageService {
 
     /**
      * Compute the SHA-256 hex digest of a stored object.
+     * <p>
+     * Streamed through the digest so a large upload (the admin limit is in the GB) never
+     * has to fit in the heap.
      */
     public String calculateSha256Hash(String objectKey) throws Exception {
-        byte[] bytes = getObjectBytes(objectKey);
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        return HexFormat.of().formatHex(digest.digest(bytes));
+        GetObjectRequest getRequest = GetObjectRequest.builder()
+                .bucket(bucketName)
+                .key(objectKey)
+                .build();
+        try (ResponseInputStream<GetObjectResponse> stream = s3Client.getObject(getRequest)) {
+            byte[] buffer = new byte[64 * 1024];
+            int read;
+            while ((read = stream.read(buffer)) != -1) {
+                digest.update(buffer, 0, read);
+            }
+        }
+        return HexFormat.of().formatHex(digest.digest());
+    }
+
+    /** How long the signed URLs this service hands out stay valid, in minutes. */
+    public long getUrlExpirationMinutes() {
+        return urlExpirationMinutes;
     }
 
     /**
@@ -393,6 +410,26 @@ public class R2StorageService {
             throw new SecurityException("Access denied: content is not approved");
         }
         return generatePresignedDownloadUrl(thumbnailKey);
+    }
+
+    /**
+     * Signed URL for an upload's {@code fileUrl} column, which holds either a bare object key
+     * or a full URL. Same access control as {@link #getSecureUrl}.
+     */
+    public String getSecureUrlForStoredFile(String fileUrl, boolean approved, boolean isAdmin) {
+        return getSecureUrl(extractObjectKey(fileUrl), approved, isAdmin);
+    }
+
+    /**
+     * Signed URL for an upload's thumbnail, falling back to the full-size file while the
+     * thumbnail has not been generated yet (it is produced asynchronously after completion).
+     */
+    public String getSecureThumbnailUrlOrOriginal(String fileUrl, String thumbnailKey,
+            boolean approved, boolean isAdmin) {
+        if (thumbnailKey != null && !thumbnailKey.isBlank()) {
+            return getSecureThumbnailUrl(thumbnailKey, approved, isAdmin);
+        }
+        return getSecureUrlForStoredFile(fileUrl, approved, isAdmin);
     }
 
     /** An object's contents as downloaded. */

@@ -17,15 +17,9 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, UUID> {
 
     Page<AuditEvent> findAllByOrderByTimestampDesc(Pageable pageable);
 
-    List<AuditEvent> findByAdminIdOrderByTimestampDesc(UUID adminId);
-
     List<AuditEvent> findByTargetEntityTypeAndTargetEntityIdOrderByTimestampDesc(AuditEntityType entityType, UUID entityId);
 
     Page<AuditEvent> findByActionOrderByTimestampDesc(AuditAction action, Pageable pageable);
 
     Page<AuditEvent> findByTimestampBetweenOrderByTimestampDesc(Instant start, Instant end, Pageable pageable);
-
-    long countByAdminId(UUID adminId);
-
-    long countByAction(AuditAction action);
 }

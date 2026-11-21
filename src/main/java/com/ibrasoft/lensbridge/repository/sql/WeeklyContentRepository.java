@@ -11,6 +11,5 @@ import java.util.UUID;
 @Repository
 public interface WeeklyContentRepository extends JpaRepository<WeeklyContent, UUID> {
     Optional<WeeklyContent> findByYearAndWeekNumber(int year, int weekNumber);
-    boolean existsByYearAndWeekNumber(int year, int weekNumber);
     List<WeeklyContent> findByYear(int year);
 }

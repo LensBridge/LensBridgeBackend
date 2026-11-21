@@ -1,6 +1,7 @@
 package com.ibrasoft.lensbridge.repository.auth;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -26,6 +27,14 @@ public interface UserRepository extends JpaRepository<User, UUID> {
    */
   @Query("select p from User u join u.directPermissions p where u.id = :userId")
   Set<Permission> findDirectPermissions(@Param("userId") UUID userId);
+
+  /**
+   * Direct grants for many users in one query, so listing a page of users does not issue one
+   * {@link #findDirectPermissions} per row. Users with no direct grants produce no rows.
+   */
+  @Query("select new com.ibrasoft.lensbridge.repository.auth.DirectPermissionRow(u.id, p) "
+      + "from User u join u.directPermissions p where u.id in :userIds")
+  List<DirectPermissionRow> findDirectPermissionsForUsers(@Param("userIds") Collection<UUID> userIds);
 
   /** Ids of users holding {@code role}. Used to check nobody is about to be locked out. */
   @Query("select u.id from User u join u.roles r where r in :roles")

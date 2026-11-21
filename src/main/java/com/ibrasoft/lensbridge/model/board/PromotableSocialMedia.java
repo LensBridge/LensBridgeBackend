@@ -20,6 +20,9 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class PromotableSocialMedia {
+    /** Longest header, hero or footer text. Matches V4__widen_board_text_columns. */
+    public static final int TEXT_MAX = 1000;
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
@@ -51,13 +54,13 @@ public class PromotableSocialMedia {
     /**
      * Small 2-3 word tagline (i.e: follow along)
      */
-    @Column(nullable = false)
+    @Column(nullable = false, length = TEXT_MAX)
     private String headerText;
 
     /**
      * Main text shown to the user
      */
-    @Column(nullable = false)
+    @Column(nullable = false, length = TEXT_MAX)
     private String heroText;
 
     /**
@@ -70,7 +73,7 @@ public class PromotableSocialMedia {
      * Descriptive block of text
      * i.e: Follow your home on campus for event recaps, announcements, and more!
      */
-    @Column(nullable = false)
+    @Column(nullable = false, length = TEXT_MAX)
     private String footerText;
 
 }

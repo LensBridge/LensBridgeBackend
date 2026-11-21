@@ -1,6 +1,5 @@
 package com.ibrasoft.lensbridge.controller;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.ibrasoft.lensbridge.dto.auth.response.MessageResponse;
 import com.ibrasoft.lensbridge.dto.board.request.ContentBundleRequest;
 import com.ibrasoft.lensbridge.dto.board.response.AgentWeatherResponse;
@@ -12,6 +11,7 @@ import com.ibrasoft.lensbridge.service.board.offline.ContentSigningService;
 import com.ibrasoft.lensbridge.service.board.offline.OfflineBundle;
 import com.ibrasoft.lensbridge.service.board.offline.OfflineBundleService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -75,9 +75,12 @@ public class AgentContentController {
     @SecurityRequirements
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "The signed content package",
+                    headers = @Header(name = HttpHeaders.CONTENT_DISPOSITION,
+                            description = "attachment; filename=\"musallahboard-content-<first 8 chars of deviceId>-<firstDay>.mbu\"",
+                            schema = @Schema(type = "string")),
                     content = @Content(mediaType = OfflineBundleService.MBU_CONTENT_TYPE,
                             schema = @Schema(type = "string", format = "binary"))),
-            @ApiResponse(responseCode = "400", description = "Malformed body, days outside 1-31, or a bad haveMedia entry",
+            @ApiResponse(responseCode = "400", description = "Malformed body, days outside 1-92, or a bad haveMedia entry",
                     content = @Content(schema = @Schema(implementation = MessageResponse.class))),
             @ApiResponse(responseCode = "502", description = "A poster image could not be fetched; the message names the poster",
                     content = @Content(schema = @Schema(implementation = MessageResponse.class))),
@@ -121,8 +124,9 @@ public class AgentContentController {
             summary = "Current weather for this board",
             description = "Device-authenticated with the X-MB-* headers, like the content bundle; the signed "
                     + "body hash is the SHA-256 of the empty string. `weather` is the OpenWeatherMap current "
-                    + "weather JSON exactly as the server last fetched it, or null when the server has none. "
-                    + "`fetchedAt` is when the server answered.")
+                    + "weather JSON exactly as the server last fetched it, or null when the server has none "
+                    + "or its last fetch is over 3 hours old. `fetchedAt` is when the server fetched that "
+                    + "weather (when `weather` is null, when it answered).")
     @SecurityRequirements
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Current weather, or null weather when unavailable",
@@ -130,13 +134,18 @@ public class AgentContentController {
     })
     @GetMapping("/weather")
     public ResponseEntity<AgentWeatherResponse> weather(@AuthenticatedDevice Device device) {
-        return ResponseEntity.ok(new AgentWeatherResponse(currentWeather(), Instant.now()));
+        OpenWeatherService.Observation observation = currentObservation();
+        // Report when the weather was fetched, not when it was asked for: stamping every answer
+        // with the current time made an observation hours old look fresh to the board.
+        return ResponseEntity.ok(observation == null
+                ? new AgentWeatherResponse(null, Instant.now())
+                : new AgentWeatherResponse(observation.weather(), observation.fetchedAt()));
     }
 
-    /** {@link OpenWeatherService#getCurrentWeather()} should never throw; if it does, no weather. */
-    private JsonNode currentWeather() {
+    /** {@link OpenWeatherService#getCurrentObservation()} should never throw; if it does, no weather. */
+    private OpenWeatherService.Observation currentObservation() {
         try {
-            return openWeatherService.getCurrentWeather();
+            return openWeatherService.getCurrentObservation();
         } catch (RuntimeException e) {
             log.warn("Weather lookup failed; answering with null weather", e);
             return null;

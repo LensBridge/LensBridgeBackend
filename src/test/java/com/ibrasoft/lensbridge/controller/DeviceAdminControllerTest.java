@@ -5,13 +5,17 @@ import com.ibrasoft.lensbridge.model.audit.AuditAction;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.service.AdminAuditService;
+import com.ibrasoft.lensbridge.service.BoardService;
+import com.ibrasoft.lensbridge.service.agent.ContentChangeNotifier;
 import com.ibrasoft.lensbridge.repository.sql.DeviceCommandRepository;
 import com.ibrasoft.lensbridge.repository.sql.DeviceRepository;
 import com.ibrasoft.lensbridge.service.agent.AgentSession;
 import com.ibrasoft.lensbridge.service.agent.AgentSessionRegistry;
+import com.ibrasoft.lensbridge.service.agent.events.DeviceEventPublisher;
 import com.ibrasoft.lensbridge.service.agent.CommandDispatcher;
 import com.ibrasoft.lensbridge.service.agent.EnrollmentTokenService;
 import com.ibrasoft.lensbridge.service.board.offline.OfflineBundleService;
+import com.ibrasoft.lensbridge.service.board.offline.SetupFileService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -43,7 +47,7 @@ class DeviceAdminControllerTest {
         DeviceRepository deviceRepository = mock(DeviceRepository.class);
         DeviceCommandRepository commandRepository = mock(DeviceCommandRepository.class);
         CommandDispatcher commandDispatcher = mock(CommandDispatcher.class);
-        AgentSessionRegistry registry = new AgentSessionRegistry();
+        AgentSessionRegistry registry = new AgentSessionRegistry(mock(DeviceEventPublisher.class));
         AdminAuditService auditService = mock(AdminAuditService.class);
 
         DeviceAdminController controller = new DeviceAdminController(
@@ -54,7 +58,10 @@ class DeviceAdminControllerTest {
                 new ObjectMapper(),
                 registry,
                 auditService,
-                mock(OfflineBundleService.class));
+                mock(OfflineBundleService.class),
+                mock(BoardService.class),
+                mock(ContentChangeNotifier.class),
+                mock(SetupFileService.class));
 
         UUID deviceId = UUID.randomUUID();
         Device device = Device.builder()
@@ -99,9 +106,12 @@ class DeviceAdminControllerTest {
                 mock(DeviceCommandRepository.class),
                 mock(CommandDispatcher.class),
                 new ObjectMapper(),
-                new AgentSessionRegistry(),
+                new AgentSessionRegistry(mock(DeviceEventPublisher.class)),
                 auditService,
-                mock(OfflineBundleService.class));
+                mock(OfflineBundleService.class),
+                mock(BoardService.class),
+                mock(ContentChangeNotifier.class),
+                mock(SetupFileService.class));
 
         UUID deviceId = UUID.randomUUID();
         Instant revokedAt = Instant.now().minusSeconds(3600);

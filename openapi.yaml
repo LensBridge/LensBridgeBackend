@@ -493,11 +493,46 @@ paths:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
           description: Request failed; body carries a human-readable message
-      summary: List every enrolled board device
+      summary: "List every board, connected or not"
+      tags:
+      - device-admin-controller
+    post:
+      description: "Creates the board before it is ever switched on, with no device\
+        \ key. Its config, content packages and setup file work at once; it gets a\
+        \ key only if it later claims online. Requires board:device:enroll."
+      operationId: createDevice
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDeviceRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceSummary"
+          description: Board created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: "Missing name or audience, or an unusable location"
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      summary: Add a board
       tags:
       - device-admin-controller
   /api/admin/board/devices/enrollment-tokens:
     post:
+      description: "The token creates a new device when used. To enroll a board already\
+        \ added in the console, use POST /api/admin/board/devices/{deviceId}/enrollment-tokens."
       operationId: issueEnrollmentToken
       requestBody:
         content:
@@ -518,7 +553,29 @@ paths:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
           description: Request failed; body carries a human-readable message
-      summary: Mint a one-time token a new device can exchange for an identity
+      summary: Mint a one-time token that enrolls a new device over SSH (legacy)
+      tags:
+      - device-admin-controller
+  /api/admin/board/devices/setup-defaults:
+    get:
+      description: "onlineSetup: whether setup files and USB kits are online ones\
+        \ by default, which is whenever the server has a backend URL for boards. The\
+        \ console starts its Online setup box from it."
+      operationId: getSetupDefaults
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SetupDefaultsResponse"
+          description: OK
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      summary: How setup files are made when the console does not say
       tags:
       - device-admin-controller
   /api/admin/board/devices/{deviceId}:
@@ -574,15 +631,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeviceSummary"
-          description: OK
+          description: Device updated
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Blank or over-long displayName
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: No device with that id
         default:
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
           description: Request failed; body carries a human-readable message
+      summary: Rename a board or change its audience
       tags:
-      - board-admin-controller
+      - device-admin-controller
   /api/admin/board/devices/{deviceId}/commands:
     get:
       operationId: listDeviceCommands
@@ -614,7 +684,12 @@ paths:
     post:
       description: "Returns as soon as the command is queued; delivery and execution\
         \ are reported asynchronously over the agent websocket. The permission required\
-        \ depends on the command kind: board:command:benign, :disruptive, or :inspect."
+        \ depends on the command kind: board:command:benign, :disruptive, or :inspect.\
+        \ ttlSeconds is capped per kind (10 minutes for kiosk.restart, system.reboot\
+        \ and update.install_now; 15 for chrome.screenshot and logs.tail; an hour\
+        \ for chrome.reload and config.refresh), deadlineMs at 15 minutes. Only logs.tail\
+        \ takes a payload, {\"lines\": 1..500}; for the others it must be absent,\
+        \ null or {}."
       operationId: issueDeviceCommand
       parameters:
       - in: path
@@ -636,6 +711,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/CommandIssuedResponse"
           description: Command accepted and queued for delivery
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: "Unknown kind, a payload the kind does not take, or a deadline\
+            \ or time-to-live over its limit"
         "403":
           content:
             application/json:
@@ -649,6 +731,55 @@ paths:
                 $ref: "#/components/schemas/MessageResponse"
           description: Request failed; body carries a human-readable message
       summary: Queue a command for a device
+      tags:
+      - device-admin-controller
+  /api/admin/board/devices/{deviceId}/enrollment-tokens:
+    post:
+      description: "For musallahboard-agent enroll --token on the board. The token\
+        \ binds the board's key to this device, replacing any key it had (for example\
+        \ after an SD card swap). Boards set up with an online setup file claim by\
+        \ themselves and need no token."
+      operationId: issueDeviceEnrollmentToken
+      parameters:
+      - in: path
+        name: deviceId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - description: "Lifetime of the token in minutes (1-1440, default 30)"
+        in: query
+        name: expiresInMinutes
+        required: false
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssueEnrollmentTokenResponse"
+          description: Token issued; the plaintext is returned exactly once
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: No device with that id
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Device is revoked
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      summary: Mint a one-time token that enrolls this board over SSH (maintainers)
       tags:
       - device-admin-controller
   /api/admin/board/devices/{deviceId}/offline-bundle:
@@ -674,7 +805,7 @@ paths:
           type: integer
           format: int32
           default: 14
-          maximum: 31
+          maximum: 92
           minimum: 1
       responses:
         "200":
@@ -686,16 +817,17 @@ paths:
           description: The package
           headers:
             Content-Disposition:
-              description: "attachment; filename=\"musallahboard-content-<first 8 chars\
-                \ of deviceId>-<firstDay>.mbu\""
+              description: attachment; filename="musallahboard-content-<first 8 chars
+                of deviceId>-<firstDay>.mbu"
               schema:
                 type: string
+              style: simple
         "400":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
-          description: days outside 1-31
+          description: days outside 1-92
         "404":
           content:
             application/json:
@@ -713,7 +845,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
-          description: A poster image could not be fetched; the message names the poster
+          description: A poster image could not be fetched; the message names the
+            poster
         "503":
           content:
             application/json:
@@ -763,6 +896,172 @@ paths:
       summary: Revoke a device's enrollment
       tags:
       - device-admin-controller
+  /api/admin/board/devices/{deviceId}/setup-file:
+    get:
+      description: "A signed .mbu provision package (provision.json: deviceId, displayName,\
+        \ sequence, issuedAt and, with online=true, backendUrl and a claimSecret).\
+        \ Plugged into a fresh board on a USB stick, it makes the board this one.\
+        \ Every download has a newer sequence; an online one also replaces the claim\
+        \ secret, so earlier online files can no longer claim the board. Requires\
+        \ board:device:enroll."
+      operationId: downloadSetupFile
+      parameters:
+      - in: path
+        name: deviceId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - description: "Include the backend URL and a new claim secret, for a board\
+          \ that will be online. Default: online whenever the server has a backend\
+          \ URL for boards (getSetupDefaults), else offline-only."
+        in: query
+        name: online
+        required: false
+        schema:
+          type: boolean
+      responses:
+        "200":
+          content:
+            application/vnd.musallahboard.mbu:
+              schema:
+                type: string
+                format: binary
+          description: The setup file
+          headers:
+            Content-Disposition:
+              description: attachment; filename="musallahboard-setup-<first 8 chars
+                of deviceId>.mbu"
+              schema:
+                type: string
+              style: simple
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: No device with that id
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Device is revoked
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: "No content signing key, or (online) no backend URL, is configured\
+            \ on the server"
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      summary: Download a board's setup file
+      tags:
+      - device-admin-controller
+  /api/admin/board/devices/{deviceId}/usb-kit:
+    get:
+      description: "A zip holding one folder, MusallahBoard/, with content-<id8>.mbu,\
+        \ setup-<id8>.mbu (includeSetup=true; online=true adds the backend URL and\
+        \ a new claim secret), and the latest board app and arm64 agent packages from\
+        \ their GitHub release channels. When a channel cannot be reached the kit\
+        \ goes without that package and the X-Usb-Kit-Omitted header says why. Requires\
+        \ board:device:read, and board:device:enroll with includeSetup."
+      operationId: downloadUsbKit
+      parameters:
+      - in: path
+        name: deviceId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - description: "Days of content, starting today in each board's timezone"
+        in: query
+        name: days
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 14
+          maximum: 92
+          minimum: 1
+      - description: Include the board's setup file
+        in: query
+        name: includeSetup
+        required: false
+        schema:
+          type: boolean
+          default: false
+      - description: "Make the setup file an online one (backend URL and a new claim\
+          \ secret). Default: online whenever the server has a backend URL for boards"
+        in: query
+        name: online
+        required: false
+        schema:
+          type: boolean
+      responses:
+        "200":
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+          description: The kit
+          headers:
+            Content-Disposition:
+              description: attachment; filename="musallahboard-usb-kit-<id8>-<date>.zip"
+              schema:
+                type: string
+              style: simple
+            X-Usb-Kit-Omitted:
+              description: "Present when the kit is missing the app or agent package:\
+                \ what, and why"
+              schema:
+                type: string
+              style: simple
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: days outside 1-92
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: No device with that id
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Device is revoked
+        "502":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: A poster image could not be fetched
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: "No content signing key (or, online, no backend URL) is configured"
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      summary: Download a USB kit for one board
+      tags:
+      - usb-kit-controller
   /api/admin/board/events:
     get:
       operationId: getBoardEvents
@@ -1107,7 +1406,7 @@ paths:
       - board-admin-controller
   /api/admin/board/refresh:
     post:
-      operationId: refreshSignboard
+      operationId: refreshBoards
       responses:
         "200":
           content:
@@ -1121,6 +1420,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
           description: Request failed; body carries a human-readable message
+      summary: Ask every connected board to sync its content now
       tags:
       - board-admin-controller
   /api/admin/board/socials:
@@ -1275,6 +1575,90 @@ paths:
           description: Request failed; body carries a human-readable message
       tags:
       - board-admin-controller
+  /api/admin/board/usb-kit:
+    get:
+      description: "As the one-board kit, with the files of every board that is not\
+        \ revoked. One stick then updates any of them: each board keeps only its own\
+        \ files."
+      operationId: downloadAllBoardsUsbKit
+      parameters:
+      - description: "Days of content, starting today in each board's timezone"
+        in: query
+        name: days
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 14
+          maximum: 92
+          minimum: 1
+      - description: Include every board's setup file
+        in: query
+        name: includeSetup
+        required: false
+        schema:
+          type: boolean
+          default: false
+      - description: "Make the setup files online ones (backend URL and new claim\
+          \ secrets). Default: online whenever the server has a backend URL for boards"
+        in: query
+        name: online
+        required: false
+        schema:
+          type: boolean
+      responses:
+        "200":
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+          description: The kit
+          headers:
+            Content-Disposition:
+              description: attachment; filename="musallahboard-usb-kit-all-<date>.zip"
+              schema:
+                type: string
+              style: simple
+            X-Usb-Kit-Omitted:
+              description: "Present when the kit is missing the app or agent package:\
+                \ what, and why"
+              schema:
+                type: string
+              style: simple
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: days outside 1-92
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: There are no boards
+        "502":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: A poster image could not be fetched
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: "No content signing key (or, online, no backend URL) is configured"
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      summary: Download a USB kit for every board
+      tags:
+      - usb-kit-controller
   /api/admin/board/weekly-content:
     get:
       operationId: getAllWeeklyContent
@@ -2112,6 +2496,54 @@ paths:
           description: Request failed; body carries a human-readable message
       tags:
       - admin-controller
+  /api/agent/claim:
+    post:
+      description: "proof is base64url(HMAC-SHA256(key = the setup file's claimSecret\
+        \ bytes, msg = deviceId + \"\\n\" + publicKey)), with the lowercase deviceId\
+        \ and the publicKey string exactly as sent. Idempotent: claiming again with\
+        \ the same key succeeds. The response is the same as enrollment's."
+      operationId: claimAgent
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentClaimRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentEnrollResponse"
+          description: Key bound (or already bound to this key)
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: "Malformed body, public key or proof"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: "Unknown or revoked device, no online setup file issued for\
+            \ it, or a wrong proof (a setup file older than the latest online one)"
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: The device is already bound to a different key
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+          description: Request failed; body carries a human-readable message
+      summary: Bind a board's device key to its pre-created device (online setup file)
+      tags:
+      - agent-enrollment-controller
   /api/agent/content-bundle:
     post:
       description: "Device-authenticated with the X-MB-* headers (Ed25519 signature\
@@ -2135,7 +2567,8 @@ paths:
         schema:
           type: integer
           format: int64
-      - description: Base64 Ed25519 signature by the device key
+      - description: "Base64 Ed25519 signature by the device key over musallahboard-http-v1,\
+          \ the method, path, device id, timestamp and the body's SHA-256"
         in: header
         name: X-MB-Signature
         required: true
@@ -2156,16 +2589,17 @@ paths:
           description: The signed content package
           headers:
             Content-Disposition:
-              description: "attachment; filename=\"musallahboard-content-<first 8 chars\
-                \ of deviceId>-<firstDay>.mbu\""
+              description: attachment; filename="musallahboard-content-<first 8 chars
+                of deviceId>-<firstDay>.mbu"
               schema:
                 type: string
+              style: simple
         "400":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
-          description: "Malformed body, days outside 1-31, or a bad haveMedia entry"
+          description: "Malformed body, days outside 1-92, or a bad haveMedia entry"
         "401":
           content:
             application/json:
@@ -2178,7 +2612,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
-          description: A poster image could not be fetched; the message names the poster
+          description: A poster image could not be fetched; the message names the
+            poster
         "503":
           content:
             application/json:
@@ -2264,7 +2699,9 @@ paths:
       description: "Device-authenticated with the X-MB-* headers, like the content\
         \ bundle; the signed body hash is the SHA-256 of the empty string. `weather`\
         \ is the OpenWeatherMap current weather JSON exactly as the server last fetched\
-        \ it, or null when the server has none. `fetchedAt` is when the server answered."
+        \ it, or null when the server has none or its last fetch is over 3 hours old.\
+        \ `fetchedAt` is when the server fetched that weather (when `weather` is null,\
+        \ when it answered)."
       operationId: getAgentWeather
       parameters:
       - description: Enrolled device id
@@ -2281,7 +2718,8 @@ paths:
         schema:
           type: integer
           format: int64
-      - description: Base64 Ed25519 signature by the device key
+      - description: "Base64 Ed25519 signature by the device key over musallahboard-http-v1,\
+          \ the method, path, device id, timestamp and the body's SHA-256"
         in: header
         name: X-MB-Signature
         required: true
@@ -2799,154 +3237,6 @@ paths:
           description: Request failed; body carries a human-readable message
       tags:
       - gallery-controller
-  /api/musallah/config:
-    get:
-      operationId: getPublicBoardConfig
-      parameters:
-      - in: query
-        name: deviceId
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/DeviceConfig"
-          description: OK
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: Request failed; body carries a human-readable message
-      summary: Fetch the config a kiosk should render
-      tags:
-      - musallah-board-controller
-  /api/musallah/events:
-    get:
-      operationId: getUpcomingEvents
-      parameters:
-      - in: query
-        name: audience
-        required: true
-        schema:
-          type: string
-          enum:
-          - brothers
-          - sisters
-          - both
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/BoardEvent"
-          description: OK
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: Request failed; body carries a human-readable message
-      tags:
-      - musallah-board-controller
-  /api/musallah/events/range:
-    get:
-      operationId: getEventsInRange
-      parameters:
-      - in: query
-        name: audience
-        required: true
-        schema:
-          type: string
-          enum:
-          - brothers
-          - sisters
-          - both
-      - in: query
-        name: start
-        required: true
-        schema:
-          type: string
-          format: date-time
-      - in: query
-        name: end
-        required: true
-        schema:
-          type: string
-          format: date-time
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/BoardEvent"
-          description: OK
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: Request failed; body carries a human-readable message
-      tags:
-      - musallah-board-controller
-  /api/musallah/weekly-content:
-    get:
-      operationId: getCurrentWeeklyContent
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/WeeklyContent"
-          description: OK
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: Request failed; body carries a human-readable message
-      tags:
-      - musallah-board-controller
-  /api/musallah/weekly-content/{year}/{weekNumber}:
-    get:
-      operationId: getPublicWeeklyContent
-      parameters:
-      - in: path
-        name: year
-        required: true
-        schema:
-          type: integer
-          format: int32
-      - in: path
-        name: weekNumber
-        required: true
-        schema:
-          type: integer
-          format: int32
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/WeeklyContent"
-          description: OK
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-          description: Request failed; body carries a human-readable message
-      summary: Fetch weekly content for a kiosk
-      tags:
-      - musallah-board-controller
   /api/upload/event/{eventId}:
     get:
       operationId: getUploadsByEvent
@@ -3035,6 +3325,8 @@ paths:
         required: true
         schema:
           type: string
+          maxLength: 255
+          minLength: 0
       - in: query
         name: contentType
         required: true
@@ -3046,16 +3338,21 @@ paths:
         schema:
           type: integer
           format: int64
+          exclusiveMinimum: 0
       - in: query
         name: instagramHandle
         required: false
         schema:
           type: string
+          maxLength: 255
+          minLength: 0
       - in: query
         name: description
         required: false
         schema:
           type: string
+          maxLength: 255
+          minLength: 0
       - in: query
         name: anon
         required: false
@@ -3067,6 +3364,7 @@ paths:
         required: true
         schema:
           type: string
+          pattern: "^[0-9a-fA-F]{64}$"
       responses:
         "200":
           content:
@@ -3097,6 +3395,8 @@ paths:
         required: true
         schema:
           type: string
+          maxLength: 255
+          minLength: 0
       - in: query
         name: contentType
         required: true
@@ -3108,11 +3408,13 @@ paths:
         schema:
           type: integer
           format: int64
+          exclusiveMinimum: 0
       - in: query
         name: expectedSha256
         required: true
         schema:
           type: string
+          pattern: "^[0-9a-fA-F]{64}$"
       responses:
         "200":
           content:
@@ -3348,15 +3650,46 @@ components:
               $ref: "#/components/schemas/DayBucket"
           heading:
             type: string
+    AgentClaimRequest:
+      type: object
+      properties:
+        agentVersion:
+          type: string
+          maxLength: 255
+          minLength: 0
+        deviceId:
+          type: string
+          format: uuid
+        hostname:
+          type: string
+          maxLength: 255
+          minLength: 0
+        proof:
+          type: string
+          maxLength: 64
+          minLength: 0
+        publicKey:
+          type: string
+          maxLength: 64
+          minLength: 0
+      required:
+      - deviceId
+      - proof
+      - publicKey
     AgentEnrollRequest:
       type: object
       properties:
         agentVersion:
           type: string
+          maxLength: 255
+          minLength: 0
         hardwareModel:
           type: string
+          maxLength: 255
+          minLength: 0
         hostname:
           type: string
+          maxLength: 255
           minLength: 1
         publicKey:
           type: string
@@ -3370,13 +3703,11 @@ components:
       - token
     AgentEnrollResponse:
       type: object
-      required:
-        - contentSigningKeys
       properties:
         contentSigningKeys:
           type: array
-          description: "Public content signing keys the agent pins at enrollment. Always\
-            \ present; empty when the server has no content key configured."
+          description: Public content signing keys the agent pins at enrollment. Always
+            present; empty when the server has no content key configured.
           items:
             $ref: "#/components/schemas/SigningKeyView"
         deviceId:
@@ -3384,12 +3715,29 @@ components:
           format: uuid
         websocketUrl:
           type: string
+      required:
+      - contentSigningKeys
+    AgentUpdate:
+      type: object
+      properties:
+        at:
+          type: string
+        from:
+          type: string
+        message:
+          type: string
+        status:
+          type: string
+        to:
+          type: string
     AgentWeatherResponse:
       type: object
       properties:
         fetchedAt:
           type: string
           format: date-time
+          description: "When the server fetched the weather from OpenWeatherMap; when\
+            \ weather is null, when the server answered"
           example: 2026-09-24T14:05:00Z
         weather:
           $ref: "#/components/schemas/JsonNode"
@@ -3502,6 +3850,27 @@ components:
         startTime:
           type: string
           format: date-time
+    BoardReport:
+      type: object
+      properties:
+        appVersion:
+          type: string
+        clock:
+          $ref: "#/components/schemas/Clock"
+        content:
+          $ref: "#/components/schemas/Content"
+        error:
+          type: string
+        lastAgentUpdate:
+          $ref: "#/components/schemas/AgentUpdate"
+        servicePort:
+          type: boolean
+        syncError:
+          type: string
+        updates:
+          $ref: "#/components/schemas/Updates"
+        usbImport:
+          type: boolean
     ChangePasswordRequest:
       type: object
       properties:
@@ -3516,6 +3885,13 @@ components:
       required:
       - currentPassword
       - newPassword
+    Clock:
+      type: object
+      properties:
+        source:
+          type: string
+        trusted:
+          type: boolean
     CommandIssuedResponse:
       type: object
       properties:
@@ -3597,6 +3973,27 @@ components:
           - TIMEOUT
           - REJECTED
           - EXPIRED
+    Content:
+      type: object
+      properties:
+        createdAt:
+          type: string
+        daysRemaining:
+          type: integer
+          format: int32
+        firstDay:
+          type: string
+        installedAt:
+          type: string
+        lastDay:
+          type: string
+        source:
+          type: string
+        staleDays:
+          type: integer
+          format: int32
+        timezone:
+          type: string
     ContentBundleRequest:
       type: object
       properties:
@@ -3604,7 +4001,7 @@ components:
           type: integer
           format: int32
           default: 7
-          maximum: 31
+          maximum: 92
           minimum: 1
         haveMedia:
           type: array
@@ -3612,6 +4009,7 @@ components:
             type: string
             pattern: "^[0-9a-f]{64}$"
           maxItems: 2000
+          minItems: 0
     CreateCalendarEventRequest:
       type: object
       properties:
@@ -3632,9 +4030,10 @@ components:
         location:
           type: string
           maxLength: 255
-          minLength: 0
+          minLength: 1
         name:
           type: string
+          maxLength: 255
           minLength: 1
         startEpochMs:
           type: integer
@@ -3646,6 +4045,24 @@ components:
       - location
       - name
       - startEpochMs
+    CreateDeviceRequest:
+      type: object
+      properties:
+        audience:
+          type: string
+          enum:
+          - brothers
+          - sisters
+          - both
+        displayName:
+          type: string
+          maxLength: 255
+          minLength: 0
+        location:
+          $ref: "#/components/schemas/Location"
+      required:
+      - audience
+      - displayName
     CreatePosterRequest:
       type: object
       properties:
@@ -3667,12 +4084,15 @@ components:
           format: binary
         signupUrl:
           type: string
+          maxLength: 255
+          minLength: 0
           pattern: ""
         startTime:
           type: string
           format: date-time
         title:
           type: string
+          maxLength: 255
           minLength: 1
       required:
       - audience
@@ -3695,17 +4115,23 @@ components:
           minimum: 0
         footerText:
           type: string
+          maxLength: 1000
           minLength: 1
         handle:
           type: string
+          maxLength: 255
+          minLength: 0
         headerText:
           type: string
+          maxLength: 1000
           minLength: 1
         heroText:
           type: string
+          maxLength: 1000
           minLength: 1
         name:
           type: string
+          maxLength: 255
           minLength: 1
         type:
           type: string
@@ -3717,6 +4143,7 @@ components:
           - other
         url:
           type: string
+          maxLength: 255
           minLength: 1
           pattern: ""
       required:
@@ -3793,6 +4220,8 @@ components:
           type: array
           items:
             type: string
+            maxLength: 4000
+            minLength: 0
     DeviceSummary:
       type: object
       properties:
@@ -3804,6 +4233,11 @@ components:
           - brothers
           - sisters
           - both
+        board:
+          $ref: "#/components/schemas/BoardReport"
+        boardReportAt:
+          type: string
+          format: date-time
         displayName:
           type: string
         enrolledAt:
@@ -3946,6 +4380,7 @@ components:
         deadlineMs:
           type: integer
           format: int32
+          maximum: 900000
           minimum: 0
         kind:
           type: string
@@ -3956,6 +4391,7 @@ components:
         ttlSeconds:
           type: integer
           format: int32
+          maximum: 3600
           minimum: 0
       required:
       - kind
@@ -3970,6 +4406,7 @@ components:
           - both
         displayName:
           type: string
+          maxLength: 255
           minLength: 1
         expiresInMinutes:
           type: integer
@@ -4016,10 +4453,14 @@ components:
       properties:
         khatib:
           type: string
+          maxLength: 255
+          minLength: 0
         prayerTime:
           type: string
         room:
           type: string
+          maxLength: 255
+          minLength: 0
     JwtResponse:
       type: object
       properties:
@@ -4435,6 +4876,8 @@ components:
       properties:
         arabic:
           type: string
+          maxLength: 4000
+          minLength: 0
         durationSeconds:
           type: integer
           format: int32
@@ -4447,10 +4890,16 @@ components:
           - HADITH
         reference:
           type: string
+          maxLength: 1000
+          minLength: 0
         translation:
           type: string
+          maxLength: 4000
+          minLength: 0
         transliteration:
           type: string
+          maxLength: 4000
+          minLength: 0
     ResetPasswordRequest:
       type: object
       properties:
@@ -4475,6 +4924,13 @@ components:
           type: array
           items:
             type: string
+    SetupDefaultsResponse:
+      type: object
+      properties:
+        onlineSetup:
+          type: boolean
+      required:
+      - onlineSetup
     SigningKeyView:
       type: object
       properties:
@@ -4578,6 +5034,15 @@ components:
           type: boolean
         verified:
           type: boolean
+    Update:
+      type: object
+      properties:
+        description:
+          type: string
+        type:
+          type: string
+        version:
+          type: string
     UpdateBoardConfigRequest:
       type: object
       properties:
@@ -4601,6 +5066,8 @@ components:
           type: array
           items:
             type: string
+            maxLength: 4000
+            minLength: 0
     UpdateCalendarEventRequest:
       type: object
       properties:
@@ -4619,8 +5086,12 @@ components:
           format: date-time
         location:
           type: string
+          maxLength: 255
+          minLength: 0
         name:
           type: string
+          maxLength: 255
+          minLength: 0
         startTime:
           type: string
           format: date-time
@@ -4656,11 +5127,15 @@ components:
           format: date-time
         signupUrl:
           type: string
+          maxLength: 255
+          minLength: 0
         startTime:
           type: string
           format: date-time
         title:
           type: string
+          maxLength: 255
+          minLength: 0
     UpdateProfileRequest:
       type: object
       properties:
@@ -4693,14 +5168,24 @@ components:
           minimum: 0
         footerText:
           type: string
+          maxLength: 1000
+          minLength: 0
         handle:
           type: string
+          maxLength: 255
+          minLength: 0
         headerText:
           type: string
+          maxLength: 1000
+          minLength: 0
         heroText:
           type: string
+          maxLength: 1000
+          minLength: 0
         name:
           type: string
+          maxLength: 255
+          minLength: 0
         type:
           type: string
           enum:
@@ -4711,6 +5196,8 @@ components:
           - other
         url:
           type: string
+          maxLength: 255
+          minLength: 0
           pattern: ""
     UpdateTickerRequest:
       type: object
@@ -4721,6 +5208,27 @@ components:
           type: array
           items:
             type: string
+            maxLength: 4000
+            minLength: 0
+    Updates:
+      type: object
+      properties:
+        autoUpdate:
+          type: boolean
+        available:
+          type: array
+          items:
+            $ref: "#/components/schemas/Update"
+        installAt:
+          type: string
+        installTime:
+          type: string
+        installing:
+          type: boolean
+        lastCheckAt:
+          type: string
+        lastCheckError:
+          type: string
     UploadCompletionResponse:
       type: object
       properties:

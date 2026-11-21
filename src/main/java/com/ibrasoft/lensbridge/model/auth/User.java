@@ -28,7 +28,9 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 @AllArgsConstructor
 @NoArgsConstructor
@@ -60,17 +62,24 @@ public class User {
   @Column(nullable = false, unique = true)
   private String email;
 
+  // Kept out of toString so the hash cannot reach a log line through a stray "{}" of a User.
+  @ToString.Exclude
   @NotBlank
   @JsonIgnore
   @Column(nullable = false)
   private String passwordHash;
 
+  @ToString.Exclude
   @ElementCollection(targetClass = Role.class, fetch = FetchType.EAGER)
   @Enumerated(EnumType.STRING)
   @CollectionTable(name = "user_roles")
   @Column(name = "role", nullable = false)
   private Set<Role> roles = new HashSet<>();
   
+  // LAZY: touching it from toString/equals/hashCode on a detached entity throws
+  // LazyInitializationException (and issues a query on an attached one), so all three skip it.
+  @ToString.Exclude
+  @EqualsAndHashCode.Exclude
   @ElementCollection(targetClass = Permission.class, fetch = FetchType.LAZY)
   @Enumerated(EnumType.STRING)
   @CollectionTable(name = "user_permissions", joinColumns = @JoinColumn(name = "user_id"))

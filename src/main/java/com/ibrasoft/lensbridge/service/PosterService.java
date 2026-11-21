@@ -4,7 +4,7 @@ import com.ibrasoft.lensbridge.dto.board.request.CreatePosterRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdatePosterRequest;
 import com.ibrasoft.lensbridge.dto.upload.response.ErrorResponse;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
-import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
+import com.ibrasoft.lensbridge.service.agent.ContentChangeNotifier;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.Poster;
 import java.time.Instant;
@@ -28,7 +28,7 @@ public class PosterService {
 
     private final PosterRepository posterRepository;
     private final R2StorageService r2StorageService;
-    private final BoardStreamHandler boardStream;
+    private final ContentChangeNotifier contentChanges;
 
     @Value("${cloudflare.r2.public-url}")
     private String publicUrl;
@@ -67,13 +67,6 @@ public class PosterService {
     }
 
     /**
-     * Get all active posters (currently within their viewing window).
-     */
-    public List<Poster> getActivePosters() {
-        return posterRepository.findActivePostersAt(Instant.now());
-    }
-
-    /**
      * Create a new poster with an uploaded image.
      */
     public Poster createPoster(CreatePosterRequest request) {
@@ -105,7 +98,7 @@ public class PosterService {
 
         poster = posterRepository.save(poster);
         log.info("Created poster: id={}, title={}", poster.getId(), poster.getTitle());
-        boardStream.contentChanged("posters");
+        contentChanges.contentChanged("posters");
 
         return poster;
     }
@@ -137,7 +130,7 @@ public class PosterService {
 
         poster = posterRepository.save(poster);
         log.info("Updated poster: id={}", posterId);
-        boardStream.contentChanged("posters");
+        contentChanges.contentChanged("posters");
 
         return poster;
     }
@@ -153,15 +146,8 @@ public class PosterService {
 
         validateImageFile(imageFile);
 
-        // Delete old image from R2 if exists
-        if (poster.getImage() != null && !poster.getImage().isBlank()) {
-            try {
-                r2StorageService.deleteObject(poster.getImage());
-                log.info("Deleted old poster image: {}", poster.getImage());
-            } catch (Exception e) {
-                log.warn("Failed to delete old poster image: {}", poster.getImage(), e);
-            }
-        }
+        // Remember the old image so it can be removed once the new one is safely stored.
+        String oldImage = poster.getImage();
 
         // Upload new image
         String objectKey;
@@ -179,7 +165,11 @@ public class PosterService {
         poster.setImage(publicUrl + "/" + objectKey);
         poster = posterRepository.save(poster);
         log.info("Updated poster image: id={}", posterId);
-        boardStream.contentChanged("posters");
+
+        // Delete the old object last: if the upload or the save above fails the poster
+        // still points at an image that exists. A failed delete only leaks an object.
+        deleteStoredImage(oldImage);
+        contentChanges.contentChanged("posters");
 
         return poster;
     }
@@ -193,22 +183,36 @@ public class PosterService {
                         HttpStatus.NOT_FOUND,
                         ErrorResponse.of("Poster not found with id: " + posterId)));
 
-        // Delete image from R2 if exists
-        if (poster.getImage() != null && !poster.getImage().isBlank()) {
-            try {
-                r2StorageService.deleteObject(poster.getImage());
-                log.info("Deleted poster image: {}", poster.getImage());
-            } catch (Exception e) {
-                log.warn("Failed to delete poster image: {}", poster.getImage(), e);
-            }
-        }
+        deleteStoredImage(poster.getImage());
 
         posterRepository.delete(poster);
         log.info("Deleted poster: id={}", posterId);
-        boardStream.contentChanged("posters");
+        contentChanges.contentChanged("posters");
     }
 
     // ==================== Helper Methods ====================
+
+    /**
+     * Best-effort removal of a poster image from R2. {@code image} is stored as the full
+     * public URL, but R2 deletes by object key, so the URL has to be converted first
+     * (passing the URL deletes nothing and leaks the object).
+     */
+    private void deleteStoredImage(String image) {
+        if (image == null || image.isBlank()) {
+            return;
+        }
+        try {
+            String objectKey = r2StorageService.objectKeyFromPublicUrl(image);
+            if (objectKey == null || objectKey.isBlank()) {
+                log.warn("Could not derive an object key from poster image: {}", image);
+                return;
+            }
+            r2StorageService.deleteObject(objectKey);
+            log.info("Deleted poster image: {}", objectKey);
+        } catch (Exception e) {
+            log.warn("Failed to delete poster image: {}", image, e);
+        }
+    }
 
     private String generatePosterFilename(String originalFilename) {
         String extension = "";

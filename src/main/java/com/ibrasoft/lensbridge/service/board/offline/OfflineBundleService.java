@@ -1,7 +1,5 @@
 package com.ibrasoft.lensbridge.service.board.offline;
 
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ibrasoft.lensbridge.dto.board.response.MusallahBoardPayload;
 import com.ibrasoft.lensbridge.dto.upload.response.ErrorResponse;
@@ -17,16 +15,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Base64;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -54,9 +48,7 @@ import java.util.UUID;
  * plus a handful of posters (10 MB cap each), and building first is the only way a failed
  * image download can still become a 502 rather than a truncated download.
  * <p>
- * Signing: the manifest is serialized exactly once. Those bytes are signed and those same
- * bytes are stored as {@code mbu.json}; the signature covers
- * {@value ContentSigningService#MBU_SIGNATURE_PREFIX} followed by them, and nothing else.
+ * Signing and the zip layout are {@link MbuPackager}'s, shared with the setup file.
  */
 @Service
 @Slf4j
@@ -69,13 +61,11 @@ public class OfflineBundleService {
      * {@link com.ibrasoft.lensbridge.dto.board.request.ContentBundleRequest#DEFAULT_DAYS}).
      */
     public static final int DEFAULT_DAYS = 14;
-    public static final int MAX_DAYS = 31;
+    public static final int MAX_DAYS = 92;
 
     /** Media type of a {@code .mbu} package. */
     public static final String MBU_CONTENT_TYPE = "application/vnd.musallahboard.mbu";
 
-    private static final String MANIFEST_ENTRY = "mbu.json";
-    private static final String SIGNATURE_ENTRY = "mbu.sig";
     private static final String MEDIA_DIR = "media/";
     private static final String PAYLOAD_DIR = "payloads/";
 
@@ -114,6 +104,7 @@ public class OfflineBundleService {
      */
     private final ObjectMapper objectMapper;
     private final ContentSigningService signingService;
+    private final MbuPackager packager;
     private final Clock clock;
     /** Lets a sync in which the board already holds every poster skip downloading them. */
     private final MediaMetadataCache mediaMetadataCache;
@@ -139,6 +130,7 @@ public class OfflineBundleService {
         this.r2StorageService = r2StorageService;
         this.objectMapper = objectMapper;
         this.signingService = signingService;
+        this.packager = new MbuPackager(objectMapper, signingService);
         this.clock = clock;
         this.mediaMetadataCache = new MediaMetadataCache(clock);
     }
@@ -210,10 +202,10 @@ public class OfflineBundleService {
 
         // Payload bytes first: the manifest lists their hashes.
         Map<String, byte[]> payloadFiles = new LinkedHashMap<>();
-        payloads.forEach((day, payload) -> payloadFiles.put(PAYLOAD_DIR + day + ".json", toJson(payload)));
+        payloads.forEach((day, payload) -> payloadFiles.put(PAYLOAD_DIR + day + ".json", packager.toJson(payload)));
 
         List<MbuManifest.FileEntry> files = new ArrayList<>();
-        payloadFiles.forEach((path, bytes) -> files.add(new MbuManifest.FileEntry(path, sha256Hex(bytes), bytes.length)));
+        payloadFiles.forEach((path, bytes) -> files.add(MbuPackager.fileEntry(path, bytes)));
         List<MbuManifest.MediaEntry> mediaEntries = new ArrayList<>();
         for (MediaFile m : mediaByHash.values()) {
             files.add(new MbuManifest.FileEntry(m.path(), m.sha256(), m.bytes()));
@@ -231,15 +223,7 @@ public class OfflineBundleService {
                 files,
                 new MbuManifest.Content(zone.getId(), firstDay.toString(), lastDay.toString(), mediaEntries));
 
-        // Serialize once; sign these bytes; store these same bytes.
-        byte[] manifestBytes = toJson(manifest);
-        byte[] signature = signingService.signManifest(manifestBytes);
-        byte[] signatureFile = toJson(new SignatureFile(List.of(
-                new SignatureEntry(signingService.currentKeyId(), Base64.getEncoder().encodeToString(signature)))));
-
         List<OfflineBundle.Entry> entries = new ArrayList<>();
-        entries.add(new OfflineBundle.Entry(MANIFEST_ENTRY, manifestBytes, false));
-        entries.add(new OfflineBundle.Entry(SIGNATURE_ENTRY, signatureFile, false));
         payloadFiles.forEach((path, bytes) -> entries.add(new OfflineBundle.Entry(path, bytes, false)));
         int omitted = 0;
         for (MediaFile media : mediaByHash.values()) {
@@ -254,14 +238,8 @@ public class OfflineBundleService {
                 manifest.sequence(), deviceId, firstDay, lastDay, mediaByHash.size(), omitted);
 
         String filename = "musallahboard-content-" + deviceId.toString().substring(0, 8) + "-" + firstDay + ".mbu";
-        return new OfflineBundle(filename, entries);
+        return packager.pack(filename, manifest, entries);
     }
-
-    /** {@code mbu.sig}: {@code {"signatures":[{"keyId","sig"}]}}. */
-    private record SignatureFile(List<SignatureEntry> signatures) {}
-
-    @JsonPropertyOrder({"keyId", "sig"})
-    private record SignatureEntry(String keyId, String sig) {}
 
     // ==================== Media ====================
 
@@ -333,7 +311,7 @@ public class OfflineBundleService {
             throw imageFailure(poster, "its image is empty");
         }
 
-        String sha256 = sha256Hex(object.bytes());
+        String sha256 = MbuPackager.sha256Hex(object.bytes());
         String keyExtension = extensionOf(objectKey);
         String contentType = normalizeContentType(object.contentType());
         // Trust a stored image type; otherwise (missing, or a generic type such as
@@ -379,22 +357,5 @@ public class OfflineBundleService {
         String ext = objectKey.substring(dot + 1).toLowerCase(Locale.ROOT);
         return ext.length() <= 5 && ext.chars().allMatch(c -> (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'))
                 ? ext : null;
-    }
-
-    private static String sha256Hex(byte[] bytes) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 is mandatory in every JRE", e);
-        }
-    }
-
-    private byte[] toJson(Object value) {
-        try {
-            return objectMapper.writeValueAsBytes(value);
-        } catch (JsonProcessingException e) {
-            throw new ApiResponseException(HttpStatus.INTERNAL_SERVER_ERROR,
-                    ErrorResponse.of("Could not serialize content package: " + e.getOriginalMessage()));
-        }
     }
 }

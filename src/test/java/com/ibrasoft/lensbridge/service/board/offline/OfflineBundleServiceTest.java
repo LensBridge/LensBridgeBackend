@@ -591,15 +591,16 @@ class OfflineBundleServiceTest {
 
     // ==================== Validation ====================
 
+    /** Up to three months between USB visits; the agent's mbu.MaxContentDays is the same 92. */
     @Test
-    void daysOutsideOneToThirtyOneIsA400() {
-        for (int days : new int[]{0, -1, 32}) {
+    void daysOutsideOneToNinetyTwoIsA400() {
+        for (int days : new int[]{0, -1, 93}) {
             assertThatThrownBy(() -> service().build(DEVICE_ID, days))
                     .isInstanceOfSatisfying(ApiResponseException.class,
                             e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST));
         }
-        assertThat(service().build(DEVICE_ID, 31).entries())
-                .filteredOn(e -> e.name().startsWith("payloads/")).hasSize(31);
+        assertThat(service().build(DEVICE_ID, 92).entries())
+                .filteredOn(e -> e.name().startsWith("payloads/")).hasSize(92);
     }
 
     @Test

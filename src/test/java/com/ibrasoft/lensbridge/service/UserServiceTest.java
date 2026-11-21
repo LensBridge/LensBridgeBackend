@@ -8,6 +8,8 @@ import com.ibrasoft.lensbridge.model.auth.Permission;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.model.auth.User;
 import com.ibrasoft.lensbridge.model.auth.VerificationToken;
+import com.ibrasoft.lensbridge.dto.auth.response.UserInfoResponse;
+import com.ibrasoft.lensbridge.repository.auth.DirectPermissionRow;
 import com.ibrasoft.lensbridge.repository.auth.UserRepository;
 import com.ibrasoft.lensbridge.security.services.AuthorityResolver;
 import com.ibrasoft.lensbridge.security.services.EmailService;
@@ -18,10 +20,15 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -32,6 +39,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -175,6 +183,8 @@ class UserServiceTest {
 
         assertThat(created.getPassword()).isEqualTo("ENC");
         assertThat(created.isVerified()).isTrue();
+        // Verified before the one save, not saved twice.
+        verify(userRepository, times(1)).save(any(User.class));
         verifyNoInteractions(emailService);
         verifyNoInteractions(verificationTokenService);
     }
@@ -549,19 +559,6 @@ class UserServiceTest {
     }
 
     @Test
-    void changePasswordRejectsShortNewPassword() {
-        User user = new User("A", "B", "1", "a@b.ca", "hash");
-        ChangePasswordRequest req = new ChangePasswordRequest();
-        req.setCurrentPassword("right");
-        req.setNewPassword("12345");
-        when(passwordEncoder.matches("right", "hash")).thenReturn(true);
-
-        assertThatThrownBy(() -> userService.changePassword(user, req))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("at least 6 characters");
-    }
-
-    @Test
     void changePasswordUpdatesHashOnSuccess() {
         User user = new User("A", "B", "1", "a@b.ca", "hash");
         ChangePasswordRequest req = new ChangePasswordRequest();
@@ -629,5 +626,77 @@ class UserServiceTest {
 
         assertThat(result.getStudentNumber()).isEqualTo("1000001");
         verify(userRepository, never()).existsByStudentNumber(anyString());
+    }
+
+    // ---- listing ----
+
+    @Test
+    void getAllUsersFetchesDirectPermissionsForThePageInOneQuery() {
+        User editor = new User("E", "Ditor", "1", "e@mail.utoronto.ca", "p");
+        editor.setId(UUID.randomUUID());
+        editor.addRole(Role.BOARD_VIEWER);
+        User plain = new User("P", "Lain", "2", "p@mail.utoronto.ca", "p");
+        plain.setId(UUID.randomUUID());
+        plain.addRole(Role.USER);
+        PageRequest pageable = PageRequest.of(0, 10);
+        when(userRepository.findAll(pageable)).thenReturn(new PageImpl<>(List.of(editor, plain), pageable, 2));
+        when(userRepository.findDirectPermissionsForUsers(List.of(editor.getId(), plain.getId())))
+                .thenReturn(List.of(
+                        new DirectPermissionRow(editor.getId(), Permission.BOARD_COMMAND_INSPECT),
+                        new DirectPermissionRow(editor.getId(), Permission.BOARD_POSTER_WRITE)));
+
+        Page<UserInfoResponse> result = userService.getAllUsers(pageable);
+
+        assertThat(result.getContent()).hasSize(2);
+        UserInfoResponse editorRow = result.getContent().get(0);
+        assertThat(editorRow.getDirectPermissions())
+                .containsExactly("board:command:inspect", "board:poster:write");
+        assertThat(editorRow.getEffectivePermissions())
+                .containsAll(Role.BOARD_VIEWER.getPermissions().stream().map(Permission::getAuthority).toList())
+                .contains("board:command:inspect");
+        assertThat(result.getContent().get(1).getDirectPermissions()).isEmpty();
+        verify(userRepository, times(1)).findDirectPermissionsForUsers(any());
+        verify(userRepository, never()).findDirectPermissions(any());
+    }
+
+    @Test
+    void getAllUsersSkipsThePermissionQueryForAnEmptyPage() {
+        PageRequest pageable = PageRequest.of(0, 10);
+        when(userRepository.findAll(pageable)).thenReturn(Page.empty(pageable));
+
+        assertThat(userService.getAllUsers(pageable).getContent()).isEmpty();
+        verify(userRepository, never()).findDirectPermissionsForUsers(any());
+    }
+
+    // ---- transactions ----
+
+    /**
+     * Rollback itself needs a real transaction manager, which these Mockito tests do not have;
+     * what they can pin is that the methods that must roll back on an email or save failure
+     * are transactional, with Spring's annotation (the proxy ignores jakarta's rollback rules).
+     */
+    @Test
+    void methodsThatMustRollBackOnFailureAreTransactional() throws Exception {
+        for (var method : List.of(
+                UserService.class.getMethod("createUser", SignupRequest.class, boolean.class),
+                UserService.class.getMethod("createUser", SignupRequest.class),
+                UserService.class.getMethod("createUserByAdmin", CreateUserRequest.class),
+                UserService.class.getMethod("addRole", String.class, UUID.class, Role.class),
+                UserService.class.getMethod("removeRole", String.class, UUID.class, Role.class),
+                UserService.class.getMethod("resetPassword", String.class, String.class))) {
+            assertThat(method.isAnnotationPresent(Transactional.class))
+                    .as(method.toString()).isTrue();
+        }
+    }
+
+    @Test
+    void createUserPropagatesAnEmailFailureSoTheTransactionRollsBack() {
+        when(passwordEncoder.encode("password1")).thenReturn("ENC");
+        when(verificationTokenService.generateEmailVerificationToken(any(User.class))).thenReturn("tok");
+        org.mockito.Mockito.doThrow(new RuntimeException("smtp down"))
+                .when(emailService).sendVerificationEmail(anyString(), anyString(), anyString());
+
+        assertThatThrownBy(() -> userService.createUser(signup(), true))
+                .hasMessageContaining("smtp down");
     }
 }

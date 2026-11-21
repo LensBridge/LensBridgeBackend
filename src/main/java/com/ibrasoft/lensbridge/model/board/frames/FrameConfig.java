@@ -9,11 +9,11 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * Base class for frame-specific configuration.
  * Uses Jackson annotations for polymorphic serialization.
  * <p>
- * {@link FrameType#NEXT_PRAYER} uses empty marker configs
- * ({@link NextPrayerFrameConfig}) — the backend has no data to
- * contribute to either (prayer times and the QR destination are both resolved client-side), but
- * the frame still needs a real position and {@code durationInSeconds} in the sequence rather
- * than being synthesized outside the API contract.
+ * {@link FrameType#NEXT_PRAYER} uses an empty marker config ({@link NextPrayerFrameConfig}):
+ * the backend has no prayer-time data to contribute (the board computes the countdown itself
+ * from its configured location), but the frame still needs a real position and
+ * {@code durationInSeconds} in the sequence rather than being synthesized outside the API
+ * contract.
  */
 @JsonTypeInfo(
     use = JsonTypeInfo.Id.NAME,

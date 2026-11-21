@@ -21,6 +21,8 @@ docs/
 # application.properties at all, so without this the test suite runs on the inline @Value
 # defaults and behaves differently there than on a developer machine.
 !src/test/resources/application.properties
+# Placeholder configuration for generating openapi.yaml (pom.xml, openapi profile); no secrets.
+!tools/openapi-gen.properties
 
 ### IntelliJ IDEA ###
 .idea

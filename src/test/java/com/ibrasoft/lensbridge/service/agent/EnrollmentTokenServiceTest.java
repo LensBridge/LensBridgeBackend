@@ -16,6 +16,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -60,51 +61,64 @@ class EnrollmentTokenServiceTest {
     void consumeHappyPath() {
         var issued = service.issue("X", Audience.BOTH, 30, "admin@x");
         when(repository.findByTokenHash(any())).thenReturn(Optional.of(issued.token()));
+        when(repository.markConsumed(eq(issued.token().getId()), any(Instant.class))).thenReturn(1);
 
-        UUID deviceId = UUID.randomUUID();
-        Optional<EnrollmentToken> consumed = service.consume(issued.plaintext(), deviceId);
+        Optional<EnrollmentToken> consumed = service.consume(issued.plaintext());
 
         assertTrue(consumed.isPresent());
         assertNotNull(consumed.get().getConsumedAt());
-        assertEquals(deviceId, consumed.get().getConsumedByDeviceId());
+    }
+
+    /**
+     * The single-use guarantee lives in the conditional UPDATE: a row count other than 1 means
+     * someone else consumed the token (or it expired) between our read and our write, and this
+     * caller must lose even though its read saw an unconsumed token.
+     */
+    @Test
+    void consumeLosesWhenTheConditionalUpdateChangesNoRow() {
+        var issued = service.issue("X", Audience.BOTH, 30, "admin@x");
+        when(repository.findByTokenHash(any())).thenReturn(Optional.of(issued.token()));
+        when(repository.markConsumed(any(), any())).thenReturn(0);
+
+        assertTrue(service.consume(issued.plaintext()).isEmpty());
     }
 
     @Test
-    void consumeRejectsAlreadyUsed() {
+    void twoRacersOnOneTokenCannotBothWin() {
         var issued = service.issue("X", Audience.BOTH, 30, "admin@x");
-        issued.token().setConsumedAt(Instant.now().minusSeconds(60));
-        issued.token().setConsumedByDeviceId(UUID.randomUUID());
         when(repository.findByTokenHash(any())).thenReturn(Optional.of(issued.token()));
+        // Both read an unconsumed row; the database lets exactly one UPDATE through.
+        when(repository.markConsumed(any(), any())).thenReturn(1, 0);
 
-        Optional<EnrollmentToken> consumed = service.consume(issued.plaintext(), UUID.randomUUID());
+        boolean first = service.consume(issued.plaintext()).isPresent();
+        boolean second = service.consume(issued.plaintext()).isPresent();
 
-        assertTrue(consumed.isEmpty());
-        verify(repository, never()).save(argThat(t ->
-                t != issued.token() // we don't write a fresh row
-        ));
-    }
-
-    @Test
-    void consumeRejectsExpired() {
-        var issued = service.issue("X", Audience.BOTH, 30, "admin@x");
-        issued.token().setExpiresAt(Instant.now().minusSeconds(60));
-        when(repository.findByTokenHash(any())).thenReturn(Optional.of(issued.token()));
-
-        Optional<EnrollmentToken> consumed = service.consume(issued.plaintext(), UUID.randomUUID());
-
-        assertTrue(consumed.isEmpty());
+        assertTrue(first);
+        assertFalse(second);
     }
 
     @Test
     void consumeRejectsUnknown() {
         when(repository.findByTokenHash(any())).thenReturn(Optional.empty());
-        assertTrue(service.consume("nonsense", UUID.randomUUID()).isEmpty());
+
+        assertTrue(service.consume("nonsense").isEmpty());
+        verify(repository, never()).markConsumed(any(), any());
     }
 
     @Test
     void consumeRejectsBlank() {
-        assertTrue(service.consume(null, UUID.randomUUID()).isEmpty());
-        assertTrue(service.consume("   ", UUID.randomUUID()).isEmpty());
+        assertTrue(service.consume(null).isEmpty());
+        assertTrue(service.consume("   ").isEmpty());
         verifyNoInteractions(repository);
+    }
+
+    @Test
+    void recordConsumerPointsTheTokenAtItsDevice() {
+        UUID tokenId = UUID.randomUUID();
+        UUID deviceId = UUID.randomUUID();
+
+        service.recordConsumer(tokenId, deviceId);
+
+        verify(repository).recordConsumer(tokenId, deviceId);
     }
 }

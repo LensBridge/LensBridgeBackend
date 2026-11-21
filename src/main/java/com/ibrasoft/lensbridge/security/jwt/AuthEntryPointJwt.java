@@ -17,15 +17,21 @@ import org.springframework.stereotype.Component;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import lombok.RequiredArgsConstructor;
+
 @Component
+@RequiredArgsConstructor
 public class AuthEntryPointJwt implements AuthenticationEntryPoint {
 
   private static final Logger logger = LoggerFactory.getLogger(AuthEntryPointJwt.class);
 
+  private final ObjectMapper mapper;
+
   @Override
   public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException authException)
       throws IOException, ServletException {
-    logger.error("Unauthorized error: {}", authException.getMessage());
+    // A 401 is the expected answer to an anonymous or expired caller, not a server error.
+    logger.debug("Unauthorized error: {}", authException.getMessage());
 
     response.setContentType(MediaType.APPLICATION_JSON_VALUE);
     response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
@@ -36,7 +42,6 @@ public class AuthEntryPointJwt implements AuthenticationEntryPoint {
     body.put("message", authException.getMessage());
     body.put("path", request.getServletPath());
 
-    final ObjectMapper mapper = new ObjectMapper();
     mapper.writeValue(response.getOutputStream(), body);
   }
 

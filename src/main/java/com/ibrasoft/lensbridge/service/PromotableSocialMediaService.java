@@ -4,7 +4,7 @@ import com.ibrasoft.lensbridge.dto.board.request.CreatePromotableSocialMediaRequ
 import com.ibrasoft.lensbridge.dto.board.request.UpdatePromotableSocialMediaRequest;
 import com.ibrasoft.lensbridge.dto.upload.response.ErrorResponse;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
-import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
+import com.ibrasoft.lensbridge.service.agent.ContentChangeNotifier;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.PromotableSocialMedia;
 import com.ibrasoft.lensbridge.model.board.SocialType;
@@ -29,7 +29,7 @@ import java.util.UUID;
 public class PromotableSocialMediaService {
 
     private final PromotableSocialMediaRepository repository;
-    private final BoardStreamHandler boardStream;
+    private final ContentChangeNotifier contentChanges;
 
     /** Every promotable social, ordered by name. */
     public List<PromotableSocialMedia> getAll() {
@@ -49,10 +49,6 @@ public class PromotableSocialMediaService {
      */
     public List<PromotableSocialMedia> getForAudience(Audience audience) {
         return repository.findByAudienceOrBoth(audience);
-    }
-
-    public List<PromotableSocialMedia> getByType(SocialType type) {
-        return repository.findByTypeOrderByNameAsc(type);
     }
 
     public PromotableSocialMedia create(CreatePromotableSocialMediaRequest request) {
@@ -78,7 +74,7 @@ public class PromotableSocialMediaService {
         social = repository.save(social);
         log.info("Created promotable social media: id={}, type={}, name={}",
                 social.getId(), social.getType(), social.getName());
-        boardStream.contentChanged("socials");
+        contentChanges.contentChanged("socials");
 
         return social;
     }
@@ -86,17 +82,33 @@ public class PromotableSocialMediaService {
     public PromotableSocialMedia update(UUID id, UpdatePromotableSocialMediaRequest request) {
         PromotableSocialMedia social = getById(id);
 
+        // Create requires these to be non-blank (@NotBlank), so a patch must not be able to
+        // blank them either: a board would render an empty heading or an unnamed entry.
+        requireNotBlankIfPresent("name", request.getName());
+        requireNotBlankIfPresent("headerText", request.getHeaderText());
+        requireNotBlankIfPresent("heroText", request.getHeroText());
+        requireNotBlankIfPresent("footerText", request.getFooterText());
+
+        // Same (type, url) rule as create. Only checked when one of the two actually changes,
+        // otherwise re-sending an entry's own values would collide with itself. Done before
+        // any field is applied so a rejected request leaves the entity untouched.
+        SocialType newType = request.getType() != null ? request.getType() : social.getType();
+        String newUrl = request.getUrl() != null ? normalize(request.getUrl()) : social.getUrl();
+        boolean identityChanged = newType != social.getType() || !newUrl.equals(social.getUrl());
+        if (identityChanged && repository.existsByTypeAndUrl(newType, newUrl)) {
+            throw new ApiResponseException(
+                    HttpStatus.CONFLICT,
+                    ErrorResponse.of("That " + newType + " URL is already promoted"));
+        }
+
         Patch.apply(request.getName(), social::setName);
         Patch.apply(request.getDuration(), social::setDuration);
         Patch.apply(request.getAudience(), social::setAudience);
-        Patch.apply(request.getType(), social::setType);
         Patch.apply(request.getHeaderText(), social::setHeaderText);
         Patch.apply(request.getHeroText(), social::setHeroText);
         Patch.apply(request.getFooterText(), social::setFooterText);
-
-        if (request.getUrl() != null) {
-            social.setUrl(normalize(request.getUrl()));
-        }
+        social.setType(newType);
+        social.setUrl(newUrl);
         // Not Patch.apply: an empty string means "clear the handle", which the null-guard
         // there would let through unchanged.
         if (request.getHandle() != null) {
@@ -105,7 +117,7 @@ public class PromotableSocialMediaService {
 
         social = repository.save(social);
         log.info("Updated promotable social media: id={}", id);
-        boardStream.contentChanged("socials");
+        contentChanges.contentChanged("socials");
 
         return social;
     }
@@ -115,7 +127,7 @@ public class PromotableSocialMediaService {
 
         repository.delete(social);
         log.info("Deleted promotable social media: id={}", id);
-        boardStream.contentChanged("socials");
+        contentChanges.contentChanged("socials");
     }
 
     // ==================== Helper Methods ====================
@@ -128,6 +140,14 @@ public class PromotableSocialMediaService {
                     ErrorResponse.of("URL is required"));
         }
         return trimmed;
+    }
+
+    private static void requireNotBlankIfPresent(String field, String value) {
+        if (value != null && value.isBlank()) {
+            throw new ApiResponseException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorResponse.of(field + " must not be blank"));
+        }
     }
 
     private static String blankToNull(String value) {

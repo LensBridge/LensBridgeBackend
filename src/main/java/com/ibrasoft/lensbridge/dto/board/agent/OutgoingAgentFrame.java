@@ -35,8 +35,4 @@ public class OutgoingAgentFrame {
     private Integer deadlineMs;
     /** Serialized command payload (typically a {@link com.fasterxml.jackson.databind.JsonNode}). */
     private Object payload;
-
-    // ── error ────────────────────────────────────────────────────────────
-    private String error;
-    private String reason;
 }

@@ -25,7 +25,4 @@ public interface PosterRepository extends JpaRepository<Poster, UUID> {
      */
     @Query("SELECT p FROM Poster p WHERE (p.audience = :aud OR p.audience = com.ibrasoft.lensbridge.model.board.Audience.BOTH) AND p.startTime < :to AND p.endTime > :from ORDER BY p.startTime DESC")
     List<Poster> findPostersForAudienceOverlapping(@Param("from") Instant from, @Param("to") Instant to, @Param("aud") Audience audience);
-
-    @Query("SELECT p FROM Poster p WHERE p.startTime <= :now AND p.endTime > :now")
-    List<Poster> findActivePostersAt(@Param("now") Instant now);
 }

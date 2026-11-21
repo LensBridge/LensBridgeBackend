@@ -3,7 +3,7 @@ package com.ibrasoft.lensbridge.service;
 import com.ibrasoft.lensbridge.dto.board.request.CreatePosterRequest;
 import com.ibrasoft.lensbridge.dto.board.request.UpdatePosterRequest;
 import com.ibrasoft.lensbridge.exception.ApiResponseException;
-import com.ibrasoft.lensbridge.handler.BoardStreamHandler;
+import com.ibrasoft.lensbridge.service.agent.ContentChangeNotifier;
 import com.ibrasoft.lensbridge.model.board.Audience;
 import com.ibrasoft.lensbridge.model.board.Poster;
 import com.ibrasoft.lensbridge.repository.sql.PosterRepository;
@@ -42,7 +42,7 @@ class PosterServiceTest {
     private R2StorageService r2StorageService;
 
     @Mock
-    private BoardStreamHandler boardStream;
+    private ContentChangeNotifier contentChanges;
 
     @InjectMocks
     private PosterService service;
@@ -103,14 +103,6 @@ class PosterServiceTest {
         when(posterRepository.findByAudienceOrBoth(Audience.SISTERS)).thenReturn(expected);
 
         assertThat(service.getPostersForAudience(Audience.SISTERS)).isEqualTo(expected);
-    }
-
-    @Test
-    void getActivePostersQueriesActiveAtNow() {
-        List<Poster> expected = List.of(poster("a"));
-        when(posterRepository.findActivePostersAt(any(Instant.class))).thenReturn(expected);
-
-        assertThat(service.getActivePosters()).isEqualTo(expected);
     }
 
     // ==================== createPoster ====================
@@ -255,16 +247,55 @@ class PosterServiceTest {
     // ==================== updatePosterImage ====================
 
     @Test
-    void updatePosterImageDeletesOldAndUploadsNew() throws IOException {
+    void updatePosterImageUploadsNewThenDeletesOldByObjectKey() throws IOException {
         Poster existing = poster("Old");
         when(posterRepository.findById(existing.getId())).thenReturn(Optional.of(existing));
         when(r2StorageService.uploadImage(anyString(), any(MultipartFile.class)))
                 .thenReturn("new-key.png");
         when(posterRepository.save(any(Poster.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(r2StorageService.objectKeyFromPublicUrl("https://cdn.example.com/poster-old.png"))
+                .thenReturn("poster-old.png");
 
         Poster updated = service.updatePosterImage(existing.getId(), imageFile());
 
-        verify(r2StorageService).deleteObject("https://cdn.example.com/poster-old.png");
+        // The key, not the public URL, is what R2 deletes by.
+        verify(r2StorageService).deleteObject("poster-old.png");
+        assertThat(updated.getImage()).isEqualTo("https://cdn.example.com/new-key.png");
+        // Upload and save come before the delete so a failure never leaves a dangling image.
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(r2StorageService, posterRepository);
+        order.verify(r2StorageService).uploadImage(anyString(), any(MultipartFile.class));
+        order.verify(posterRepository).save(any(Poster.class));
+        order.verify(r2StorageService).deleteObject("poster-old.png");
+    }
+
+    @Test
+    void updatePosterImageKeepsOldImageWhenUploadFails() throws IOException {
+        Poster existing = poster("Old");
+        when(posterRepository.findById(existing.getId())).thenReturn(Optional.of(existing));
+        when(r2StorageService.uploadImage(anyString(), any(MultipartFile.class)))
+                .thenThrow(new IOException("r2 down"));
+
+        assertThatThrownBy(() -> service.updatePosterImage(existing.getId(), imageFile()))
+                .isInstanceOf(ApiResponseException.class);
+
+        verify(r2StorageService, never()).deleteObject(anyString());
+        verify(posterRepository, never()).save(any());
+        assertThat(existing.getImage()).isEqualTo("https://cdn.example.com/poster-old.png");
+    }
+
+    @Test
+    void updatePosterImageStillSucceedsWhenOldImageRemovalFails() throws IOException {
+        Poster existing = poster("Old");
+        when(posterRepository.findById(existing.getId())).thenReturn(Optional.of(existing));
+        when(r2StorageService.uploadImage(anyString(), any(MultipartFile.class)))
+                .thenReturn("new-key.png");
+        when(posterRepository.save(any(Poster.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(r2StorageService.objectKeyFromPublicUrl(anyString())).thenReturn("poster-old.png");
+        org.mockito.Mockito.doThrow(new RuntimeException("r2 down"))
+                .when(r2StorageService).deleteObject(anyString());
+
+        Poster updated = service.updatePosterImage(existing.getId(), imageFile());
+
         assertThat(updated.getImage()).isEqualTo("https://cdn.example.com/new-key.png");
     }
 
@@ -283,10 +314,12 @@ class PosterServiceTest {
     void deletePosterRemovesImageAndEntity() {
         Poster existing = poster("Old");
         when(posterRepository.findById(existing.getId())).thenReturn(Optional.of(existing));
+        when(r2StorageService.objectKeyFromPublicUrl("https://cdn.example.com/poster-old.png"))
+                .thenReturn("poster-old.png");
 
         service.deletePoster(existing.getId());
 
-        verify(r2StorageService).deleteObject("https://cdn.example.com/poster-old.png");
+        verify(r2StorageService).deleteObject("poster-old.png");
         verify(posterRepository).delete(existing);
     }
 
@@ -294,6 +327,7 @@ class PosterServiceTest {
     void deletePosterStillDeletesEntityWhenImageRemovalFails() {
         Poster existing = poster("Old");
         when(posterRepository.findById(existing.getId())).thenReturn(Optional.of(existing));
+        when(r2StorageService.objectKeyFromPublicUrl(anyString())).thenReturn("poster-old.png");
         org.mockito.Mockito.doThrow(new RuntimeException("r2 down"))
                 .when(r2StorageService).deleteObject(anyString());
 

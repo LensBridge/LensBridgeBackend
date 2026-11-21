@@ -40,7 +40,6 @@ public class CreateUserRequest {
   @NotBlank
   @Size(max = 50)
   @Email
-  // @Pattern(regexp = "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]*\\.utoronto\\.ca$", message = "Email must be a valid University of Toronto email address (*.utoronto.ca)")
   private String email;
 
   @Size(min = 6, max = 40, message = "Password must be between 6 and 40 characters long")

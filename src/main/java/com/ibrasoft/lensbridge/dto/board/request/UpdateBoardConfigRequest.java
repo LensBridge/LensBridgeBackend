@@ -5,15 +5,21 @@ import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
 
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 import lombok.*;
 import java.util.List;
 
 @Data @Builder @NoArgsConstructor @AllArgsConstructor
 public class UpdateBoardConfigRequest {
+    /**
+     * Merged into the stored location field by field: an omitted (null) field is left alone,
+     * so a body carrying only {@code timezone} cannot reset the coordinates.
+     */
     private Location location;
     private Boolean darkModeAfterIsha;
     private Boolean enableScrollingMessage;
-    private List<String> scrollingMessages;
+    private List<@Size(max = DeviceConfig.MESSAGE_MAX,
+            message = "Each scrolling message must be at most 4000 characters") String> scrollingMessages;
 
     /**
      * Seconds to pin the agenda slide for, or {@code 0} to hand the decision back to the board

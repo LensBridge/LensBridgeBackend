@@ -4,9 +4,11 @@ import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -30,6 +32,7 @@ import com.ibrasoft.lensbridge.model.auth.Permission;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.model.auth.User;
 import com.ibrasoft.lensbridge.model.auth.VerificationToken;
+import com.ibrasoft.lensbridge.repository.auth.DirectPermissionRow;
 import com.ibrasoft.lensbridge.repository.auth.UserRepository;
 import com.ibrasoft.lensbridge.security.services.AuthorityResolver;
 import com.ibrasoft.lensbridge.security.services.EmailService;
@@ -55,10 +58,22 @@ public class UserService {
     private String frontendBaseUrl;
 
     public Page<UserInfoResponse> getAllUsers(Pageable pageable) {
-        return userRepository.findAll(pageable).map(u -> {
-            // Fetched once and used for both lists. Going through AuthorityResolver here
-            // would re-query the same direct grants, making a 50-row page 101 queries.
-            Set<Permission> direct = userRepository.findDirectPermissions(u.getId());
+        Page<User> page = userRepository.findAll(pageable);
+
+        // One query for the whole page's direct grants, rather than one per row (a 50-row page
+        // was 51 queries). Going through AuthorityResolver per user would re-query the same
+        // grants again, so the effective set is derived here from the same data.
+        Map<UUID, Set<Permission>> directByUser = new HashMap<>();
+        List<UUID> ids = page.getContent().stream().map(User::getId).toList();
+        if (!ids.isEmpty()) {
+            for (DirectPermissionRow row : userRepository.findDirectPermissionsForUsers(ids)) {
+                directByUser.computeIfAbsent(row.userId(), k -> EnumSet.noneOf(Permission.class))
+                        .add(row.permission());
+            }
+        }
+
+        return page.map(u -> {
+            Set<Permission> direct = directByUser.getOrDefault(u.getId(), Set.of());
 
             Set<Permission> effective = EnumSet.noneOf(Permission.class);
             for (Role role : u.getRoles()) {
@@ -97,6 +112,12 @@ public class UserService {
         return userRepository.save(user);
     }
 
+    /**
+     * Transactional so that a failed verification email (SMTP down, template error) rolls the
+     * new account back. Without it the user row survived the exception, and the retry was told
+     * the email or student number already exists, with no way to receive the link.
+     */
+    @Transactional
     public User createUser(SignupRequest signUpRequest, boolean sendConfirmEmail) {
         log.info("Creating new user: {}", signUpRequest.getEmail());
 
@@ -105,7 +126,8 @@ public class UserService {
                 signUpRequest.getLastName(),
                 signUpRequest.getStudentNumber(),
                 signUpRequest.getEmail(),
-                () -> signUpRequest.getPassword() == null ? null : passwordEncoder.encode(signUpRequest.getPassword())
+                () -> signUpRequest.getPassword() == null ? null : passwordEncoder.encode(signUpRequest.getPassword()),
+                false
         );
 
         if (sendConfirmEmail) {
@@ -119,6 +141,7 @@ public class UserService {
         return savedUser;
     }
 
+    @Transactional
     public User createUser(SignupRequest signUpRequest) {
         return createUser(signUpRequest, true);
     }
@@ -136,7 +159,11 @@ public class UserService {
      * immediately and no email goes out. Nothing else here needs an unverified branch: the
      * address was chosen by an administrator, not self-asserted by a stranger, so email
      * verification is not what is being established.
+     * <p>
+     * Transactional for the same reason as {@link #createUser(SignupRequest, boolean)}: a failed
+     * invitation email must not leave a disabled account that blocks a retry.
      */
+    @Transactional
     public User createUserByAdmin(CreateUserRequest request) {
         log.info("Admin creating user: {} (password supplied: {})", request.getEmail(), request.hasPassword());
 
@@ -145,12 +172,11 @@ public class UserService {
                 request.getLastName(),
                 request.getStudentNumber(),
                 request.getEmail(),
-                () -> request.hasPassword() ? passwordEncoder.encode(request.getPassword()) : unusablePassword()
+                () -> request.hasPassword() ? passwordEncoder.encode(request.getPassword()) : unusablePassword(),
+                request.hasPassword()
         );
 
         if (request.hasPassword()) {
-            user.setVerifiedAt(Instant.now());
-            user = saveUser(user);
             log.info("Admin created enabled user: {}", user.getEmail());
         } else {
             sendPasswordResetEmail(user);
@@ -165,9 +191,11 @@ public class UserService {
      *
      * @param passwordHash supplied lazily so a rejected duplicate does not pay for a bcrypt round
      *                     first — and so the check cannot be reordered after it by accident
+     * @param verified     whether the account is usable immediately; set before the single save
+     *                     rather than saving again afterwards
      */
     private User register(String firstName, String lastName, String studentNumber, String email,
-                         Supplier<String> passwordHash) {
+                         Supplier<String> passwordHash, boolean verified) {
         if (existsByEmail(email) || existsByStudentNumber(studentNumber)) {
             throw new IllegalArgumentException("User with this email or student number already exists");
         }
@@ -175,6 +203,9 @@ public class UserService {
         User user = new User(firstName, lastName, studentNumber, email, passwordHash.get());
         user.setRoles(new HashSet<>());
         user.addRole(Role.USER);
+        if (verified) {
+            user.setVerifiedAt(Instant.now());
+        }
 
         return saveUser(user);
     }
@@ -229,6 +260,12 @@ public class UserService {
     //   4. The last holder of iam:role:grant cannot be stripped of it, or the org locks
     //      itself out of its own admin console with no way back in short of a DB edit.
 
+    /**
+     * Transactional (here and on {@link #removeRole}) so the acting-user lookup, the lockout
+     * check and the save see one consistent snapshot, and so a failure part-way leaves nothing
+     * half applied.
+     */
+    @Transactional
     public User addRole(String actingEmail, UUID userId, Role role) {
         User user = findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
@@ -245,6 +282,7 @@ public class UserService {
         return saveUser(user);
     }
 
+    @Transactional
     public User removeRole(String actingEmail, UUID userId, Role role) {
         User user = findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
@@ -444,7 +482,11 @@ public class UserService {
      * this the invitee would set a password through the emailed link and still be refused at
      * sign-in, with no way out. Following a link sent to the address proves control of it —
      * the same thing the verification email proves — so nothing is being taken on trust.
+     * <p>
+     * Transactional so a failed save does not leave the token spent: the user could otherwise
+     * neither reset nor retry with the same link.
      */
+    @Transactional
     public User resetPassword(String token, String newPassword) {
         VerificationToken verificationToken = verificationTokenService.consumePasswordReset(token);
         User user = verificationToken.getUser();
@@ -460,9 +502,6 @@ public class UserService {
     public User changePassword(User user, ChangePasswordRequest changePasswordRequest) {
         if (!passwordEncoder.matches(changePasswordRequest.getCurrentPassword(), user.getPassword())) {
             throw new IllegalArgumentException("Current password is incorrect");
-        }
-        if (changePasswordRequest.getNewPassword().length() < 6) {
-            throw new IllegalArgumentException("New password must be at least 6 characters long");
         }
         user.setPassword(passwordEncoder.encode(changePasswordRequest.getNewPassword()));
         return saveUser(user);

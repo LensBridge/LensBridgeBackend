@@ -35,11 +35,19 @@ import java.util.UUID;
  * <pre>
  *   open      → server generates challenge, sends hello (seq:1)
  *   recv auth → verify Ed25519 sig + timestamp + revocation; on success bind deviceId,
- *               send auth_ok (seq:2), register in {@link AgentSessionRegistry}
+ *               send auth_ok (seq:2), then register in {@link AgentSessionRegistry}, then flush
+ *               queued commands
  *   recv hb   → persist via {@link HeartbeatService}
  *   recv ?    → close 4001 (unauth) / 4003 (bad-state) / 4002 (seq replay)
- *   close     → unregister
+ *   close     → unregister (and announce offline only if this session was still the live one)
  * </pre>
+ * The agent requires auth_ok to be the first frame after its auth, which is why registration
+ * waits until auth_ok is on the wire: once registered, a concurrent command issue can write to
+ * the session at any moment.
+ * <p>
+ * A socket that never authenticates, or an authenticated one that goes silent, is closed by
+ * {@link com.ibrasoft.lensbridge.service.agent.AgentSessionSweeper}, not here: a half-open
+ * connection produces no frames, so nothing in this class would ever run for it.
  */
 @Component
 @RequiredArgsConstructor
@@ -49,7 +57,7 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
     static final String SESSION_ATTR = "agent.session";
     static final long TIMESTAMP_SKEW_MS = 5 * 60 * 1000L;
     static final int CHALLENGE_BYTES = 32;
-    static final int HEARTBEAT_INTERVAL_MS = 30_000;
+    static final int HEARTBEAT_INTERVAL_MS = AgentSession.HEARTBEAT_INTERVAL_MS;
 
     static final CloseStatus CLOSE_AUTH_FAILED   = new CloseStatus(4001, "auth_failed");
     static final CloseStatus CLOSE_SEQ_VIOLATION = new CloseStatus(4002, "seq_violation");
@@ -71,11 +79,12 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
         AgentSession session = new AgentSession(transport, challenge, objectMapper);
         transport.getAttributes().put(SESSION_ATTR, session);
 
-        OutgoingAgentFrame hello = session.populateOutgoing(OutgoingAgentFrame.builder()
+        registry.track(session);
+
+        session.send(OutgoingAgentFrame.builder()
                 .type("hello")
                 .challenge(challenge)
                 .serverTime(System.currentTimeMillis()));
-        session.send(hello);
     }
 
     @Override
@@ -85,6 +94,7 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
             safeClose(transport, CLOSE_BAD_STATE);
             return;
         }
+        session.touch();
 
         IncomingAgentFrame frame;
         try {
@@ -117,12 +127,10 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
             case AUTHED -> {
                 if (frame instanceof HeartbeatFrame hb) {
                     handleHeartbeat(session, hb);
-                } else if (frame instanceof CommandAckFrame ack) {
-                    commandDispatcher.onAck(ack, session);
-                } else if (frame instanceof CommandProgressFrame progress) {
-                    commandDispatcher.onProgress(progress, session);
-                } else if (frame instanceof CommandResultFrame result) {
-                    commandDispatcher.onResult(result, session);
+                } else if (frame instanceof CommandAckFrame
+                        || frame instanceof CommandProgressFrame
+                        || frame instanceof CommandResultFrame) {
+                    handleCommandFrame(session, frame);
                 } else if (frame instanceof AuthFrame) {
                     log.warn("session={} duplicate auth after auth_ok", session.getSessionId());
                     session.close(CLOSE_BAD_STATE);
@@ -185,16 +193,24 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
         }
 
         session.markAuthenticated(device.getId());
-        registry.register(device.getId(), session);
         log.info("session={} authenticated as device {}", session.getSessionId(), device.getId());
 
-        OutgoingAgentFrame ok = session.populateOutgoing(OutgoingAgentFrame.builder()
+        // auth_ok must be the first frame the agent sees after its auth. Registering first
+        // would expose the session to a concurrent CommandDispatcher.issue(), which could
+        // write a command frame ahead of it.
+        boolean acknowledged = session.send(OutgoingAgentFrame.builder()
                 .type("auth_ok")
                 .deviceId(device.getId())
                 .serverTime(now)
                 .heartbeatIntervalMs(HEARTBEAT_INTERVAL_MS));
-        session.send(ok);
+        if (!acknowledged) {
+            // The transport died under us; registering would only advertise a dead session.
+            log.warn("session={} could not send auth_ok to device {}; not registering",
+                    session.getSessionId(), device.getId());
+            return;
+        }
 
+        registry.register(device.getId(), session);
         events.deviceOnline(device.getId());
         try {
             commandDispatcher.flushPending(device.getId(), session);
@@ -215,14 +231,36 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
+    /**
+     * Ack, progress and result frames hit the database like a heartbeat does, so a transient
+     * failure there gets the same treatment: logged, and the socket stays up. Letting it escape
+     * would make Spring close the connection with 1011, and the agent would reconnect, replay
+     * its cached result, and hit the same database error.
+     */
+    private void handleCommandFrame(AgentSession session, IncomingAgentFrame frame) {
+        try {
+            if (frame instanceof CommandAckFrame ack) {
+                commandDispatcher.onAck(ack, session);
+            } else if (frame instanceof CommandProgressFrame progress) {
+                commandDispatcher.onProgress(progress, session);
+            } else if (frame instanceof CommandResultFrame result) {
+                commandDispatcher.onResult(result, session);
+            }
+        } catch (Exception e) {
+            log.error("session={} failed to process {} frame", session.getSessionId(), frame.getType(), e);
+        }
+    }
+
     @Override
     public void afterConnectionClosed(WebSocketSession transport, CloseStatus status) {
         AgentSession session = (AgentSession) transport.getAttributes().get(SESSION_ATTR);
         if (session != null) {
             session.markClosed();
+            registry.untrack(session);
             if (session.getDeviceId() != null) {
+                // Announces offline only if this was still the registered session: one that was
+                // superseded by a reconnect closes later, and the device is not offline then.
                 registry.unregister(session.getDeviceId(), session);
-                events.deviceOffline(session.getDeviceId());
             }
             log.debug("session={} closed status={}", session.getSessionId(), status);
         }
