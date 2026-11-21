@@ -46,6 +46,8 @@ services:
       MUSALLAHBOARD_AGENT_WS_URL: ${MUSALLAHBOARD_AGENT_WS_URL}
       MUSALLAHBOARD_CONTENT_SIGNING_KEY: ${MUSALLAHBOARD_CONTENT_SIGNING_KEY:-}
       OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY}
+      # false closes new media submissions (uploads stay readable and moderatable).
+      LENSBRIDGE_MEDIA_SUBMISSIONS_ENABLED: ${LENSBRIDGE_MEDIA_SUBMISSIONS_ENABLED:-true}
     # Loopback only by default, so the app is reached through the reverse proxy and never
     # directly: it trusts X-Forwarded-For from private and loopback peers (see
     # server.forward-headers-strategy in application.properties.example). Set

@@ -8,6 +8,7 @@ import com.ibrasoft.lensbridge.model.auth.Permission;
 import com.ibrasoft.lensbridge.model.auth.Role;
 import com.ibrasoft.lensbridge.model.auth.User;
 import com.ibrasoft.lensbridge.security.CurrentUser;
+import com.ibrasoft.lensbridge.service.MediaSubmissions;
 import com.ibrasoft.lensbridge.service.UploadLimitsService;
 import com.ibrasoft.lensbridge.service.UploadService;
 import com.ibrasoft.lensbridge.service.UploadWorkflowService;
@@ -37,6 +38,8 @@ public class FileUploadController {
     private final UploadService uploadService;
     private final UploadWorkflowService uploadWorkflowService;
     private final UploadLimitsService uploadLimitsService;
+    /** Closed: no new submissions (presign, complete); everything else still works. */
+    private final MediaSubmissions mediaSubmissions;
 
     private static final String SHA256_HEX = "^[0-9a-fA-F]{64}$";
     /** The uploads table keeps these in varchar(255) columns. */
@@ -74,6 +77,7 @@ public class FileUploadController {
             @RequestParam @Pattern(regexp = SHA256_HEX) String expectedSha256,
             @CurrentUser User user,
             Authentication authentication) {
+        mediaSubmissions.requireOpen();
         Role role = uploadLimitsService.getHighestRole(authentication);
         return ResponseEntity.ok(uploadWorkflowService.initiateUpload(
                 eventId, filename, contentType, fileSize, expectedSha256, user.getId(), role));
@@ -93,6 +97,7 @@ public class FileUploadController {
             @RequestParam @Pattern(regexp = SHA256_HEX) String expectedSha256,
             @CurrentUser User user,
             Authentication authentication) {
+        mediaSubmissions.requireOpen();
         Role role = uploadLimitsService.getHighestRole(authentication);
         return ResponseEntity.ok(uploadWorkflowService.completeUpload(
                 eventId, objectKey, filename, contentType, fileSize,

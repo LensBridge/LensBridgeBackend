@@ -84,6 +84,9 @@ cloudflare.r2.public-url=https://media.lensbridge.tech
 cloudflare.r2.url-expiration-minutes=15
 
 # Uploads
+# Media submissions (new uploads) open? false makes presign/complete answer 503; reading,
+# moderation and the gallery are unaffected. Env: LENSBRIDGE_MEDIA_SUBMISSIONS_ENABLED.
+lensbridge.media-submissions.enabled=true
 uploads.allowed-file-types=image/jpeg,image/png,image/heic,image/webp,image/gif
 uploads.global-max-size=1GB
 uploads.global-daily-limit=10

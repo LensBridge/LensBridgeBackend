@@ -67,6 +67,18 @@ class FileUploadControllerTest {
     private final User caller = new User();
     private final UUID eventId = UUID.randomUUID();
     private MockMvc mockMvc;
+    private HandlerMethodArgumentResolver currentUser;
+    private LocalValidatorFactoryBean validator;
+
+    /** The controller with media submissions open or closed. */
+    private MockMvc mvc(boolean submissionsOpen) {
+        return MockMvcBuilders.standaloneSetup(new FileUploadController(uploadService, workflow, limits,
+                        new com.ibrasoft.lensbridge.service.MediaSubmissions(submissionsOpen)))
+                .setValidator(validator)
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .setCustomArgumentResolvers(currentUser, new PageableHandlerMethodArgumentResolver())
+                .build();
+    }
 
     @BeforeEach
     void setUp() {
@@ -88,11 +100,9 @@ class FileUploadControllerTest {
             }
         };
 
-        mockMvc = MockMvcBuilders.standaloneSetup(new FileUploadController(uploadService, workflow, limits))
-                .setValidator(validator)
-                .setControllerAdvice(new GlobalExceptionHandler())
-                .setCustomArgumentResolvers(currentUser, new PageableHandlerMethodArgumentResolver())
-                .build();
+        this.currentUser = currentUser;
+        this.validator = validator;
+        mockMvc = mvc(true);
 
         when(limits.getHighestRole(any())).thenReturn(Role.USER);
     }
@@ -132,6 +142,28 @@ class FileUploadControllerTest {
                 "contentType", "image/jpeg",
                 "fileSize", "1024",
                 "expectedSha256", SHA), overrides));
+    }
+
+    // ── media submissions closed ──────────────────────────────────────────────
+
+    @Test
+    void closedSubmissionsAreA503BeforeAnyWorkflowRuns() throws Exception {
+        MockMvc closed = mvc(false);
+        for (MockHttpServletRequestBuilder request : new MockHttpServletRequestBuilder[] { presign(), complete() }) {
+            closed.perform(request)
+                    .andExpect(status().isServiceUnavailable())
+                    .andExpect(jsonPath("$.message", containsString("closed")));
+        }
+        verifyNoInteractions(workflow);
+    }
+
+    @Test
+    void closedSubmissionsStillLetPeopleReadTheirUploads() throws Exception {
+        MockMvc closed = mvc(false);
+        when(uploadService.getUploadsByEventAsDto(eq(eventId), eq(caller.getId()), eq(false), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+        closed.perform(get("/api/upload/event/{id}", eventId).principal(holding("ROLE_USER")))
+                .andExpect(status().isOk());
     }
 
     // ── validation ────────────────────────────────────────────────────────────
