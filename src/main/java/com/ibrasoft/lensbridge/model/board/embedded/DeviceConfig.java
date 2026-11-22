@@ -3,6 +3,7 @@ package com.ibrasoft.lensbridge.model.board.embedded;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.model.board.Location;
+import com.ibrasoft.lensbridge.model.board.ThemeMode;
 import jakarta.persistence.*;
 import lombok.*;
 import java.util.List;
@@ -26,7 +27,15 @@ public class DeviceConfig {
     @Embedded
     private Location location;
 
-    private boolean darkModeAfterIsha;
+    /**
+     * Light, dark, or {@link ThemeMode#AUTO} (dark from Maghrib until sunrise). Never null to a
+     * caller: the column is {@code not null} and rows built in code default to AUTO.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "theme_mode", nullable = false)
+    @Builder.Default
+    private ThemeMode themeMode = ThemeMode.AUTO;
+
     private boolean enableScrollingMessage;
 
     @ElementCollection(fetch = FetchType.EAGER)

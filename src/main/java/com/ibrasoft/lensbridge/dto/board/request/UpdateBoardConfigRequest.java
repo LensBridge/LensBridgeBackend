@@ -1,6 +1,7 @@
 package com.ibrasoft.lensbridge.dto.board.request;
 
 import com.ibrasoft.lensbridge.model.board.Location;
+import com.ibrasoft.lensbridge.model.board.ThemeMode;
 import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
 
 import jakarta.validation.constraints.Max;
@@ -16,7 +17,8 @@ public class UpdateBoardConfigRequest {
      * so a body carrying only {@code timezone} cannot reset the coordinates.
      */
     private Location location;
-    private Boolean darkModeAfterIsha;
+    /** LIGHT, DARK or AUTO (dark from Maghrib until sunrise). Omitted leaves it alone. */
+    private ThemeMode themeMode;
     private Boolean enableScrollingMessage;
     private List<@Size(max = DeviceConfig.MESSAGE_MAX,
             message = "Each scrolling message must be at most 4000 characters") String> scrollingMessages;
