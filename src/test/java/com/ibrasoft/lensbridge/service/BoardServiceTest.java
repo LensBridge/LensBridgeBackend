@@ -14,6 +14,7 @@ import com.ibrasoft.lensbridge.model.board.CalculationMethod;
 import com.ibrasoft.lensbridge.model.board.Device;
 import com.ibrasoft.lensbridge.model.board.IslamicQuote;
 import com.ibrasoft.lensbridge.model.board.Location;
+import com.ibrasoft.lensbridge.model.board.ThemeMode;
 import com.ibrasoft.lensbridge.model.board.WeekId;
 import com.ibrasoft.lensbridge.model.board.WeeklyContent;
 import com.ibrasoft.lensbridge.model.board.embedded.DeviceConfig;
@@ -63,7 +64,7 @@ class BoardServiceTest {
     private DeviceConfig config(UUID deviceId) {
         DeviceConfig c = new DeviceConfig();
         c.setId(deviceId);
-        c.setDarkModeAfterIsha(true);
+        c.setThemeMode(ThemeMode.AUTO);
         return c;
     }
 
@@ -684,9 +685,45 @@ class BoardServiceTest {
         existing.setAgendaDurationSeconds(35);
 
         DeviceConfig saved = service.updateBoardConfig(
-                id, UpdateBoardConfigRequest.builder().darkModeAfterIsha(true).build());
+                id, UpdateBoardConfigRequest.builder().themeMode(ThemeMode.DARK).build());
 
         assertThat(saved.getAgendaDurationSeconds()).isEqualTo(35);
+    }
+
+    // ==================== Theme mode ====================
+
+    @Test
+    void updateBoardConfigSetsTheThemeMode() {
+        UUID id = UUID.randomUUID();
+        configForDurationTest(id);
+
+        DeviceConfig saved = service.updateBoardConfig(
+                id, UpdateBoardConfigRequest.builder().themeMode(ThemeMode.LIGHT).build());
+
+        assertThat(saved.getThemeMode()).isEqualTo(ThemeMode.LIGHT);
+    }
+
+    @Test
+    void updateBoardConfigLeavesThemeModeAloneWhenOmitted() {
+        UUID id = UUID.randomUUID();
+        DeviceConfig existing = configForDurationTest(id);
+        existing.setThemeMode(ThemeMode.DARK);
+
+        DeviceConfig saved = service.updateBoardConfig(
+                id, UpdateBoardConfigRequest.builder().agendaDurationSeconds(35).build());
+
+        assertThat(saved.getThemeMode()).isEqualTo(ThemeMode.DARK);
+    }
+
+    @Test
+    void aNewBoardStartsOnAutoThemeMode() {
+        assertThat(BoardService.defaultConfig(new Device()).getThemeMode()).isEqualTo(ThemeMode.AUTO);
+    }
+
+    @Test
+    void aConfigBuiltWithoutAThemeModeIsAuto() {
+        assertThat(DeviceConfig.builder().build().getThemeMode()).isEqualTo(ThemeMode.AUTO);
+        assertThat(new DeviceConfig().getThemeMode()).isEqualTo(ThemeMode.AUTO);
     }
 
     /** The 1–4 gap the DTO's @Min(0) cannot express. */

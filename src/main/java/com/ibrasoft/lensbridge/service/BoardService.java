@@ -83,7 +83,7 @@ public class BoardService {
     public DeviceConfig updateBoardConfig(UUID deviceId, UpdateBoardConfigRequest request) {
         DeviceConfig existing = getBoardConfigOrThrow(deviceId);
         mergeLocation(existing, request.getLocation());
-        Patch.apply(request.getDarkModeAfterIsha(), existing::setDarkModeAfterIsha);
+        Patch.apply(request.getThemeMode(), existing::setThemeMode);
         Patch.apply(request.getEnableScrollingMessage(), existing::setEnableScrollingMessage);
         Patch.apply(request.getScrollingMessages(), existing::setScrollingMessages);
         applyAgendaDuration(existing, request.getAgendaDurationSeconds());
@@ -376,7 +376,7 @@ public class BoardService {
                         .timezone("America/Toronto")
                         .method(CalculationMethod.ISNA)
                         .build())
-                .darkModeAfterIsha(true)
+                .themeMode(ThemeMode.AUTO)
                 .enableScrollingMessage(true)
                 .scrollingMessages(new ArrayList<>(List.of("Welcome to UTM MSA - Follow us @utmmsa for updates!")))
                 .build();

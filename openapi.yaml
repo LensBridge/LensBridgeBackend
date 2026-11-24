@@ -4204,8 +4204,6 @@ components:
         agendaDurationSeconds:
           type: integer
           format: int32
-        darkModeAfterIsha:
-          type: boolean
         enableScrollingMessage:
           type: boolean
         id:
@@ -4222,6 +4220,12 @@ components:
             type: string
             maxLength: 4000
             minLength: 0
+        themeMode:
+          type: string
+          enum:
+          - LIGHT
+          - DARK
+          - AUTO
     DeviceSummary:
       type: object
       properties:
@@ -5051,8 +5055,6 @@ components:
           format: int32
           maximum: 120
           minimum: 0
-        darkModeAfterIsha:
-          type: boolean
         enableScrollingMessage:
           type: boolean
         location:
@@ -5068,6 +5070,12 @@ components:
             type: string
             maxLength: 4000
             minLength: 0
+        themeMode:
+          type: string
+          enum:
+          - LIGHT
+          - DARK
+          - AUTO
     UpdateCalendarEventRequest:
       type: object
       properties:
